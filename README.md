@@ -68,7 +68,7 @@ Bug 或某些不合理的地方请及时联系我 QQ:1287905882，邮箱 1287905
 
 ### 测试时其他库所使用的版本
 
-![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/versions.png)
+![版本](https://github.com/Dogwei/Swifter.Json/blob/master/versions.png)
 
 ### 如何安装 Swifter.Json ？
 
