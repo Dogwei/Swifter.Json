@@ -4,22 +4,22 @@
 
 ### 之所以说强大，因为这些功能其他框架没有！
 
-```
+~~~
 (1): 支持深度复杂的对象结构且易于使用。
 (2): 用 $ref 表示重复和循环引用的序列化和反序列化。
 (3): 目前唯一支持 ref 属性的 JSON 库。 
 (4): 支持几乎所有您常用的类型！并允许您自定义类型的行为。
 (5): 支持 .Net Framework 2.0 +, .Net Core 2.0+, .Net Standard 2.0+, Mono, Xamarin, Unity。
-```
+~~~
 
 ### Swifter.Json 实用功能
 
-```
+~~~
 (1): 缩进美化 Json。
 (2): 允许忽略 0 或 null 或 "" 值。
 (3): 允许使用 [RWField] 特性定制属性或字段的行为。
 (4): 允许设置最大深度来限制内容大小。
-```
+~~~
 
 ### Swifter.Json 支持的类型
 
@@ -29,29 +29,30 @@ float, double, decimal, string, enum, DateTime, DateTimeOffset,
 Guid, TimeSpan, DBNull, Nullable<T>, Version, Type,
 Array, Multidimensional-Arrays, IList, IList<T>, ICollection,
 ICollection<T>, IDictionary, IDictionary<TKey, TValue>,
-IEnumerable, IEnumerable<T>, DataTable, DbDataReader ...
+IEnumerable, IEnumerable<T>, DataTable, DbDataReader
+...
 其余类型将会被当作 Object，以 属性键/属性值 的形式映射。
 ```
 
 ### Swifter.Json 安全吗？
 
-```
+~~~
 每次发布之前我都会测试至少一个月，并且经过大量的测试，在实际项目中使用未发布的版本
 来确保发布版本的稳定性。但即使这样，我也无法保证它一定安全。所以，如果您发现了
 Bug 或某些不合理的地方请及时联系我 QQ:1287905882，邮箱 1287905882@qq.com。
-```
+~~~
 
-### 如何安装？
+### 如何安装 Swifter.Json ？
 
-```
+~~~
 Nuget> Install-Package Swifter.Json -Version 1.1.2
-```
+~~~
 
 ### 性能测试对比
 
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
 
-```
+~~~
 * 图标中的颜色随所用时间从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
 	Timeout: 表示用时过久。
 	Exception: 表示发生了异常。
@@ -59,17 +60,17 @@ Nuget> Install-Package Swifter.Json -Version 1.1.2
 * Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类” (FastObjectRW<T>)，
 	则会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。
 	您的程序不适用这种模式，那么下面介绍的 XObjectRW<T> 也许适合您。
-```
+~~~
 
-### 性能为何如此优异？
+### Swifter.Json 性能为何如此优异？
 
-```
+~~~
 (1): 最优秀的整型和浮点型 ToString 和 Parse 方法实现。
 (2): Emit 实现的高性能对象映射工具。
 (3): 本地内存分配！拒绝 .Net 托管二次内存。
 (4): 使用线程缓存，让您的程序运行越久速度越快。
 (5): 内部全指针运算，相当于使用了 .Net Core 新技术 Span<T>！
-```
+~~~
 
 ### 测试时其他库所使用的版本
 
