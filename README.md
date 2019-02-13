@@ -42,12 +42,6 @@ IEnumerable, IEnumerable<T>, DataTable, DbDataReader
 Bug 或某些不合理的地方请及时联系我 QQ:1287905882，邮箱 1287905882@qq.com。
 ~~~
 
-### 如何安装 Swifter.Json ？
-
-~~~
-Nuget> Install-Package Swifter.Json -Version 1.1.2
-~~~
-
 ### 性能测试对比
 
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
@@ -75,6 +69,12 @@ Nuget> Install-Package Swifter.Json -Version 1.1.2
 ### 测试时其他库所使用的版本
 
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/versions.png)
+
+### 如何安装 Swifter.Json ？
+
+~~~
+Nuget> Install-Package Swifter.Json -Version 1.1.2
+~~~
 
 ### 代码示例
 
