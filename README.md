@@ -24,14 +24,14 @@
 
 #### Swifter.Json 支持的类型
 
-```
-	bool, byte, sbyte, char, shoft, ushoft, int, uint, long, ulong,
-	float, double, decimal, string, enum DateTime, DateTimeOffset,
-	Guid, TimeSpan, DBNull, Nullable<T>, Version, Type,
-	Array, Multidimensional-Arrays, IList, IList<T>, ICollection,
-	ICollection<T>, IDictionary, IDictionary<TKey, TValue>,
-	IEnumerable, IEnumerable<T>, DataTable, DbDataReader ...
-	其余类型将会被当作 Object，以 属性键/属性值 的形式映射。
+```C#
+bool, byte, sbyte, char, shoft, ushoft, int, uint, long, ulong,
+float, double, decimal, string, enum, DateTime, DateTimeOffset,
+Guid, TimeSpan, DBNull, Nullable<T>, Version, Type,
+Array, Multidimensional-Arrays, IList, IList<T>, ICollection,
+ICollection<T>, IDictionary, IDictionary<TKey, TValue>,
+IEnumerable, IEnumerable<T>, DataTable, DbDataReader ...
+其余类型将会被当作 Object，以 属性键/属性值 的形式映射。
 ```
 
 #### Swifter.Json 安全吗？
@@ -49,14 +49,16 @@ Nuget> Install-Package Swifter.Json -Version 1.1.2
 
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
 
-	*:  图标中的颜色随所用时间从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
-			Timeout: 表示用时过久。
-			Exception: 表示发生了异常。
-			Error: 未发生异常，但结果不正确。
 
-	*:  Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类” (FastObjectRW<T>)，
-	    则会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。
-	    您的程序不适用这种模式，那么下面介绍的 XObjectRW<T> 也许适合您。
+	*:  图标中的颜色随所用时间从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
+		Timeout: 表示用时过久。
+		Exception: 表示发生了异常。
+		Error: 未发生异常，但结果不正确。
+
+ 	*:  Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类” (FastObjectRW<T>)，
+		则会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。
+		您的程序不适用这种模式，那么下面介绍的 XObjectRW<T> 也许适合您。
+
 
 #### 测试时其他库所使用的版本
 
