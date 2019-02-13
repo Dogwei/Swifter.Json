@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;netcoreapp2.1;netstandard2.0</TargetFrameworks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>1.1.2</Version>
+    <Authors>Dogwei</Authors>
+    <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Json.xml</DocumentationFile>
+    <Description>fastest JSON serialize and deserialize tool in the world.</Description>
+    <LangVersion>7.3</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swifter.Core" Version="1.1.2" />
+  </ItemGroup>
+
+
+
+
+</Project>
