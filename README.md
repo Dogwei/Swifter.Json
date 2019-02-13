@@ -47,13 +47,13 @@ Bug 或某些不合理的地方请及时联系我 QQ:1287905882，邮箱 1287905
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
 
 ~~~
-* 图标中的颜色随所用时间从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
+* 图表中的颜色随所用时间从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
 	Timeout: 表示用时过久。
 	Exception: 表示发生了异常。
 	Error: 未发生异常，但结果不正确。
 * Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类” (FastObjectRW<T>)，
 	则会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。
-	您的程序不适用这种模式，那么下面介绍的 XObjectRW<T> 也许适合您。
+	如果您的程序不适用这种模式，那么下面介绍的 XObjectRW<T> 也许适合您。
 ~~~
 
 ### Swifter.Json 性能为何如此优异？
