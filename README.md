@@ -10,6 +10,8 @@
 #### 3: 增加特性定义 (反)序列化行为 ([RWFormat], [RWField], [RWObject] 等特性)。
 #### 4: 增加 AspNetCore 的扩展方法 ConfigureJsonFormatter。现在可以很方便将 Swifter.Json 配置到 MVC 了。
 
+### 效率评测图
+
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
 
 ~~~
@@ -45,4 +47,4 @@
     }
 ```
 
-# 更详细的文档我正在努力加班中...
+# 更详细的文档我正在努力加班...
