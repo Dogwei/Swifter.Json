@@ -15,7 +15,7 @@
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
 
 ~~~
-* 此次测试运行在 .Net Core 3.0 预览版上，增加了 SpanJson。
+* 此次测试运行在 .Net Core 3.0 预览版上，并增加了 SpanJson 库。
 * 测试中的第三方库均来自 Nuget 上最新正式版本。
 * 这次评测让我深知 Span<T> 的硬件加速的性能，我会考虑对 .Net Core 2.1+ 进行特殊处理，提高长字符串解析的性能。
 ~~~
