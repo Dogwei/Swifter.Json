@@ -1,84 +1,33 @@
 # Swifter.Json
 
-#### 这是迄今为止 .Net 平台功能最强大，性能最佳的 JSON 序列化和反序列化库。
+#### 完整代码在 [Github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
+#### FULL CODE IN [Github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
 
-### 之所以说强大，因为这些功能其他框架没有！
+### 1.2.0 更新 (UPDATE) :
 
-~~~
-(1): 支持深度复杂的对象结构且易于使用。
-(2): 用 $ref 表示重复和循环引用的序列化和反序列化。
-(3): 目前唯一支持 ref 属性的 JSON 库。 
-(4): 支持几乎所有您常用的类型！并允许您自定义类型的行为。
-(5): 支持 .Net Framework 2.0 +, .Net Core 2.0+, .Net Standard 2.0+, Mono, Xamarin, Unity。
-~~~
-
-### Swifter.Json 实用功能
-
-~~~
-(1): 缩进美化 Json。
-(2): 允许忽略 0 或 null 或 "" 值。
-(3): 允许使用 [RWField] 特性定制属性或字段的行为。
-(4): 允许设置最大深度来限制内容大小。
-~~~
-
-### Swifter.Json 支持的类型
-
-```C#
-bool, byte, sbyte, char, shoft, ushoft, int, uint, long, ulong,
-float, double, decimal, string, enum, DateTime, DateTimeOffset,
-Guid, TimeSpan, DBNull, Nullable<T>, Version, Type,
-Array, Multidimensional-Arrays, IList, IList<T>, ICollection,
-ICollection<T>, IDictionary, IDictionary<TKey, TValue>,
-IEnumerable, IEnumerable<T>, DataTable, DbDataReader
-...
-其余类型将会被当作 Object，以 属性键/属性值 的形式映射。
-```
-
-### Swifter.Json 安全吗？
-
-~~~
-每次发布之前我都会观察至少一个月，期间会进行大量的测试，并且在实际项目中使用未发布的版本
-来确保发布版本的稳定性。但即使这样，我也无法保证它一定安全。所以，如果您发现了
-Bug 或某些不合理的地方请及时联系我 QQ:1287905882，邮箱 1287905882@qq.com。
-~~~
-
-### 性能测试对比
+#### 1: 再度提高性能 (主要原理是对不常见行为禁止内联，提高常见行为的内联成功率)。
+#### 2: 解决枚举序列化出错，ValueInterface.SetInterface() 不起作用等 BUG。
+#### 3: 增加特性定义 (反)序列化行为 ([RWFormat], [RWField], [RWObject] 等特性)。
+#### 4: 增加 AspNetCore 的扩展方法 ConfigureJsonFormatter。现在可以很方便将 Swifter.Json 配置到 MVC 了。
 
 ![评测用时图](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
 
 ~~~
-* 图表中的颜色随所用时间从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
-	Timeout: 表示用时过久。
-	Exception: 表示发生了异常。
-	Error: 未发生异常，但结果不正确。
-* Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类” (FastObjectRW<T>)，
-	后续会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。
-	如果您的程序不适用这种模式，那么下面介绍的 XObjectRW<T> 也许适合您。
+* 此次测试运行在 .Net Core 3.0 预览版上，增加了 SpanJson。
+* 测试中的第三方库均来自 Nuget 上最新正式版本。
+* 这次评测让我深知 Span<T> 的硬件加速的性能，我会考虑对 .Net Core 2.1+ 进行特殊处理，提高长字符串解析的性能。
 ~~~
 
-### Swifter.Json 性能为何如此优异？
+#### Swifter.Json 仍然支持 .Net Framework 2.0+, .Net Core 2.0+, .Net Standard 2.0+, Mono, Xamarin, Unity 等平台。
+#### Swifter.Json 支持 .Net 上绝大多数的数据类型。包括字典，集合，迭代器，数据读取器，表格等等。
+#### 建议在 Nuget 包管理上下载最新的 Swifter.Json 库 (最新版本 1.2.0)。
 
-~~~
-(1): 最优秀的整型和浮点型 ToString 和 Parse 方法实现。
-(2): Emit 实现的高性能对象映射工具。
-(3): 本地内存分配！拒绝 .Net 托管二次内存。
-(4): 使用线程缓存，让您的程序运行越久速度越快。
-(5): 内部全指针运算，相当于使用了 .Net Core 新技术 Span<T>！
-~~~
+#### 虽然此前一直强调 Swifter.Json 的性能，但其实它的可扩展性和代码重用性才是可圈可点的。为了这些， Swifter.Json 在性能上其实做了很大让步！
+#### Swifter 并不是围绕 Swifter.Json 去优化，而是 Swifter.Json 只是在 Swifter 基础上扩展出来的一个组件。我希望后期我可以写一个文档来讲解这个库。
+#### 之前承诺针对 .Net Core 3.0 使用 Avx2 指令优化，但并没有提升效果，可能是我打开方式不对，所以暂没有此类优化。
 
-### 测试时其他库所使用的版本
 
-![版本](https://github.com/Dogwei/Swifter.Json/blob/master/versions.png)
-
-### 如何安装 Swifter.Json ？
-
-~~~
-Nuget> Install-Package Swifter.Json -Version 1.1.2
-~~~
-
-### 代码示例
-
-#### (1): 简单使用
+#### (1): 简单使用 Swifter.Json
 
 ```C#
     public class Demo
@@ -96,181 +45,4 @@ Nuget> Install-Package Swifter.Json -Version 1.1.2
     }
 ```
 
-#### (2): 处理重复引用
-
-```C#
-    public class Demo
-    {
-        public int Id { get; set; }
-
-        public string Name { get; set; }
-
-        public Demo Instance { get; set; }
-
-        public static void Main()
-        {
-            var jsonFormatter = new JsonFormatter(JsonFormatterOptions.MultiReferencingReference);
-
-            var obj = new Demo() { Id = 1, Name = "Dogwei" };
-
-            obj.Instance = obj;
-
-            var json = jsonFormatter.Serialize(obj);
-
-            var deser = jsonFormatter.Deserialize<Demo>(json);
-
-            Console.WriteLine(json); // {"Id":1,"Instance":{"$ref":"#"},"Name":"Dogwei"}
-
-            Console.WriteLine(deser.Instance == deser); // True
-        }
-    }
-```
-
-#### (3): RWField 特性
-
-```C#
-    public class Demo
-    {
-        [RWField("First Name")]
-        public string Name { get; set; }
-
-        [RWField]
-        public int Age;
-
-        [RWField(Access = RWFieldAccess.Ignore)]
-        public int Sex { get; set; }
-        [RWField(Order = 1)]
-        public int Id { get; set; }
-
-        public static void Main()
-        {
-            var obj = new Demo() { Id = 1, Name = "Dogwei", Age = 22, Sex = 1 };
-
-            var json = JsonFormatter.SerializeObject(obj);
-
-            Console.WriteLine(json); // {"Id":1,"Age":22,"First Name":"Dogwei"}
-        }
-    }
-```
-
-#### (4): 设置日期格式
-
-```C#
-    public class Demo
-    {
-        public static void Main()
-        {
-            var jsonFormatter = new JsonFormatter();
-
-            jsonFormatter.SetDateTimeFormat("yyyy-MM-dd HH:mm:ss");
-
-            var json = jsonFormatter.Serialize(DateTime.Now);
-
-            Console.WriteLine(json); // "2019-02-13 11:03:46"
-        }
-    }
-```
-
-#### (5): 自定义类型的行为
-
-```C#
-    public class Demo
-    {
-        public string Name { get; set; }
-
-        public int Sex { get; set; }
-
-        public bool IsMan { get => Sex == 1; }
-
-        public unsafe static void Main()
-        {
-            var jsonFormatter = new JsonFormatter();
-            
-            jsonFormatter.SetValueInterface<bool>(new MyBooleanInterface());
-
-            var obj = new Demo() { Name = "Dogwei", Sex = 1 };
-
-            var json = jsonFormatter.Serialize(obj);
-
-            Console.WriteLine(json); // {"IsMan":"yes","Name":"Dogwei","Sex":1}
-        }
-    }
-
-    public class MyBooleanInterface : IValueInterface<bool>
-    {
-        public bool ReadValue(IValueReader valueReader)
-        {
-            var value = valueReader.ReadString();
-
-            switch (value)
-            {
-                case "yes":
-                case "true":
-                    return true;
-                case "no":
-                case "false":
-                    return false;
-                default:
-                    return Convert.ToBoolean(value);
-            }
-        }
-
-        public void WriteValue(IValueWriter valueWriter, bool value)
-        {
-            valueWriter.WriteString(value ? "yes" : "no");
-        }
-    }
-```
-
-#### (6): 设置缓存大小
-
-```C#
-    public class Demo
-    {
-        public static void Main()
-        {
-            HGlobalCache.MaxSize = 1024 * 500; // 500KB
-
-            var json = JsonFormatter.SerializeObject(new { MaxJsonLength = 256000 });
-        }
-    }
-```
-
-#### (7): 序列化超大文件
-
-```C#
-    public class Demo
-    {
-        public static void Main()
-        {
-            var bigObject = new BigObject();
-
-            using (FileStream fileStream = new FileStream("/BigObject.json", FileMode.Create, FileAccess.ReadWrite))
-            {
-                using (StreamWriter streamWriter = new StreamWriter(fileStream))
-                {
-                    JsonFormatter.SerializeObject(bigObject, streamWriter);
-                }
-            }
-        }
-    }
-```
-
-#### (8): 使用适用小型应用程序的 XObjectRW<T>
-
-```C#
-    public class Demo
-    {
-        public static void Main()
-        {
-            // Default (FastObjectInterface)    : 初始化开销较大，内存较大，性能优异。
-            // XObjectInterface                 : 初始化开销小，内存占用少，性能也不错。
-
-            ValueInterface.DefaultObjectInterfaceType = typeof(XObjectInterface<>);
-
-            var json = JsonFormatter.SerializeObject(new { Id = 1, Name = "Dogwei" });
-
-            Console.WriteLine(json); // {"Id":1,"Name":"Dogwei"}
-        }
-    }
-```
+# 更详细的文档我正在努力加班中...
