@@ -6,7 +6,7 @@
 ### 1.2.0 更新 (UPDATE) :
 
 #### 1: 再度提高性能 (主要原理是对不常见行为禁止内联，提高常见行为的内联成功率)。
-#### 2: 解决枚举序列化出错，ValueInterface.SetInterface() 不起作用等 BUG。
+#### 2: 解决枚举序列化出错，ValueInterface&lt;T&gt;.SetInterface() 不起作用等 BUG。
 #### 3: 增加特性定义 (反)序列化行为 ([RWFormat], [RWField], [RWObject] 等特性)。
 #### 4: 增加 AspNetCore 的扩展方法 ConfigureJsonFormatter。现在可以很方便将 Swifter.Json 配置到 MVC 了。
 
