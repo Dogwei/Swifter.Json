@@ -36,7 +36,7 @@ The .Net Core 3.0 Preview running results:
 * Later, on the .Net Core 2.1+ I will use Span<char> to optimize the parsing of Long string.
 ~~~
 
-#### [Click here to view the .Net Framework 4.7.1 running results](https://github.com/Dogwei/Swifter.Json/blob/master/benckmark_for_framework_4.7.1.png)
+#### [Click here to view the .Net Framework 4.7.1 running results](https://www.codeproject.com/KB/Articles/4067532/Working/benckmark_for_framework_4.7.1.png)
 
 ### Demo
 
