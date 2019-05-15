@@ -26,7 +26,7 @@ So Swifter.Json was produced.
 
 The .Net Core 3.0 Preview running results:
 
-![Run on the .Net Core 3.0 Preview.](https://www.codeproject.com/KB/Articles/4067532/Working/benchmark_1_.png)
+![Run on the .Net Core 3.0 Preview.](https://github.com/Dogwei/Swifter.Json/blob/master/benchmark.png)
 
 ~~~
 * The numbers in the chart represent time consumption.
@@ -36,7 +36,7 @@ The .Net Core 3.0 Preview running results:
 * Later, on the .Net Core 2.1+ I will use Span<char> to optimize the parsing of Long string.
 ~~~
 
-#### [Click here to view the .Net Framework 4.7.1 running results](https://www.codeproject.com/KB/Articles/4067532/Working/benckmark_for_framework_4.7.1.png)
+#### [Click here to view the .Net Framework 4.7.1 running results](https://github.com/Dogwei/Swifter.Json/blob/master/benckmark%20for%20framework%204.7.1.png)
 
 ### Demo
 
