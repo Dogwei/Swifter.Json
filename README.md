@@ -2,6 +2,8 @@
 
 A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.
 
+### Github: [Github.com/Dogwei/Swifter.Json](https://github.com/Dogwei/Swifter.Json)
+
 #### FULL CODE ON [Github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
 
 ### Swifter.Json Features
