@@ -2,9 +2,9 @@
 
 A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.
 
-### Github: [Github.com/Dogwei/Swifter.Json](https://github.com/Dogwei/Swifter.Json)
+### Github: [https://github.com/Dogwei/Swifter.Json](https://github.com/Dogwei/Swifter.Json)
 
-#### FULL CODE ON [Github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
+#### FULL CODE ON [https://github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
 
 ### Swifter.Json Features
 
@@ -36,7 +36,7 @@ The .Net Core 3.0 Preview running results:
 * Later, on the .Net Core 2.1+ I will use Span<char> to optimize the parsing of Long string.
 ~~~
 
-#### [Click here to view the .Net Framework 4.7.1 running results](https://github.com/Dogwei/Swifter.Json/blob/master/benckmark%20for%20framework%204.7.1.png)
+#### [Click here to view the .Net Framework 4.7.1 running results](https://github.com/Dogwei/Swifter.Json/blob/master/benckmark_for_framework_4.7.1.png)
 
 ### Demo
 
