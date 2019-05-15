@@ -199,7 +199,7 @@ The .Net Core 3.0 Preview running results:
 
         public string Name { get; set; } = "Dogwei";
 
-        [RWFormat("yyyy-MM-dd HH:mm:ss")\]
+        [RWFormat("yyyy-MM-dd HH:mm:ss")]
         public DateTime CreateTime { get; set; } = DateTime.Now;
 
         public static void Main()
@@ -242,7 +242,7 @@ The .Net Core 3.0 Preview running results:
             {
                 { "id", 1},
                 { "name", "Dogwei" }
-            };**
+            };
 
             var json = JsonFormatter.SerializeObject(dic);
         
