@@ -1,19 +1,14 @@
 ﻿using Swifter.Readers;
 using Swifter.RW;
-using Swifter.Tools;
 using Swifter.Writers;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Text;
 
 namespace Swifter.Json
 {
     /// <summary>
     /// 提供 Json 格式化工具的扩展方法。
     /// </summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static class JsonExtensions
+    public static partial class JsonExtensions
     {
         /// <summary>
         /// 设置 Json 格式化工具序列化时的 DateTime 格式。

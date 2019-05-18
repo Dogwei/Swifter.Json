@@ -1,11 +1,10 @@
-﻿using Swifter.RW;
+﻿using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -33,12 +32,13 @@ namespace Swifter.Test
         private List<ITestInfo> tests;
         private Button button2;
         private Button button3;
+        private Button button4;
         private Panel panel2;
 
         public MyForm()
         {
             InitializeComponent();
-            
+
             results = new DataTable();
             testers = new List<ITester>();
             tests = new List<ITestInfo>();
@@ -50,6 +50,8 @@ namespace Swifter.Test
             testers.Add(new JilTester());
             testers.Add(new NetJSONTestter());
             testers.Add(new Utf8JsonTester());
+            testers.Add(new SpanJsonJsonTester());
+            testers.Add(new System_Text_JsonTester());
             testers.Add(new SwifterTester());
 
             tests.Add(new CommonDataTest(100000));
@@ -64,6 +66,11 @@ namespace Swifter.Test
             tests.Add(new CalalogDictionaryTest(10));
             tests.Add(new CSharp7Test());
             tests.Add(new TwoDimensionaArrayTest());
+            tests.Add(new ThreeDimensionalArray());
+            tests.Add(new LongStringTest());
+            tests.Add(new ShortStringTest());
+            tests.Add(new DateTimeTest());
+            tests.Add(new BasicTypesTest(100000));
             tests.Add(new PolymorphismTest());
             tests.Add(new StructTest());
             tests.Add(new UnsafeTest());
@@ -351,95 +358,108 @@ namespace Swifter.Test
 
         private void InitializeComponent()
         {
-            this.dataGridView1 = new System.Windows.Forms.DataGridView();
-            this.panel1 = new System.Windows.Forms.Panel();
-            this.button2 = new System.Windows.Forms.Button();
-            this.button1 = new System.Windows.Forms.Button();
-            this.panel2 = new System.Windows.Forms.Panel();
-            this.button3 = new System.Windows.Forms.Button();
-            ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
-            this.panel1.SuspendLayout();
-            this.panel2.SuspendLayout();
-            this.SuspendLayout();
+            dataGridView1 = new DataGridView();
+            panel1 = new Panel();
+            button3 = new Button();
+            button2 = new Button();
+            button1 = new Button();
+            panel2 = new Panel();
+            button4 = new Button();
+            ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
+            panel1.SuspendLayout();
+            panel2.SuspendLayout();
+            SuspendLayout();
             // 
             // dataGridView1
             // 
-            this.dataGridView1.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
-            this.dataGridView1.ColumnHeadersBorderStyle = System.Windows.Forms.DataGridViewHeaderBorderStyle.Single;
-            this.dataGridView1.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridView1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.dataGridView1.Location = new System.Drawing.Point(0, 0);
-            this.dataGridView1.Name = "dataGridView1";
-            this.dataGridView1.RowHeadersBorderStyle = System.Windows.Forms.DataGridViewHeaderBorderStyle.None;
-            this.dataGridView1.RowHeadersVisible = false;
-            this.dataGridView1.RowTemplate.Height = 23;
-            this.dataGridView1.Size = new System.Drawing.Size(959, 386);
-            this.dataGridView1.TabIndex = 0;
-            this.dataGridView1.Sorted += DataGridView1_Sorted;
+            dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dataGridView1.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+            dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dataGridView1.Dock = DockStyle.Fill;
+            dataGridView1.Location = new Point(0, 0);
+            dataGridView1.Name = "dataGridView1";
+            dataGridView1.RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+            dataGridView1.RowHeadersVisible = false;
+            dataGridView1.RowTemplate.Height = 23;
+            dataGridView1.Size = new Size(959, 386);
+            dataGridView1.TabIndex = 0;
+            dataGridView1.Sorted += DataGridView1_Sorted;
             // 
             // panel1
             // 
-            this.panel1.Controls.Add(this.button3);
-            this.panel1.Controls.Add(this.button2);
-            this.panel1.Controls.Add(this.button1);
-            this.panel1.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.panel1.Location = new System.Drawing.Point(0, 386);
-            this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(959, 100);
-            this.panel1.TabIndex = 1;
-            // 
-            // button2
-            // 
-            this.button2.Font = new System.Drawing.Font("Courier New", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.button2.Location = new System.Drawing.Point(201, 16);
-            this.button2.Name = "button2";
-            this.button2.Size = new System.Drawing.Size(168, 72);
-            this.button2.TabIndex = 1;
-            this.button2.Text = "Start(Thread)";
-            this.button2.UseVisualStyleBackColor = true;
-            this.button2.Click += new System.EventHandler(this.button2_Click);
-            // 
-            // button1
-            // 
-            this.button1.Font = new System.Drawing.Font("Courier New", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.button1.Location = new System.Drawing.Point(12, 16);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(168, 72);
-            this.button1.TabIndex = 0;
-            this.button1.Text = "Start(Task)";
-            this.button1.UseVisualStyleBackColor = true;
-            this.button1.Click += new System.EventHandler(this.button1_Click);
-            // 
-            // panel2
-            // 
-            this.panel2.Controls.Add(this.dataGridView1);
-            this.panel2.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panel2.Location = new System.Drawing.Point(0, 0);
-            this.panel2.Name = "panel2";
-            this.panel2.Size = new System.Drawing.Size(959, 386);
-            this.panel2.TabIndex = 1;
+            panel1.Controls.Add(button4);
+            panel1.Controls.Add(button3);
+            panel1.Controls.Add(button2);
+            panel1.Controls.Add(button1);
+            panel1.Dock = DockStyle.Bottom;
+            panel1.Location = new Point(0, 386);
+            panel1.Name = "panel1";
+            panel1.Size = new Size(959, 100);
+            panel1.TabIndex = 1;
             // 
             // button3
             // 
-            this.button3.Font = new System.Drawing.Font("Courier New", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.button3.Location = new System.Drawing.Point(390, 16);
-            this.button3.Name = "button3";
-            this.button3.Size = new System.Drawing.Size(168, 72);
-            this.button3.TabIndex = 2;
-            this.button3.Text = "GC Collect";
-            this.button3.UseVisualStyleBackColor = true;
-            this.button3.Click += new System.EventHandler(this.button3_Click);
+            button3.Font = new Font("Courier New", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            button3.Location = new Point(390, 16);
+            button3.Name = "button3";
+            button3.Size = new Size(168, 72);
+            button3.TabIndex = 2;
+            button3.Text = "GC Collect";
+            button3.UseVisualStyleBackColor = true;
+            button3.Click += new EventHandler(button3_Click);
+            // 
+            // button2
+            // 
+            button2.Font = new Font("Courier New", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            button2.Location = new Point(201, 16);
+            button2.Name = "button2";
+            button2.Size = new Size(168, 72);
+            button2.TabIndex = 1;
+            button2.Text = "Start(Thread)";
+            button2.UseVisualStyleBackColor = true;
+            button2.Click += new EventHandler(button2_Click);
+            // 
+            // button1
+            // 
+            button1.Font = new Font("Courier New", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            button1.Location = new Point(12, 16);
+            button1.Name = "button1";
+            button1.Size = new Size(168, 72);
+            button1.TabIndex = 0;
+            button1.Text = "Start(Task)";
+            button1.UseVisualStyleBackColor = true;
+            button1.Click += new EventHandler(button1_Click);
+            // 
+            // panel2
+            // 
+            panel2.Controls.Add(dataGridView1);
+            panel2.Dock = DockStyle.Fill;
+            panel2.Location = new Point(0, 0);
+            panel2.Name = "panel2";
+            panel2.Size = new Size(959, 386);
+            panel2.TabIndex = 1;
+            // 
+            // button4
+            // 
+            button4.Font = new Font("Courier New", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            button4.Location = new Point(581, 16);
+            button4.Name = "button4";
+            button4.Size = new Size(168, 72);
+            button4.TabIndex = 3;
+            button4.Text = "New Window";
+            button4.UseVisualStyleBackColor = true;
+            button4.Click += new EventHandler(button4_Click);
             // 
             // MyForm
             // 
-            this.ClientSize = new System.Drawing.Size(959, 486);
-            this.Controls.Add(this.panel2);
-            this.Controls.Add(this.panel1);
-            this.Name = "MyForm";
-            ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).EndInit();
-            this.panel1.ResumeLayout(false);
-            this.panel2.ResumeLayout(false);
-            this.ResumeLayout(false);
+            ClientSize = new Size(959, 486);
+            Controls.Add(panel2);
+            Controls.Add(panel1);
+            Name = "MyForm";
+            ((System.ComponentModel.ISupportInitialize)dataGridView1).EndInit();
+            panel1.ResumeLayout(false);
+            panel2.ResumeLayout(false);
+            ResumeLayout(false);
 
         }
 
@@ -463,14 +483,14 @@ namespace Swifter.Test
             }
         }
 
-        int task_index;
+        static int task_index;
 
-        private void button1_Click(object sender, System.EventArgs e)
+        private void button1_Click(object sender, EventArgs e)
         {
             Task.Run(() => StartTest($"Task {++task_index}", logTypes));
         }
 
-        int thread_index;
+        static int thread_index;
 
         private void button2_Click(object sender, EventArgs e)
         {
@@ -480,6 +500,14 @@ namespace Swifter.Test
         private void button3_Click(object sender, EventArgs e)
         {
             GC.Collect();
+        }
+
+        private void button4_Click(object sender, EventArgs e)
+        {
+            new Thread(() =>
+            {
+                Program.Main();
+            }).Start();
         }
     }
 }

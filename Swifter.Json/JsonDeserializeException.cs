@@ -36,7 +36,7 @@ namespace Swifter.Json
         {
             get
             {
-                return StringHelper.Format("Json Deserialize Failed. Index : {0}, Line: {1}, Column : {2}, Text : {3}.", Index.ToString(), Line.ToString(), Column.ToString(), Text);
+                return $"Json Deserialize Failed. Index : {Index}, Line: {Line}, Column : {Column}, Text : {Text}.";
             }
         }
     }

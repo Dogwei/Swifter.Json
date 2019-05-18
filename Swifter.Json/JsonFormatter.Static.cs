@@ -1,4 +1,6 @@
 ﻿using Swifter.RW;
+using Swifter.Tools;
+using Swifter.Writers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,7 +11,6 @@ namespace Swifter.Json
 {
     public sealed unsafe partial class JsonFormatter
     {
-
         /// <summary>
         /// 读取或设置默认最大结构深度。
         /// 此值只在序列化时有效。
@@ -43,8 +44,21 @@ namespace Swifter.Json
         {
             fixed (char* chars = text)
             {
-                return ValueInterface<T>.Content.ReadValue(new JsonDeserializer(chars, 0, text.Length));
+                return DeserializeObject<T>(chars, text.Length);
             }
+        }
+
+        /// <summary>
+        /// 将 JSON 字符串反序列化为指定类型的值。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="chars">JSON 字符串</param>
+        /// <param name="length">JSON 字符串长度</param>
+        /// <returns>返回指定类型的值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T DeserializeObject<T>(char* chars, int length)
+        {
+            return ValueInterface<T>.ReadValue(new JsonDeserializer(chars, length));
         }
 
         /// <summary>
@@ -56,7 +70,12 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static T DeserializeObject<T>(TextReader textReader)
         {
-            return DeserializeObject<T>(textReader.ReadToEnd());
+            using (var hGCache = HGlobalCache<char>.OccupancyInstance())
+            {
+                var length = hGCache.Buffer(textReader);
+
+                return DeserializeObject<T>(hGCache.GetPointer(), length);
+            }
         }
 
         /// <summary>
@@ -64,14 +83,27 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="text">JSON 字符串</param>
         /// <param name="type">指定类型</param>
-        /// <returns>返回指定类型的值</returns>
+        /// <returns>返回指定类型的实例</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static object DeserializeObject(string text, Type type)
         {
             fixed (char* chars = text)
             {
-                return ValueInterface.GetInterface(type).Read(new JsonDeserializer(chars, 0, text.Length));
+                return DeserializeObject(chars, text.Length, type);
             }
+        }
+
+        /// <summary>
+        /// 将 JSON 字符串反序列化为指定类型的值。
+        /// </summary>
+        /// <param name="chars">JSON 字符串</param>
+        /// <param name="length">JSON 字符串长度</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object DeserializeObject(char* chars, int length, Type type)
+        {
+            return ValueInterface.GetInterface(type).Read(new JsonDeserializer(chars, length));
         }
 
         /// <summary>
@@ -79,11 +111,16 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="textReader">JSON 字符串读取器</param>
         /// <param name="type">指定类型</param>
-        /// <returns>返回指定类型的值</returns>
+        /// <returns>返回指定类型的实例</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static object DeserializeObject(TextReader textReader, Type type)
         {
-            return DeserializeObject(textReader.ReadToEnd(), type);
+            using (var hGCache = HGlobalCache<char>.OccupancyInstance())
+            {
+                var length = hGCache.Buffer(textReader);
+
+                return DeserializeObject(hGCache.GetPointer(), length, type);
+            }
         }
 
         /// <summary>
@@ -91,34 +128,48 @@ namespace Swifter.Json
         /// </summary>
         /// <typeparam name="T">指定类型</typeparam>
         /// <param name="text">JSON 字符串</param>
-        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference 。</param>
+        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference</param>
         /// <returns>返回指定类型的值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static T DeserializeObject<T>(string text, JsonFormatterOptions options)
         {
+            fixed (char* chars = text)
+            {
+                return DeserializeObject<T>(chars, text.Length, options);
+            }
+        }
+
+        /// <summary>
+        /// 将 JSON 字符串反序列化为指定类型的值。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="chars">JSON 字符串</param>
+        /// <param name="length">JSON 字符串长度</param>
+        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference</param>
+        /// <returns>返回指定类型的值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T DeserializeObject<T>(char* chars, int length, JsonFormatterOptions options)
+        {
             if ((options & JsonFormatterOptions.MultiReferencingReference) != 0)
             {
-                fixed (char* chars = text)
+                var jsonDeserializer = new JsonReferenceDeserializer(chars, length);
+
+                var result = ValueInterface<T>.ReadValue(jsonDeserializer);
+
+                if (jsonDeserializer.references.Count != 0)
                 {
-                    var jsonDeserializer = new JsonReferenceDeserializer(chars, 0, text.Length);
+                    ReferenceInfo.ProcessReference(result, jsonDeserializer.references);
 
-                    var result = ValueInterface<T>.Content.ReadValue(jsonDeserializer);
-
-                    if (jsonDeserializer.references.Count != 0)
+                    if (jsonDeserializer.updateBase)
                     {
-                        ReferenceInfo.ProcessReference(result, jsonDeserializer.references);
-
-                        if (jsonDeserializer.updateBase)
-                        {
-                            result = RWHelper.GetContent<T>(jsonDeserializer.writer);
-                        }
+                        result = RWHelper.GetContent<T>(jsonDeserializer.writer);
                     }
-
-                    return result;
                 }
+
+                return result;
             }
 
-            return DeserializeObject<T>(text);
+            return DeserializeObject<T>(chars, length);
         }
 
         /// <summary>
@@ -126,12 +177,17 @@ namespace Swifter.Json
         /// </summary>
         /// <typeparam name="T">指定类型</typeparam>
         /// <param name="textReader">JSON 字符串读取器</param>
-        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference 。</param>
+        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference</param>
         /// <returns>返回指定类型的值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static T DeserializeObject<T>(TextReader textReader, JsonFormatterOptions options)
         {
-            return DeserializeObject<T>(textReader.ReadToEnd(), options);
+            using (var hGCache = HGlobalCache<char>.OccupancyInstance())
+            {
+                var length = hGCache.Buffer(textReader);
+
+                return DeserializeObject<T>(hGCache.GetPointer(), length, options);
+            }
         }
 
         /// <summary>
@@ -139,36 +195,50 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="text">JSON 字符串</param>
         /// <param name="type">指定类型</param>
-        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference 。</param>
-        /// <returns>返回指定类型的值</returns>
+        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference</param>
+        /// <returns>返回指定类型的实例</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static object DeserializeObject(string text, Type type, JsonFormatterOptions options)
         {
+            fixed (char* chars = text)
+            {
+                return DeserializeObject(chars, text.Length, type, options);
+            }
+        }
+
+        /// <summary>
+        /// 将 JSON 字符串反序列化为指定类型的值。
+        /// </summary>
+        /// <param name="chars">JSON 字符串</param>
+        /// <param name="length">JSON 字符串长度</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object DeserializeObject(char* chars, int length, Type type, JsonFormatterOptions options)
+        {
             if ((options & JsonFormatterOptions.MultiReferencingReference) != 0)
             {
-                fixed (char* chars = text)
+                var jsonDeserializer = new JsonReferenceDeserializer(chars, length);
+
+                var result = ValueInterface.GetInterface(type).Read(jsonDeserializer);
+
+                if (jsonDeserializer.references.Count != 0)
                 {
-                    var jsonDeserializer = new JsonReferenceDeserializer(chars, 0, text.Length);
+                    ReferenceInfo.ProcessReference(result, jsonDeserializer.references);
 
-                    var result = ValueInterface.GetInterface(type).Read(jsonDeserializer);
-
-                    if (jsonDeserializer.references.Count != 0)
+                    if (jsonDeserializer.updateBase)
                     {
-                        ReferenceInfo.ProcessReference(result, jsonDeserializer.references);
+                        result = RWHelper.GetContent<object>(jsonDeserializer.writer);
 
-                        if (jsonDeserializer.updateBase)
-                        {
-                            result = RWHelper.GetContent<object>(jsonDeserializer.writer);
-
-                            result = Convert.ChangeType(result, type);
-                        }
+                        result = Convert.ChangeType(result, type);
                     }
-
-                    return result;
                 }
+
+                return result;
             }
 
-            return DeserializeObject(text, type);
+            return DeserializeObject(chars, length, type);
         }
 
         /// <summary>
@@ -176,12 +246,17 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="textReader">JSON 字符串读取器</param>
         /// <param name="type">指定类型</param>
-        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference 。</param>
-        /// <returns>返回指定类型的值</returns>
+        /// <param name="options">反序列化配置项，可设置 MultiReferencingReference</param>
+        /// <returns>返回指定类型的实例</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static object DeserializeObject(TextReader textReader, Type type, JsonFormatterOptions options)
         {
-            return DeserializeObject(textReader.ReadToEnd(), type);
+            using (var hGCache = HGlobalCache<char>.OccupancyInstance())
+            {
+                var length = hGCache.Buffer(textReader);
+
+                return DeserializeObject(hGCache.GetPointer(), length, type, options);
+            }
         }
 
         /// <summary>
@@ -193,11 +268,15 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static string SerializeObject<T>(T value)
         {
-            var serializer = new JsonDefaultSerializer(DefaultMaxDepth);
+            using (var jsonSerializer = new JsonDefaultSerializer(DefaultMaxDepth))
+            {
+                ValueInterface<T>.WriteValue(jsonSerializer, value);
 
-            ValueInterface<T>.Content.WriteValue(serializer, value);
-
-            return serializer.ToString();
+                return new string(
+                    jsonSerializer.hGlobal.GetPointer(),
+                    0,
+                    jsonSerializer.StringLength);
+            }
         }
 
         /// <summary>
@@ -209,13 +288,51 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void SerializeObject<T>(T value, TextWriter textWriter)
         {
-            var jsonSerializer = new JsonDefaultSerializer(DefaultMaxDepth);
+            using (var jsonSerializer = new JsonDefaultSerializer(DefaultMaxDepth) { textWriter = textWriter })
+            {
+                ValueInterface<T>.WriteValue(jsonSerializer, value);
 
-            jsonSerializer.textWriter = textWriter;
+                VersionDifferences.WriteChars(
+                    textWriter,
+                    jsonSerializer.hGlobal.GetPointer(),
+                    jsonSerializer.StringLength);
+            }
+        }
 
-            ValueInterface<T>.Content.WriteValue(jsonSerializer, value);
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        static BaseJsonSerializer CreateJsonSerializer(JsonFormatterOptions options)
+        {
+            if ((options & ReferenceOptions) != 0)
+            {
+                if ((options & JsonFormatterOptions.Indented) != 0)
+                {
+                    return new JsonReferenceSerializer(options)
+                    {
+                        indentedChars = DefaultIndentedChars,
+                        lineBreak = DefaultLineBreak,
+                        middleChars = DefaultMiddleChars
+                    };
+                }
 
-            jsonSerializer.WriteTo(textWriter);
+                return new JsonReferenceSerializer(options);
+            }
+
+            if ((options & ~JsonFormatterOptions.PriorCheckReferences) == JsonFormatterOptions.Default)
+            {
+                return new JsonDefaultSerializer(DefaultMaxDepth);
+            }
+
+            if ((options & JsonFormatterOptions.Indented) != 0)
+            {
+                return new JsonSerializer(options, DefaultMaxDepth)
+                {
+                    indentedChars = DefaultIndentedChars,
+                    lineBreak = DefaultLineBreak,
+                    middleChars = DefaultMiddleChars
+                };
+            }
+
+            return new JsonSerializer(options, DefaultMaxDepth);
         }
 
         /// <summary>
@@ -228,49 +345,14 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static string SerializeObject<T>(T value, JsonFormatterOptions options)
         {
-            if ((options & ReferenceOptions) != 0)
+            using (var jsonSerializer = CreateJsonSerializer(options))
             {
-                var jsonSerializer = new JsonReferenceSerializer(options);
+                ValueInterface<T>.WriteValue((IValueWriter)jsonSerializer, value);
 
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.indentedChars = DefaultIndentedChars;
-                    jsonSerializer.lineBreak = DefaultLineBreak;
-                    jsonSerializer.middleChars = DefaultMiddleChars;
-                }
-
-                ValueInterface<T>.Content.WriteValue(jsonSerializer, value);
-
-                return jsonSerializer.ToString();
-            }
-
-            if ((options & JsonFormatterOptions.PriorCheckReferences) != 0)
-            {
-                options ^= JsonFormatterOptions.PriorCheckReferences;
-            }
-
-            if (options == JsonFormatterOptions.Default)
-            {
-                var jsonSerializer = new JsonDefaultSerializer(DefaultMaxDepth);
-
-                ValueInterface<T>.Content.WriteValue(jsonSerializer, value);
-
-                return jsonSerializer.ToString();
-            }
-            else
-            {
-                var jsonSerializer = new JsonSerializer(options, DefaultMaxDepth);
-
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.indentedChars = DefaultIndentedChars;
-                    jsonSerializer.lineBreak = DefaultLineBreak;
-                    jsonSerializer.middleChars = DefaultMiddleChars;
-                }
-
-                ValueInterface<T>.Content.WriteValue(jsonSerializer, value);
-
-                return jsonSerializer.ToString();
+                return new string(
+                    jsonSerializer.hGlobal.GetPointer(),
+                    0,
+                    jsonSerializer.StringLength);
             }
         }
 
@@ -284,57 +366,14 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void SerializeObject<T>(T value, TextWriter textWriter, JsonFormatterOptions options)
         {
-            if ((options & ReferenceOptions) != 0)
+            using (var jsonSerializer = CreateJsonSerializer(options))
             {
-                var jsonSerializer = new JsonReferenceSerializer(options);
+                ValueInterface<T>.WriteValue((IValueWriter)jsonSerializer, value);
 
-                jsonSerializer.textWriter = textWriter;
-
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.indentedChars = DefaultIndentedChars;
-                    jsonSerializer.lineBreak = DefaultLineBreak;
-                    jsonSerializer.middleChars = DefaultMiddleChars;
-                }
-
-                ValueInterface<T>.Content.WriteValue(jsonSerializer, value);
-
-                jsonSerializer.WriteTo(textWriter);
-
-                return;
-            }
-
-            if ((options & JsonFormatterOptions.PriorCheckReferences) != 0)
-            {
-                options ^= JsonFormatterOptions.PriorCheckReferences;
-            }
-
-            if (options == JsonFormatterOptions.Default)
-            {
-                var jsonSerializer = new JsonDefaultSerializer(DefaultMaxDepth);
-
-                jsonSerializer.textWriter = textWriter;
-
-                ValueInterface<T>.Content.WriteValue(jsonSerializer, value);
-
-                jsonSerializer.WriteTo(textWriter);
-            }
-            else
-            {
-                var jsonSerializer = new JsonSerializer(options, DefaultMaxDepth);
-
-                jsonSerializer.textWriter = textWriter;
-
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.indentedChars = DefaultIndentedChars;
-                    jsonSerializer.lineBreak = DefaultLineBreak;
-                    jsonSerializer.middleChars = DefaultMiddleChars;
-                }
-
-                ValueInterface<T>.Content.WriteValue(jsonSerializer, value);
-
-                jsonSerializer.WriteTo(textWriter);
+                VersionDifferences.WriteChars(
+                    textWriter,
+                    jsonSerializer.hGlobal.GetPointer(),
+                    jsonSerializer.StringLength);
             }
         }
     }

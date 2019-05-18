@@ -20,7 +20,7 @@
 * 这次评测让我深知 Span<T> 的硬件加速的性能，我会考虑对 .Net Core 2.1+ 进行特殊处理，提高长字符串解析的性能。
 ~~~
 
-### [点此查看 .Net Framework 4.7.1 评测结果图](https://github.com/Dogwei/Swifter.Json/blob/master/benckmark%20for%20framework%204.7.1.png)
+### [点此查看 .Net Framework 4.7.1 评测结果图](https://github.com/Dogwei/Swifter.Json/blob/master/benckmark_for_framework_4.7.1.png)
 
 #### Swifter.Json 仍然支持 .Net Framework 2.0+, .Net Core 2.0+, .Net Standard 2.0+, Mono, Xamarin, Unity 等平台。
 #### Swifter.Json 支持 .Net 上绝大多数的数据类型。包括字典，集合，迭代器，数据读取器，表格等等。

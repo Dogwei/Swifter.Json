@@ -1,35 +1,36 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net471</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>7.3</LangVersion>
-    <ApplicationIcon />
-    <StartupObject />
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="fastJSON" Version="2.2.0.1" />
-    <PackageReference Include="Jil" Version="2.16.0" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.11.5" />
+    <PackageReference Include="fastJSON" Version="2.2.2" />
+    <PackageReference Include="Jil" Version="2.17.0" />
     <PackageReference Include="LitJson" Version="0.13.0" />
-    <PackageReference Include="NetJSON" Version="1.2.9" />
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
-    <PackageReference Include="ServiceStack" Version="5.4.0" />
+    <PackageReference Include="NetJSON" Version="1.2.10.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
+    <PackageReference Include="ServiceStack" Version="5.5.0" />
+    <PackageReference Include="SpanJson" Version="2.0.10" />
     <PackageReference Include="Utf8Json" Version="1.3.7" />
+    <PackageReference Include="Dapper" Version="1.60.6" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
     <ProjectReference Include="..\Swifter.Json\Swifter.Json.csproj" />
+    <ProjectReference Include="..\Swifter.Reflection\Swifter.Reflection.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="System.Windows.Forms" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Update="MyForm.cs">
-      <SubType>Form</SubType>
+    <Compile Update="Resource.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resource.resx</DependentUpon>
     </Compile>
   </ItemGroup>
 
@@ -38,6 +39,12 @@
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>Resource.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="MyForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
   
 </Project>

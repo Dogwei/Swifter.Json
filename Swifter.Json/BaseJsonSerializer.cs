@@ -1,25 +1,29 @@
 ﻿using Swifter.Readers;
 using Swifter.RW;
+using Swifter.Tools;
 using Swifter.Writers;
+using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.Json
 {
-    unsafe class BaseJsonSerializer: ITargetedBind
+    unsafe class BaseJsonSerializer : IDisposable, ISingleThreadOptimize
     {
+        public readonly HGlobalCache<char> hGlobal;
+
         public TextWriter textWriter;
-        public HGlobalCache hGlobal;
         public int offset;
-        public long id;
+        public JsonFormatter jsonFormatter;
 
         public int depth;
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public BaseJsonSerializer()
         {
             offset = 0;
 
-            hGlobal = HGlobalCache.ThreadInstance;
+            hGlobal = HGlobalCache<char>.OccupancyInstance();
 
             Expand(255);
         }
@@ -27,28 +31,33 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Expand(int expandMinSize)
         {
-        Loop:
-            if (hGlobal.count - offset < expandMinSize)
+            if (hGlobal.Count - offset < expandMinSize)
             {
-                if (hGlobal.count == HGlobalCache.MaxSize && textWriter != null && offset != 0)
-                {
-                    VersionDifferences.WriteChars(textWriter, hGlobal.chars, offset);
+                InternalExpand(expandMinSize);
+            }
+        }
 
-                    offset = 0;
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void InternalExpand(int expandMinSize)
+        {
+            if (hGlobal.Count == HGlobalCache<char>.MaxSize && textWriter != null && offset != 0)
+            {
+                VersionDifferences.WriteChars(textWriter, hGlobal.GetPointer(), offset);
 
-                    goto Loop;
-                }
-                else
-                {
-                    hGlobal.Expand(expandMinSize);
-                }
+                offset = 0;
+
+                Expand(expandMinSize);
+            }
+            else
+            {
+                hGlobal.Expand(expandMinSize);
             }
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Append(char c)
         {
-            hGlobal.chars[offset] = c;
+            hGlobal.GetPointer()[offset] = c;
 
             ++offset;
         }
@@ -60,63 +69,54 @@ namespace Swifter.Json
 
             Expand(length + 2);
 
-            var chars = hGlobal.chars;
-
             for (int i = 0; i < length; ++i)
             {
-                chars[offset] = value[i];
-
-                ++offset;
+                Append(value[i]);
             }
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void InternalWriteLongString(string value)
         {
             Expand(2);
 
             Append('"');
 
-            fixed (char* pValue = value)
+            for (int i = 0; i < value.Length;)
             {
-                int length = value.Length;
+                int count = value.Length - i;
 
-                for (int i = 0; i < value.Length;)
+                Expand(count + 2);
+
+                for (int end = count + offset; offset < end; ++i)
                 {
-                    int count = length - i;
+                    var item = value[i];
 
-                    Expand(count + 2);
-
-                    for (int end = count + offset; offset < end; ++i)
+                    switch (item)
                     {
-                        var c = pValue[i];
-
-                        switch (c)
-                        {
-                            case '\\':
-                                Append('\\');
-                                Append('\\');
-                                break;
-                            case '"':
-                                Append('\\');
-                                Append('"');
-                                break;
-                            case '\n':
-                                Append('\\');
-                                Append('n');
-                                break;
-                            case '\r':
-                                Append('\\');
-                                Append('r');
-                                break;
-                            case '\t':
-                                Append('\\');
-                                Append('t');
-                                break;
-                            default:
-                                Append(c);
-                                break;
-                        }
+                        case '\\':
+                            Append('\\');
+                            Append('\\');
+                            break;
+                        case '"':
+                            Append('\\');
+                            Append('"');
+                            break;
+                        case '\n':
+                            Append('\\');
+                            Append('n');
+                            break;
+                        case '\r':
+                            Append('\\');
+                            Append('r');
+                            break;
+                        case '\t':
+                            Append('\\');
+                            Append('t');
+                            break;
+                        default:
+                            Append(item);
+                            break;
                     }
                 }
             }
@@ -142,66 +142,98 @@ namespace Swifter.Json
 
             Append('"');
 
-            int offset = this.offset;
-
             for (int i = 0; i < length; ++i)
             {
-                var c = value[i];
+                var item = value[i];
 
-                switch (c)
+                switch (item)
                 {
                     case '\\':
-                        hGlobal.chars[offset] = '\\';
-                        ++offset;
-                        hGlobal.chars[offset] = '\\';
-                        ++offset;
+                        Append('\\');
+                        Append('\\');
                         break;
                     case '"':
-                        hGlobal.chars[offset] = '\\';
-                        ++offset;
-                        hGlobal.chars[offset] = '"';
-                        ++offset;
+                        Append('\\');
+                        Append('"');
                         break;
                     case '\n':
-                        hGlobal.chars[offset] = '\\';
-                        ++offset;
-                        hGlobal.chars[offset] = 'n';
-                        ++offset;
+                        Append('\\');
+                        Append('n');
                         break;
                     case '\r':
-                        hGlobal.chars[offset] = '\\';
-                        ++offset;
-                        hGlobal.chars[offset] = 'r';
-                        ++offset;
+                        Append('\\');
+                        Append('r');
                         break;
                     case '\t':
-                        hGlobal.chars[offset] = '\\';
-                        ++offset;
-                        hGlobal.chars[offset] = 't';
-                        ++offset;
+                        Append('\\');
+                        Append('t');
                         break;
                     default:
-                        hGlobal.chars[offset] = c;
-                        ++offset;
+                        Append(item);
                         break;
                 }
             }
-
-            this.offset = offset;
 
             Append('"');
         }
         
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public override string ToString()
+        public void InternalWriteChar(char value)
         {
-            return new string(hGlobal.chars, 0, offset - 1);
+            Expand(5);
+
+            Append('"');
+
+            switch (value)
+            {
+                case '\\':
+                    Append('\\');
+                    Append('\\');
+                    break;
+                case '"':
+                    Append('\\');
+                    Append('"');
+                    break;
+                case '\n':
+                    Append('\\');
+                    Append('n');
+                    break;
+                case '\r':
+                    Append('\\');
+                    Append('r');
+                    break;
+                case '\t':
+                    Append('\\');
+                    Append('t');
+                    break;
+                default:
+                    Append(value);
+                    break;
+            }
+
+            Append('"');
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteTo(TextWriter textWriter)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void InternalWriteDouble(double value)
         {
-            VersionDifferences.WriteChars(textWriter, hGlobal.chars, offset - 1);
+            // NaN, PositiveInfinity, NegativeInfinity, Or Other...
+            InternalWriteString(value.ToString());
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void InternalWriteSingle(float value)
+        {
+            // NaN, PositiveInfinity, NegativeInfinity, Or Other...
+            InternalWriteString(value.ToString());
+        }
+
+        public int StringLength => offset - 1;
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Dispose()
+        {
+            hGlobal.Dispose();
         }
 
         public void Initialize()
@@ -232,6 +264,6 @@ namespace Swifter.Json
         {
         }
 
-        public long Id => id;
+        public long Id => jsonFormatter?.id ?? 0;
     }
 }

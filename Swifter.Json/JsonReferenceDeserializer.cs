@@ -9,8 +9,21 @@ using System.Text;
 
 namespace Swifter.Json
 {
-    internal sealed unsafe class JsonReferenceDeserializer : JsonDeserializer, IValueReader
+    internal sealed unsafe class JsonReferenceDeserializer : BaseJsonDeserializer
     {
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IsRootReference(StringBuilder sb)
+        {
+            return (sb.Length == 0 || (sb.Length == 1 && sb[0] == '#'));
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IsNumberChar(char c)
+        {
+            return c >= '0' && c <= '9';
+        }
+
         public LinkedList<ReferenceInfo> references;
         public TargetPathInfo referenceTarget;
 
@@ -19,33 +32,19 @@ namespace Swifter.Json
         public IDataWriter writer;
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonReferenceDeserializer(char* chars, int index, int length)
-            : base(chars, index, length)
+        public JsonReferenceDeserializer(char* chars, int length)
+            : base(chars, length)
         {
             references = new LinkedList<ReferenceInfo>();
         }
 
-        void IValueReader.ReadObject(IDataWriter<string> valueWriter)
+        public override void ReadObject(IDataWriter<string> dataWriter)
         {
-            switch (GetValueType())
+            if (GetValueType() != JsonValueTypes.Object)
             {
-                case JsonValueTypes.String:
-                    throw new InvalidCastException("Cannot convert String to object.");
-                case JsonValueTypes.Number:
-                    throw new InvalidCastException("Cannot convert Number to object.");
-                case JsonValueTypes.Array:
-                    ReadArray(valueWriter.As<int>());
-                    return;
-                case JsonValueTypes.True:
-                case JsonValueTypes.False:
-                    throw new InvalidCastException("Cannot convert Boolean to object.");
-                case JsonValueTypes.Null:
-                    /* 空对象直接返回 */
-                    index += 4;
-                    return;
-                case JsonValueTypes.Undefined:
-                    index += 9;
-                    return;
+                NoObjectOrArray(dataWriter);
+
+                return;
             }
 
             var haveRef = false;
@@ -63,19 +62,19 @@ namespace Swifter.Json
                         continue;
                     case '{':
 
-                        valueWriter.Initialize();
+                        dataWriter.Initialize();
 
                         goto case ',';
 
                     case '}':
-                        EndCase:
+                    EndCase:
 
                         ++index;
 
                         goto ReturnValue;
                     case ',':
 
-                        Loop:
+                    Loop:
 
                         ++index;
 
@@ -103,11 +102,11 @@ namespace Swifter.Json
                             case '\'':
                                 name = InternalReadString();
 
-                                flag = StringHelper.IndexOf(chars, ':', index, length);
+                                flag = StringHelper.IndexOf(chars, index, length, ':');
 
                                 break;
                             default:
-                                flag = StringHelper.IndexOf(chars, ':', index, length);
+                                flag = StringHelper.IndexOf(chars, index, length, ':');
 
                                 name = StringHelper.Trim(chars, index, flag);
 
@@ -139,15 +138,15 @@ namespace Swifter.Json
 
                         goto Exception;
 
-                        ReadValue:
+                    ReadValue:
 
                         if (TryReadRefReferenceTarget())
                         {
-                            valueWriter.OnWriteValue(name, RWHelper.DefaultValueReader);
+                            dataWriter.OnWriteValue(name, RWHelper.DefaultValueReader);
 
-                            references.AddLast(new ReferenceInfo(referenceTarget, new SourcePathInfo(name, null, valueWriter)));
+                            references.AddLast(new ReferenceInfo(referenceTarget, new SourcePathInfo(name, null, dataWriter)));
 
-                            if (valueWriter is IDataReader reader && reader.ReferenceToken == null)
+                            if (dataWriter is IDataReader reader && reader.ReferenceToken == null)
                             {
                                 updateBase = true;
                             }
@@ -156,13 +155,13 @@ namespace Swifter.Json
                         }
                         else
                         {
-                            valueWriter.OnWriteValue(name, this);
+                            dataWriter.OnWriteValue(name, this);
 
                             if (updateBase)
                             {
                                 var last = references.Last.Value;
 
-                                last.source = new SourcePathInfo(name, last.source, valueWriter);
+                                last.source = new SourcePathInfo(name, last.source, dataWriter);
 
                                 updateBase = false;
 
@@ -177,14 +176,14 @@ namespace Swifter.Json
             }
 
 
-            Exception:
+        Exception:
             throw GetException();
 
-            ReturnValue:
+        ReturnValue:
 
-            if (haveRef && valueWriter is IDataReader dataReader && dataReader.ReferenceToken == null)
+            if (haveRef && dataWriter is IDataReader dataReader && dataReader.ReferenceToken == null)
             {
-                writer = valueWriter;
+                writer = dataWriter;
 
                 updateBase = true;
             }
@@ -192,26 +191,13 @@ namespace Swifter.Json
             return;
         }
 
-        void IValueReader.ReadArray(IDataWriter<int> valueWriter)
+        public override void ReadArray(IDataWriter<int> dataWriter)
         {
-            switch (GetValueType())
+            if (GetValueType() != JsonValueTypes.Array)
             {
-                case JsonValueTypes.String:
-                    throw new InvalidCastException("Cannot convert String to array.");
-                case JsonValueTypes.Number:
-                    throw new InvalidCastException("Cannot convert Number to array.");
-                case JsonValueTypes.Object:
-                    ReadObject(valueWriter.As<string>());
-                    return;
-                case JsonValueTypes.True:
-                    throw new InvalidCastException("Cannot convert Boolean to array.");
-                case JsonValueTypes.Null:
-                    /* 空对象直接返回 */
-                    this.index += 4;
-                    return;
-                case JsonValueTypes.Undefined:
-                    this.index += 9;
-                    return;
+                NoObjectOrArray(dataWriter);
+
+                return;
             }
 
             var haveRef = false;
@@ -233,7 +219,7 @@ namespace Swifter.Json
 
                     case '[':
 
-                        valueWriter.Initialize();
+                        dataWriter.Initialize();
 
                         goto case ',';
 
@@ -271,11 +257,11 @@ namespace Swifter.Json
 
                         if (TryReadRefReferenceTarget())
                         {
-                            valueWriter.OnWriteValue(index, RWHelper.DefaultValueReader);
+                            dataWriter.OnWriteValue(index, RWHelper.DefaultValueReader);
 
-                            references.AddLast(new ReferenceInfo(referenceTarget, new SourcePathInfo(index, null, valueWriter)));
+                            references.AddLast(new ReferenceInfo(referenceTarget, new SourcePathInfo(index, null, dataWriter)));
 
-                            if (valueWriter is IDataReader reader && reader.ReferenceToken == null)
+                            if (dataWriter is IDataReader reader && reader.ReferenceToken == null)
                             {
                                 updateBase = true;
                             }
@@ -284,13 +270,13 @@ namespace Swifter.Json
                         }
                         else
                         {
-                            valueWriter.OnWriteValue(index, this);
+                            dataWriter.OnWriteValue(index, this);
 
                             if (updateBase)
                             {
                                 var last = references.Last.Value;
 
-                                last.source = new SourcePathInfo(index, last.source, valueWriter);
+                                last.source = new SourcePathInfo(index, last.source, dataWriter);
 
                                 updateBase = false;
 
@@ -313,9 +299,9 @@ namespace Swifter.Json
 
             ReturnValue:
 
-            if (haveRef && valueWriter is IDataReader dataReader && dataReader.ReferenceToken == null)
+            if (haveRef && dataWriter is IDataReader dataReader && dataReader.ReferenceToken == null)
             {
-                writer = valueWriter;
+                writer = dataWriter;
 
                 updateBase = true;
             }
@@ -351,9 +337,10 @@ namespace Swifter.Json
                         continue;
                     case '"':
                     case '\'':
+
                         ++index;
 
-                        if (StringHelper.IgnoreCaseEquals(chars, index, length, RefName) && index + RefName.Length < length && chars[index + RefName.Length] == c)
+                        if (StringHelper.StartWithByUpper(chars + index, length, RefName) && index + RefName.Length < length && chars[index + RefName.Length] == c)
                         {
                             ++index;
 
@@ -366,7 +353,7 @@ namespace Swifter.Json
 
                     case '$':
 
-                        if (StringHelper.IgnoreCaseEquals(chars, index, length, RefName) && index + RefName.Length < length)
+                        if (StringHelper.StartWithByUpper(chars + index, length, RefName) && index + RefName.Length < length)
                         {
                             switch (chars[index + RefName.Length])
                             {
@@ -389,9 +376,9 @@ namespace Swifter.Json
 
             return false;
 
-            IsRef:
+        IsRef:
 
-            index = StringHelper.IndexOf(chars, ':', index, length);
+            index = StringHelper.IndexOf(chars, index, length, ':');
 
             if (index == -1)
             {
@@ -417,7 +404,7 @@ namespace Swifter.Json
 
             throw GetException();
 
-            ReadReference:
+        ReadReference:
 
             this.index = index;
 
@@ -444,21 +431,9 @@ namespace Swifter.Json
 
             throw GetException();
 
-            Error:
+        Error:
 
             throw new ArgumentException("Json reference object cannot contains other field.", GetException());
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static bool IsRootReference(StringBuilder sb)
-        {
-            return (sb.Length == 0 || (sb.Length == 1 && sb[0] == '#'));
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static bool IsNumberChar(char c)
-        {
-            return c >= '0' && c <= '9';
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]

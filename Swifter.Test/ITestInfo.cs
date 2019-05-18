@@ -888,6 +888,126 @@ namespace Swifter.Test
         }
     }
 
+    class BasicTypesTest : ITestInfo
+    {
+        public BasicTypesTest(int count)
+        {
+            Name = "BasicTypes";
+            Text = Encoding.UTF8.GetString(Resource.valueType);
+
+            Type = typeof(BasicTypes);
+            Count = count;
+        }
+
+        public string Name { get; }
+
+        public string Text { get; }
+
+        public Type Type { get; }
+
+        public int Count { get; }
+
+        public bool VerDeser(object obj)
+        {
+            return (obj is BasicTypes data);
+        }
+
+        public bool VerSer(string json)
+        {
+            try
+            {
+                return VerDeser(Newtonsoft.Json.JsonConvert.DeserializeObject(json, Type));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
+
+    class LongStringTest : ITestInfo
+    {
+        public string Name => "LongString";
+
+        public string Text => Newtonsoft.Json.JsonConvert.SerializeObject("\"qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//qwertyuiopasdfghjklzxcvbnmqwertyuiopasdfghjklzxcvbnm~!@#$%^&*()_+\\\"'\\\\//\"");
+
+        public Type Type => typeof(string);
+
+        public int Count => 100000;
+
+        public bool VerDeser(object obj)
+        {
+            return obj is string;
+        }
+
+        public bool VerSer(string json)
+        {
+            try
+            {
+                return VerDeser(Newtonsoft.Json.JsonConvert.DeserializeObject(json, Type));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
+
+    class ShortStringTest : ITestInfo
+    {
+        public string Name => "ShortString";
+
+        public string Text => Newtonsoft.Json.JsonConvert.SerializeObject("qwertyuiop");
+        public Type Type => typeof(string);
+
+        public int Count => 1000000;
+
+        public bool VerDeser(object obj)
+        {
+            return obj is string;
+        }
+
+        public bool VerSer(string json)
+        {
+            try
+            {
+                return VerDeser(Newtonsoft.Json.JsonConvert.DeserializeObject(json, Type));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
+
+    class DateTimeTest : ITestInfo
+    {
+        public string Name => "ISO DateTime (+08:00)";
+
+        public string Text => "\"2019-02-27T:18:00:00+08:00\"";
+
+        public Type Type => typeof(DateTime);
+
+        public int Count => 100000;
+
+        public bool VerDeser(object obj)
+        {
+            return (obj is DateTime time) && time.Year == 2019 && time.Hour == 18;
+        }
+
+        public bool VerSer(string json)
+        {
+            try
+            {
+                return VerDeser(Newtonsoft.Json.JsonConvert.DeserializeObject(json, Type));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
+
     class CalalogDictionaryTest : ITestInfo
     {
         public CalalogDictionaryTest(int count)

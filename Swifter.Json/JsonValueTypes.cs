@@ -9,6 +9,7 @@
         True = 5,
         False = 6,
         Null = 7,
+        NaN = 8,
         Undefined = 0
     }
 }

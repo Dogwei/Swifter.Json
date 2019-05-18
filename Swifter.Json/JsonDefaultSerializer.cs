@@ -1,4 +1,5 @@
-﻿using Swifter.Readers;
+﻿using Swifter.Formatters;
+using Swifter.Readers;
 using Swifter.Tools;
 using Swifter.Writers;
 using System;
@@ -7,7 +8,7 @@ using System.Runtime.CompilerServices;
 
 namespace Swifter.Json
 {
-    internal sealed unsafe class JsonDefaultSerializer : BaseJsonSerializer, IValueWriter, IValueWriter<Guid>, IValueWriter<DateTimeOffset>, IDataWriter<string>, IDataWriter<int>
+    internal sealed unsafe class JsonDefaultSerializer : BaseJsonSerializer, IDocumentWriter, IValueWriter<Guid>, IValueWriter<DateTimeOffset>, IDataWriter<string>, IDataWriter<int>
     {
         public readonly int maxDepth;
 
@@ -21,7 +22,6 @@ namespace Swifter.Json
 
         public IValueWriter this[string key]
         {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
             get
             {
                 InternalWriteString(key);
@@ -206,18 +206,14 @@ namespace Swifter.Json
         {
             Expand(4);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
         
         public void WriteChar(char value)
         {
-            Expand(4);
-
-            Append('"');
-            Append(value);
-            Append('"');
+            InternalWriteChar(value);
 
             WriteValueAfter();
         }
@@ -228,7 +224,7 @@ namespace Swifter.Json
 
             Append('"');
 
-            offset += DateTimeHelper.ToISOString(value, hGlobal.chars + offset);
+            offset += DateTimeHelper.ToISOString(value, hGlobal.GetPointer() + offset);
 
             Append('"');
 
@@ -239,17 +235,23 @@ namespace Swifter.Json
         {
             Expand(33);
 
-            offset += NumberHelper.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
         
         public void WriteDouble(double value)
         {
-            Expand(19);
+            if (value >= double.MinValue && value <= double.MaxValue)
+            {
+                Expand(24);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
-
+                offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
+            }
+            else
+            {
+                InternalWriteDouble(value);
+            }
 
             WriteValueAfter();
         }
@@ -258,7 +260,7 @@ namespace Swifter.Json
         {
             Expand(8);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
 
             WriteValueAfter();
@@ -268,7 +270,7 @@ namespace Swifter.Json
         {
             Expand(12);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
@@ -277,7 +279,7 @@ namespace Swifter.Json
         {
             Expand(21);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
@@ -313,16 +315,23 @@ namespace Swifter.Json
         {
             Expand(5);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
         
         public void WriteSingle(float value)
         {
-            Expand(19);
+            if (value >= float.MinValue && value <= float.MaxValue)
+            {
+                Expand(19);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+                offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
+            }
+            else
+            {
+                InternalWriteSingle(value);
+            }
 
             WriteValueAfter();
         }
@@ -345,7 +354,7 @@ namespace Swifter.Json
         {
             Expand(7);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
@@ -354,7 +363,7 @@ namespace Swifter.Json
         {
             Expand(11);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
@@ -363,7 +372,7 @@ namespace Swifter.Json
         {
             Expand(21);
 
-            offset += NumberHelper.Decimal.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.Decimal.ToString(value, hGlobal.GetPointer() + offset);
 
             WriteValueAfter();
         }
@@ -374,7 +383,7 @@ namespace Swifter.Json
 
             Append('"');
 
-            offset += NumberHelper.ToString(value, hGlobal.chars + offset);
+            offset += NumberHelper.ToString(value, hGlobal.GetPointer() + offset);
 
             Append('"');
 
@@ -387,7 +396,7 @@ namespace Swifter.Json
 
             Append('"');
 
-            offset += DateTimeHelper.ToISOString(value, hGlobal.chars + offset);
+            offset += DateTimeHelper.ToISOString(value, hGlobal.GetPointer() + offset);
 
             Append('"');
 
