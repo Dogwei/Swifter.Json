@@ -1,6 +1,12 @@
 # Swifter.Json
 
-### 1.2.1 更新 (UPDATE) :
+### 1.2.2 更新:
+
+#### 1：增加异步方法。
+#### 2：修改 AspNetCore 使用异步方法。
+#### 3：型新版本需要一些测试，所以暂不发布到 Nuget。
+
+### 1.2.1 更新:
 
 #### 1: 再度提高性能 (主要原理是对不常见行为禁止内联，提高常见行为的内联成功率)。
 #### 2: 解决枚举序列化出错，ValueInterface&lt;T&gt;.SetInterface() 不起作用等 BUG。
@@ -675,4 +681,12 @@
             // {"Id":1,"Name":"Dogwei"}
         }
     }
+```
+#### 将 Swifter.Json 配置到 AspNetCore。
+```C#
+
+    // 从 Nuget 上引入最新版的 Swifter.Extensions.AspNetCore 包。
+    // 然后在 Startup 中的 ConfigureServices 里加入如下代码。
+
+    services.ConfigureJsonFormatter();
 ```
