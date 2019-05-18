@@ -686,7 +686,20 @@
 ```C#
 
     // 从 Nuget 上引入最新版的 Swifter.Extensions.AspNetCore 包。
-    // 然后在 Startup 中的 ConfigureServices 里加入如下代码。
+    // 然后在 Startup 中的 ConfigureServices 方法里加入如下代码。
 
     services.ConfigureJsonFormatter();
+
+
+    // 类似这样：
+
+    public class Startup
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            ...
+
+            services.ConfigureJsonFormatter();
+        }
+    }
 ```
