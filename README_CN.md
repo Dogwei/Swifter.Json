@@ -1,8 +1,5 @@
 # Swifter.Json
 
-#### 完整代码在 [Github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
-#### FULL CODE IN [Github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
-
 ### 1.2.1 更新 (UPDATE) :
 
 #### 1: 再度提高性能 (主要原理是对不常见行为禁止内联，提高常见行为的内联成功率)。

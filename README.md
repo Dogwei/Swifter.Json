@@ -2,10 +2,6 @@
 
 A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.
 
-### Github: [https://github.com/Dogwei/Swifter.Json](https://github.com/Dogwei/Swifter.Json)
-
-#### FULL CODE ON [https://github.com/Dogwei/Swifter](https://github.com/Dogwei/Swifter)
-
 ### Swifter.Json Features
 
 (1) Supports the vast majority of data types on. Net. Includes dictionaries, collections, iterators, data readers, tables, and so on.
