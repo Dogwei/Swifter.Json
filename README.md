@@ -32,6 +32,7 @@
 #### 虽然此前一直强调 Swifter.Json 的性能，但其实它的可扩展性和代码重用性才是可圈可点的。为了这些， Swifter.Json 在性能上其实做了很大让步！
 #### 之前决定针对 .Net Core 3.0 使用 Avx2 指令优化，但并没有提升效果，可能是我打开方式不对，所以暂没有此类优化。
 
+### 文档： [Wiki](https://github.com/Dogwei/Swifter.Json/wiki/Swifter.Json)
 
 #### 简单使用
 ```C#
@@ -49,5 +50,3 @@
         }
     }
 ```
-
-### 更多文档请看 [Wiki](https://github.com/Dogwei/Swifter.Json/wiki/Swifter.Json)
