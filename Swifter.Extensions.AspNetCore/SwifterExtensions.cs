@@ -10,13 +10,14 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using static SwifterExtensions;
 
 /// <summary>
 /// Swifter 为 AspNetCore 提供的扩展方法。
 /// </summary>
 public static class SwifterExtensions
 {
-    const string JSONUTF8ContentType = "application/json; charset=utf-8";
+    internal const string JSONUTF8ContentType = "application/json; charset=utf-8";
 
     /// <summary>
     /// 为 AspNet 添加来自 Swifter.Json 高性能的 Json 格式支持。
@@ -103,157 +104,5 @@ public static class SwifterExtensions
         return mvcCoreBuilder;
     }
 
-    static string GetNonEmptyString(string st1, string st2, string st3)
-    {
-        return string.IsNullOrEmpty(st1) ? string.IsNullOrEmpty(st2) ? st3 : st2 : st1;
-    }
-
-    sealed class AspNetJsonExecutor<TJsonResult> : IActionResultExecutor<TJsonResult> where TJsonResult : IActionResult
-    {
-        static readonly XPropertyInfo valueProperty;
-        static readonly XPropertyInfo settingsProperty;
-        static readonly XPropertyInfo statusProperty;
-        static readonly XPropertyInfo contentTypeProperty;
-
-        static AspNetJsonExecutor()
-        {
-            var xTypeInfo = XTypeInfo.Create<TJsonResult>(
-                XBindingFlags.Public |
-                XBindingFlags.Instance |
-                XBindingFlags.Property);
-
-            valueProperty = xTypeInfo.GetProperty("Value") ?? xTypeInfo.GetProperty("Data") ?? throw new NotSupportedException("Value");
-            settingsProperty = xTypeInfo.GetProperty("SerializerSettings") ?? throw new NotSupportedException("SerializerSettings");
-            statusProperty = xTypeInfo.GetProperty("StatusCode") ?? throw new NotSupportedException("StatusCode");
-            contentTypeProperty = xTypeInfo.GetProperty("ContentType") ?? throw new NotSupportedException("ContentType");
-        }
-
-        readonly JsonFormatter jsonFormatter;
-
-        public AspNetJsonExecutor(JsonFormatter jsonFormatter)
-        {
-            this.jsonFormatter = jsonFormatter;
-        }
-
-        public async Task ExecuteAsync(ActionContext context, TJsonResult result)
-        {
-            var value = valueProperty.GetValue(result);
-            var settings = settingsProperty.GetValue(result);
-            var status = statusProperty.GetValue(result);
-            var contentType = Convert.ToString(contentTypeProperty.GetValue(result));
-
-            var response = context.HttpContext.Response;
-
-            if (!(settings is JsonFormatter jsonFormatter))
-            {
-                jsonFormatter = this.jsonFormatter;
-            }
-
-            contentType = GetNonEmptyString(contentType, response.ContentType, JSONUTF8ContentType);
-
-            var encoding = MediaType.GetEncoding(contentType);
-
-            response.ContentType = contentType;
-
-            if (status is int status_code)
-            {
-                response.StatusCode = status_code;
-            }
-
-            var writer = new StreamWriter(response.Body, encoding);
-
-            await jsonFormatter.SerializeAsync(value, writer);
-
-            await writer.FlushAsync();
-        }
-    }
-
-    sealed class AspNetJsonFormatter : IInputFormatter, IOutputFormatter
-    {
-        static AspNetJsonFormatter()
-        {
-            FastObjectRW.DefaultOptions =
-                FastObjectRWOptions.IgnoreCase |
-                FastObjectRWOptions.Property |
-                FastObjectRWOptions.Field |
-                FastObjectRWOptions.IndexId64 |
-                FastObjectRWOptions.BasicTypeDirectCallMethod |
-                FastObjectRWOptions.InheritedMembers |
-                FastObjectRWOptions.SkipDefaultValue;
-        }
-
-
-        readonly JsonFormatter jsonFormatter;
-
-        public AspNetJsonFormatter(JsonFormatter jsonFormatter)
-        {
-            this.jsonFormatter = jsonFormatter;
-        }
-
-        public bool CanRead(InputFormatterContext context)
-        {
-            var request = context.HttpContext.Request;
-
-            var contentType = request.ContentType;
-
-            if (!string.IsNullOrEmpty(contentType))
-            {
-                var mediaType = new MediaType(contentType);
-
-                return mediaType.SubType == "json";
-            }
-
-            return false;
-        }
-
-        public async Task<InputFormatterResult> ReadAsync(InputFormatterContext context)
-        {
-            var request = context.HttpContext.Request;
-
-            var contentType = request.ContentType;
-
-            var encoding = MediaType.GetEncoding(contentType) ?? Encoding.UTF8;
-
-            var reader = context.ReaderFactory(request.Body, encoding);
-
-            var result = await jsonFormatter.DeserializeAsync(reader, context.ModelType);
-
-            if (result == null && !context.TreatEmptyInputAsDefaultValue)
-            {
-                return InputFormatterResult.NoValue();
-            }
-            else
-            {
-                return InputFormatterResult.Success(result);
-            }
-        }
-
-        public bool CanWriteResult(OutputFormatterCanWriteContext context)
-        {
-            var response = context.HttpContext.Response;
-
-            var contentType = GetNonEmptyString(context.ContentType.Value, response.ContentType, JSONUTF8ContentType);
-
-            var mediaType = new MediaType(contentType);
-
-            return mediaType.SubType == "json";
-        }
-
-        public async Task WriteAsync(OutputFormatterWriteContext context)
-        {
-            var response = context.HttpContext.Response;
-
-            var contentType = GetNonEmptyString(context.ContentType.Value, response.ContentType, JSONUTF8ContentType);
-
-            response.ContentType = contentType;
-
-            var encoding = MediaType.GetEncoding(contentType);
-
-            var writer = context.WriterFactory(response.Body, encoding);
-
-            await jsonFormatter.SerializeAsync(context.Object, writer);
-
-            await writer.FlushAsync();
-        }
-    }
+    internal static string GetNonEmptyString(string st1, string st2, string st3) => string.IsNullOrEmpty(st1) ? string.IsNullOrEmpty(st2) ? st3 : st2 : st1;
 }

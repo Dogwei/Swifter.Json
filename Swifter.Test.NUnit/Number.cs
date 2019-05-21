@@ -4,7 +4,7 @@ using System;
 
 namespace Swifter.Test.NUnit
 {
-    public class Number
+    public abstract class Number
     {
         public static readonly Random random = new Random();
 

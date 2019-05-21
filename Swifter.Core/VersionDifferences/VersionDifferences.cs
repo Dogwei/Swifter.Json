@@ -99,6 +99,38 @@ namespace Swifter
             return AssemblyBuilder.DefineDynamicAssembly(assName, access);
         }
 #endif
+        /// <summary>
+        /// 判断是否为引用结构。
+        /// </summary>
+        /// <param name="type">类型</param>
+        /// <returns>返回一个 bool 值</returns>
+        public static bool IsByRefLike(this Type type)
+        {
+#if NETCOREAPP2_1
+            return type.IsByRefLike;
+#else
+            if (type.IsClass || type.IsByRef || type.IsPointer || type.IsEnum || type.IsInterface || !type.IsValueType)
+            {
+                return false;
+            }
+
+            if (type == typeof(void))
+            {
+                return false;
+            }
+
+            try
+            {
+                typeof(Action<>).MakeGenericType(type);
+
+                return false;
+            }
+            catch (Exception)
+            {
+                return true;
+            }
+#endif
+        }
 
         /// <summary>
         /// 往字符串写入器中写入一个字符串。

@@ -97,21 +97,6 @@ namespace Swifter.Test
         }
     }
 
-    public class SpanJsonJsonTester : ITester
-    {
-        public string Name => "SpanJson";
-
-        public T Deserialize<T>(string text)
-        {
-            return SpanJson.JsonSerializer.Generic.Utf16.Deserialize<T>(text);
-        }
-
-        public string Serialize<T>(T obj)
-        {
-            return SpanJson.JsonSerializer.Generic.Utf16.Serialize(obj);
-        }
-    }
-
     public class FastJsonTester : ITester
     {
         public string Name => "fastJSON";
@@ -182,6 +167,7 @@ namespace Swifter.Test
             return NetJSON.NetJSON.Serialize(obj, settings);
         }
     }
+#if NETCOREAPP
 
     public class System_Text_JsonTester : ITester
     {
@@ -197,6 +183,23 @@ namespace Swifter.Test
             return System.Text.Json.Serialization.JsonSerializer.ToString(obj);
         }
     }
+
+    public class SpanJsonJsonTester : ITester
+    {
+        public string Name => "SpanJson";
+
+        public T Deserialize<T>(string text)
+        {
+            return SpanJson.JsonSerializer.Generic.Utf16.Deserialize<T>(text);
+        }
+
+        public string Serialize<T>(T obj)
+        {
+            return SpanJson.JsonSerializer.Generic.Utf16.Serialize(obj);
+        }
+    }
+
+#endif
 
     public class ServiceStackTester : ITester
     {

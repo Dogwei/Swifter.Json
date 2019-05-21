@@ -1,33 +1,24 @@
 ﻿using Swifter.Json;
+using Swifter.RW;
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Reflection.Emit;
 
 namespace Swifter.Test.Debug
 {
-    class Program
+    public class Demo
     {
-        static void Main(string[] args)
+        public int TestZero { get; set; } = 0;
+        public int TestNonZero { get; set; } = 1;
+
+        public string TestEmptyString { get; set; } = "";
+        public string TestNonEmptyString { get; set; } = "Dogwei";
+
+        public object TestNull { get; set; } = null;
+        public object TestNonNull { get; set; } = new object();
+
+        public static void Main()
         {
-            while (true)
-            {
 
-                var json = JsonFormatter.SerializeObject(new { Id = 1, Name = "Dogwei" });
-
-                using (StringReader sr = new StringReader(json))
-                {
-                    var jsonFormatter = new JsonFormatter();
-
-                    var obj = jsonFormatter.DeserializeAsync(sr, typeof(Dictionary<string, object>));
-
-                    obj.Wait();
-
-                    System.Console.WriteLine(jsonFormatter.Serialize(obj.Result));
-                }
-
-                GC.Collect();
-            }
+            Console.WriteLine("Fuck123".GetHashCode());
         }
     }
 }

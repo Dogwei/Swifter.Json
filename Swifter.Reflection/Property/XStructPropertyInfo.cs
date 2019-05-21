@@ -75,7 +75,7 @@ namespace Swifter.Reflection
 
         public int Order => RWFieldAttribute.DefaultOrder;
 
-        public Type BeforeType => typeof(TValue);
+        public Type BeforeType => propertyInfo.PropertyType;
 
         public Type AfterType => typeof(TValue);
 
@@ -88,7 +88,7 @@ namespace Swifter.Reflection
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         ref TStruct GetRef(object obj)
         {
-            return ref TypeHelper.Unbox<TStruct>(obj);
+            return ref Unsafe.Unbox<TStruct>(obj);
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -143,7 +143,11 @@ namespace Swifter.Reflection
         {
             Assert(CanRead, "get");
 
-            ValueInterface<TValue>.WriteValue(valueWriter, _get(ref GetRef(obj)));
+            var value = _get(ref GetRef(obj));
+
+            Console.WriteLine(value);
+
+            ValueInterface<TValue>.WriteValue(valueWriter, value);
         }
 
         public void OnWriteValue(object obj, IValueReader valueReader)

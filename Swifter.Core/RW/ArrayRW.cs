@@ -252,6 +252,7 @@ namespace Swifter.RW
             }
 
             count = 0;
+            rank2Count = 0;
         }
 
         public override void OnWriteValue(int key, IValueReader valueReader)

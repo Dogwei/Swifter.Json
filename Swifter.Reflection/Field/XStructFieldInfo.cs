@@ -19,7 +19,7 @@ namespace Swifter.Reflection
 
         public bool CanWrite => true;
 
-        public Type BeforeType => typeof(TValue);
+        public Type BeforeType => fieldInfo.FieldType;
 
         public Type AfterType => typeof(TValue);
 

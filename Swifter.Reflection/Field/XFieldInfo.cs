@@ -31,7 +31,11 @@ namespace Swifter.Reflection
 
             Type targetType;
 
-            if (fieldInfo.IsLiteral)
+            if (fieldType.IsByRef || fieldType.IsByRefLike())
+            {
+                targetType = typeof(XDefaultFieldInfo);
+            }
+            else if (fieldInfo.IsLiteral)
             {
                 targetType = typeof(XLiteralFieldInfo<>);
             }
@@ -48,12 +52,15 @@ namespace Swifter.Reflection
                 targetType = typeof(XClassFieldInfo<>);
             }
 
-            if (fieldType.IsPointer || fieldType.IsByRef)
+            if (fieldType.IsPointer)
             {
                 fieldType = typeof(IntPtr);
             }
 
-            targetType = targetType.MakeGenericType(fieldType);
+            if (targetType.IsGenericTypeDefinition)
+            {
+                targetType = targetType.MakeGenericType(fieldType);
+            }
 
             var result = (XFieldInfo)Activator.CreateInstance(targetType);
 

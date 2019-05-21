@@ -5,6 +5,7 @@ using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace Swifter.Test.NUnit
 {
@@ -107,7 +108,7 @@ namespace Swifter.Test.NUnit
 
             AreEqual(ss, my);
 
-            Assert.Pass();
+            // Assert.Pass();
         }
 
         [Test]
@@ -127,55 +128,7 @@ namespace Swifter.Test.NUnit
         }
 
         [Test]
-        public void IndentedS()
-        {
-            var json1 = JsonFormatter.SerializeObject(s, JsonFormatterOptions.Indented);
-
-            var json2 = indentedJsonFormatter.Serialize(s);
-
-            AreEqual(json1, json2);
-
-            var my = indentedJsonFormatter.Deserialize<T[]>(json1);
-
-            AreEqual(s, my);
-
-            // Assert.Pass();
-        }
-
-        [Test]
-        public void IndentedSS()
-        {
-            var json1 = JsonFormatter.SerializeObject(s, JsonFormatterOptions.Indented);
-
-            var json2 = indentedJsonFormatter.Serialize(s);
-
-            AreEqual(json1, json2);
-
-            var my = indentedJsonFormatter.Deserialize<T[]>(json1);
-
-            AreEqual(s, my);
-
-            // Assert.Pass();
-        }
-
-        [Test]
-        public void IndentedSSS()
-        {
-            var json1 = JsonFormatter.SerializeObject(sss, JsonFormatterOptions.Indented);
-
-            var json2 = indentedJsonFormatter.Serialize(sss);
-
-            AreEqual(json1, json2);
-
-            var my = indentedJsonFormatter.Deserialize<T[,,]>(json1);
-
-            AreEqual(sss, my);
-
-            Assert.Pass();
-        }
-
-        [Test]
-        public void TextRW()
+        public void SyncS()
         {
             string json1;
             string json2;
@@ -205,6 +158,188 @@ namespace Swifter.Test.NUnit
 
             AreEqual(s, my);
         }
+
+
+        [Test]
+        public void SyncSS()
+        {
+            string json1;
+
+            string json2;
+
+            using (StringWriter sw = new StringWriter())
+            {
+                JsonFormatter.SerializeObject(ss, sw);
+
+                json1 = sw.ToString();
+            }
+
+            using (StringWriter sw = new StringWriter())
+            {
+                jsonFormatter.Serialize(ss, sw);
+
+                json2 = sw.ToString();
+            }
+
+            AreEqual(json1, json2);
+
+            T[,] my;
+
+            using (StringReader sr = new StringReader(json1))
+            {
+                my = jsonFormatter.Deserialize<T[,]>(sr);
+            }
+
+            AreEqual(ss, my);
+
+            Assert.Pass();
+        }
+
+        [Test]
+        public void SyncSSS()
+        {
+            string json1;
+
+            string json2;
+
+            using (StringWriter sw = new StringWriter())
+            {
+                JsonFormatter.SerializeObject(sss, sw);
+
+                json1 = sw.ToString();
+            }
+
+            using (StringWriter sw = new StringWriter())
+            {
+                jsonFormatter.Serialize(sss, sw);
+
+                json2 = sw.ToString();
+            }
+
+            AreEqual(json1, json2);
+
+            T[,,] my;
+
+            using (StringReader sr = new StringReader(json1))
+            {
+                my = jsonFormatter.Deserialize<T[,,]>(sr);
+            }
+
+            AreEqual(sss, my);
+
+            Assert.Pass();
+        }
+
+        [Test]
+        public void AsyncS()
+        {
+            string json1;
+            string json2;
+
+            using (StringWriter sw = new StringWriter())
+            {
+                JsonFormatter.SerializeObjectAsync(s, sw).Wait();
+
+                json1 = sw.ToString();
+            }
+
+            using (StringWriter sw = new StringWriter())
+            {
+                jsonFormatter.SerializeAsync(s, sw).Wait();
+
+                json2 = sw.ToString();
+            }
+
+            AreEqual(json1, json2);
+
+            T[] my;
+
+            using (StringReader sr = new StringReader(json1))
+            {
+                my = jsonFormatter.DeserializeAsync<T[]>(sr).Result;
+            }
+
+            AreEqual(s, my);
+        }
+
+
+        [Test]
+        public void AsyncSS()
+        {
+            string json1;
+
+            string json2;
+
+            using (StringWriter sw = new StringWriter())
+            {
+                JsonFormatter.SerializeObjectAsync(ss, sw).Wait();
+
+                json1 = sw.ToString();
+            }
+
+            using (StringWriter sw = new StringWriter())
+            {
+                jsonFormatter.SerializeAsync(ss, sw).Wait();
+
+                json2 = sw.ToString();
+            }
+
+            AreEqual(json1, json2);
+
+            T[,] my;
+
+            using (StringReader sr = new StringReader(json1))
+            {
+                my = jsonFormatter.DeserializeAsync<T[,]>(sr).Result;
+            }
+
+            AreEqual(ss, my);
+
+            Assert.Pass();
+        }
+
+        [Test]
+        public void AsyncSSS()
+        {
+            Task.Run(async () =>
+            {
+                string json1;
+
+                string json2;
+
+                using (StringWriter sw = new StringWriter())
+                {
+                    await JsonFormatter.SerializeObjectAsync(sss, sw);
+
+                    json1 = sw.ToString();
+                }
+
+                using (StringWriter sw = new StringWriter())
+                {
+                    await jsonFormatter.SerializeAsync(sss, sw);
+
+                    json2 = sw.ToString();
+                }
+
+                AreEqual(json1, json2);
+
+                T[,,] my;
+
+                using (StringReader sr = new StringReader(json1))
+                {
+                    my = await jsonFormatter.DeserializeAsync<T[,,]>(sr);
+                }
+
+                AreEqual(sss, my);
+
+            }).Wait();
+
+            Assert.Pass();
+        }
+
+
+
+
 
         public void AreEqual(string expected, string actual)
         {

@@ -1,4 +1,7 @@
-﻿using Swifter.Tools;
+﻿using Swifter.Readers;
+using Swifter.RW;
+using Swifter.Tools;
+using Swifter.Writers;
 using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -42,7 +45,11 @@ namespace Swifter.Reflection
 
             Type targetType;
 
-            if (isStatic)
+            if (propertyType.IsByRefLike())
+            {
+                targetType = typeof(XDefaultPropertyInfo);
+            }
+            else if (isStatic)
             {
                 targetType = typeof(XStaticPropertyInfo<>).MakeGenericType(propertyType);
             }

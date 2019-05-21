@@ -1,4 +1,5 @@
 ﻿using Swifter.Readers;
+using Swifter.Tools;
 using Swifter.Writers;
 using System;
 using System.Collections.Generic;
@@ -79,6 +80,8 @@ namespace Swifter.RW
 
             if (targetType == null)
             {
+                GetBestMatchRWMethod(interfaceType, fieldType, out readValueMethod, out writeValueMethod);
+
                 return;
             }
 
@@ -116,6 +119,129 @@ namespace Swifter.RW
             {
                 readValueMethod = null;
                 writeValueMethod = null;
+            }
+        }
+
+        /// <summary>
+        /// 获取与指定类型匹配的读写方法。
+        /// </summary>
+        /// <param name="interfaceType">实现读写接口的类型</param>
+        /// <param name="fieldType">指定类型</param>
+        /// <param name="readValueMethod">值读取接口</param>
+        /// <param name="writeValueMethod">值写入接口</param>
+        protected static void GetBestMatchRWMethod(Type interfaceType, Type fieldType, out MethodInfo readValueMethod, out MethodInfo writeValueMethod)
+        {
+            readValueMethod = null;
+            writeValueMethod = null;
+
+            var methods = interfaceType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance);
+
+            var readers = ArrayHelper.Filter(
+                methods, 
+                item => item.Name == nameof(IValueInterface<object>.ReadValue) 
+                    && item.GetParameters().Length == 1
+                    && item.ReturnType != typeof(void) 
+                    && item.GetParameters()[0].ParameterType == typeof(IValueReader), 
+                item => item);
+
+            var writers = ArrayHelper.Filter(
+                methods,
+                item => item.Name == nameof(IValueInterface<object>.WriteValue) 
+                    && item.GetParameters().Length == 2 
+                    && item.ReturnType == typeof(void) 
+                    && item.GetParameters()[0].ParameterType == typeof(IValueWriter),
+                item => item);
+
+            foreach (var item in readers)
+            {
+                if (item.ReturnType == fieldType)
+                {
+                    readValueMethod = item;
+                }
+            }
+
+            foreach (var item in writers)
+            {
+                if (item.GetParameters()[1].ParameterType == fieldType)
+                {
+                    writeValueMethod = item;
+                }
+            }
+
+            if (readValueMethod == null)
+            {
+                foreach (var item in readers)
+                {
+                    if (item.IsGenericMethodDefinition)
+                    {
+                        var arguments = item.GetGenericArguments();
+
+                        if (arguments.Length == 1 && arguments[0] == item.ReturnType)
+                        {
+                            readValueMethod = item.MakeGenericMethod(fieldType);
+                        }
+                    }
+                }
+            }
+
+            if (writeValueMethod == null)
+            {
+                foreach (var item in writers)
+                {
+                    if (item.IsGenericMethodDefinition)
+                    {
+                        var arguments = item.GetGenericArguments();
+
+                        if (arguments.Length == 1 && arguments[0] == item.GetParameters()[1].ParameterType)
+                        {
+                            writeValueMethod = item.MakeGenericMethod(fieldType);
+                        }
+                    }
+                }
+            }
+
+            if (readValueMethod == null)
+            {
+                foreach (var item in readers)
+                {
+                    if (fieldType.IsAssignableFrom(item.ReturnType))
+                    {
+                        readValueMethod = item;
+                    }
+                }
+            }
+
+            if (writeValueMethod == null)
+            {
+                foreach (var item in writers)
+                {
+                    if (item.GetParameters()[1].ParameterType.IsAssignableFrom(fieldType))
+                    {
+                        writeValueMethod = item;
+                    }
+                }
+            }
+
+            if (readValueMethod == null)
+            {
+                foreach (var item in readers)
+                {
+                    if (item.ReturnType.IsAssignableFrom(fieldType))
+                    {
+                        readValueMethod = item;
+                    }
+                }
+            }
+
+            if (writeValueMethod == null)
+            {
+                foreach (var item in writers)
+                {
+                    if (fieldType.IsAssignableFrom(item.GetParameters()[1].ParameterType))
+                    {
+                        writeValueMethod = item;
+                    }
+                }
             }
         }
 
