@@ -13,12 +13,12 @@ namespace Swifter.RW
         string Name { get; }
 
         /// <summary>
-        /// 字段的类型。
+        /// 字段的初始类型。
         /// </summary>
         Type BeforeType { get; }
 
         /// <summary>
-        /// ValueInterface 的类型。
+        /// 字段在经过处理之后的类型。
         /// </summary>
         Type AfterType { get; }
 

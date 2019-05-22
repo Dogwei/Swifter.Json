@@ -510,7 +510,8 @@ namespace Swifter.Test
         {
             new Thread(() =>
             {
-                Program.Main();
+                Application.Run(new MyForm());
+
             }).Start();
         }
     }
