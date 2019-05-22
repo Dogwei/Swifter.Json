@@ -267,7 +267,7 @@ The .Net Core 3.0 Preview running results:
 
         public static void Main()
         {
-            // This configuration set only at initialization, After FastObjectRW<T>.Create executes, the value cannot be change.
+            // This configuration set only at initialization, After FastObjectRW<T>.Create executes, the value cannot be modify.
             // This configuration takes effect on the specified type and its derived class.
             // But configure FastObjectRW<object>.CurrentOptions is not valid. because it always read the value of FastObjectRW.DefaultOptions.
             FastObjectRW<BaseDemo>.CurrentOptions |= FastObjectRWOptions.IgnoreCase;
