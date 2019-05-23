@@ -50,7 +50,7 @@
 ![.Net Framework 4.7.1 Previews running results](benckmark_for_framework_4.7.1.png)
 
 ##### 图中的数字代表用时(ms). 表格颜色随用时从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
-##### Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类(FastObjectRW&lt;T&gt;)” 后续会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。如果您的程序不适用这种模式，那么下面介绍的 XObjectRW<T> 也许适合您。
+##### Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类(FastObjectRW&lt;T&gt;)” 后续会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。如果您的程序不适用这种模式，那么下面介绍的 XObjectRW&lt;T&gt; 也许适合您。
 
 ## Swifter.Json 的工作原理
 
@@ -77,26 +77,26 @@ JsonFormatter.SerializeObject(new Demo { Id = 1, Name = "Dogwei" });
 
 #### Swifter.Json 首先会创建一个 JsonSerializer 实例(此实例是一个 internal class)，此类实现了 Swifter.RW.IValueWriter 接口。
 
-#### 然后 Swifter.Json 会执行 Swifter.RW.ValueInterface<Demo>.WriteValue(jsonSerializer, demo); 操作。
+#### 然后 Swifter.Json 会执行 Swifter.RW.ValueInterface&lt;Demo&gt;.WriteValue(jsonSerializer, demo); 操作。
 
-#### 在 ValueInterface<Demo>.WriteValue 里会匹配 Demo 的 IValueInterface<Demo> 的实现类；默认情况下，它会匹配到 Swifter.RW.FastObjectInterface<T> 这个实现类。
+#### 在 ValueInterface&lt;Demo&gt;.WriteValue 里会匹配 Demo 的 IValueInterface&lt;Demo&gt; 的实现类；默认情况下，它会匹配到 Swifter.RW.FastObjectInterface&lt;T&gt; 这个实现类。
 
-#### 赋予泛型参数，然后执行 FastObjectInterface<Demo> 的 WriteValue(IValueWriter valueWriter, Demo value) 方法。
+#### 赋予泛型参数，然后执行 FastObjectInterface&lt;Demo&gt; 的 WriteValue(IValueWriter valueWriter, Demo value) 方法。
 
 #### 在该方法里，它首先检查了 value 是否为 Null，如果是则执行 valueWriter.DirectWrite(null); 方法，表示在 JsonSerializer 写入一个 Null，然后返回。
 
-#### 然后检查 value 的引用，是否为 “父类引用，子类实例” 的对象，如果是则重新匹配子类的 IValueInterface<T> 实现类。
+#### 然后检查 value 的引用，是否为 “父类引用，子类实例” 的对象，如果是则重新匹配子类的 IValueInterface&lt;T&gt; 实现类。
 
-#### 之后是：执行 var fastObjectRW = FastObjectRW<Demo>.Create();，创建一个数据读写器，它实现了 IDataReader<string> 和 IDataWriter<string> 接口。
+#### 之后是：执行 var fastObjectRW = FastObjectRW&lt;Demo&gt;.Create();，创建一个数据读写器，它实现了 IDataReader&lt;string&gt; 和 IDataWriter&lt;string&gt; 接口。
 
 #### 然后初始化数据读写器：fastObjectRW.Initialize(value);，这相当于把数据读写器中的 Demo 上下文 (Context) 设置为 value。
 
-#### 再调用 valueWriter.WriterObject(IDataReader<string> dataReader); 方法。这就回到了 JsonSerializer 的 WriterObject 方法里。
+#### 再调用 valueWriter.WriterObject(IDataReader&lt;string&gt; dataReader); 方法。这就回到了 JsonSerializer 的 WriterObject 方法里。
 
 #### 在该方法里，首先直接写入了一个 '{' 字符。
 
-#### 然后执行 dataReader.OnReadAll(this);，OnReadAll 是用 IL 生成一个方法，它会遍历 Demo 中所有公开属性的名称和值写入到 IDataWriter<string> 里。
-###### 这里补充：JsonSerializer 除了实现了 IValueWriter 接口外，还实现了，IDataWriter<string> 和 IDataWriter<int>，这两个是写入 “对象” 和 写入 “数组” 的接口。
+#### 然后执行 dataReader.OnReadAll(this);，OnReadAll 是用 IL 生成一个方法，它会遍历 Demo 中所有公开属性的名称和值写入到 IDataWriter&lt;string&gt; 里。
+###### 这里补充：JsonSerializer 除了实现了 IValueWriter 接口外，还实现了，IDataWriter&lt;string&gt; 和 IDataWriter&lt;int&gt;，这两个是写入 “对象” 和 写入 “数组” 的接口。
 
 #### 在 OnReadAll 里会执行两个操作：dataWriter["Id"].WriteInt32(Context.Id); dataWriter["Name"].WriteString(Context.Name);。
 
@@ -140,19 +140,19 @@ JsonFormatter.DeserializeObject<Demo>(json);
 
 #### Swifter.Json 首先会 fixed json 取得 json 的内存地址 pJson；然会执行 var jsonDeserializer = new JsonDeserializer(pJson, 0, json.Length) 创建解析器实例，此类实现了 IValueReader 接口。
 
-#### 然后 Swifter.Json 会执行 ValueInterface<Demo>.ReadValue(jsonDeserializer); 操作。
+#### 然后 Swifter.Json 会执行 ValueInterface&lt;Demo&gt;.ReadValue(jsonDeserializer); 操作。
 
-#### 在 ValueInterface<Demo>.ReadValue 里也是会匹配 Demo 的 IValueInterface<T> 的实现类；它还是会匹配到 FastObjectInterface<Demo> 这个类。
+#### 在 ValueInterface&lt;Demo&gt;.ReadValue 里也是会匹配 Demo 的 IValueInterface&lt;T&gt; 的实现类；它还是会匹配到 FastObjectInterface&lt;Demo&gt; 这个类。
 
-#### 然后执行 FastObjectInterface<Demo> 的 ReadValue(IValueReader valueReader) 方法。
+#### 然后执行 FastObjectInterface&lt;Demo&gt; 的 ReadValue(IValueReader valueReader) 方法。
 
-#### 在该方法里，它进行没有任何判断，直接创建了一个 FastObjectRW<Demo>；因为这里是第二次创建，所以马上就能创建好。
+#### 在该方法里，它进行没有任何判断，直接创建了一个 FastObjectRW&lt;Demo&gt;；因为这里是第二次创建，所以马上就能创建好。
 
-#### 然后执行 valueReader.ReadObject(IDataWriter<string> dataWriter); 方法。现在回到 JsonDeserializer 的 ReadObject 方法里。
+#### 然后执行 valueReader.ReadObject(IDataWriter&lt;string&gt; dataWriter); 方法。现在回到 JsonDeserializer 的 ReadObject 方法里。
 
 #### 在该方法里，首先判断 JsonValueType 是否等于 Object。如果不是则调用一个 NoObject 方法。
 
-#### 在 NoObject 方法里，如果 JsonValueType 是 String，Number 或 Boolean ，则抛出异常；如果是 Null 则直接返回，如果是 Array，则执行 dataWriter.As<int> 将对象写入器转为 数组写入器，然后调用 ReadArray(IDataWriter<int> dataWriter); 方法。
+#### 在 NoObject 方法里，如果 JsonValueType 是 String，Number 或 Boolean ，则抛出异常；如果是 Null 则直接返回，如果是 Array，则执行 dataWriter.As&lt;int&gt; 将对象写入器转为 数组写入器，然后调用 ReadArray(IDataWriter&lt;int&gt; dataWriter); 方法。
 
 #### 如果 JsonValueType 是 Object 类型，则执行 dataWriter.Initialize() 操作，此方法内部会执行 Context = new Demo(); 操作。
 
@@ -203,7 +203,7 @@ JsonFormatter.DeserializeObject<Demo>(json);
 
 #### 现在回到 dataWriter.OnWriteValue 方法里将该值赋予 Context.Name。然会返回解析器。
 
-#### 解析器继续解析会解析到 '}'，然会返回到 FastObjectInterface<Demo>.ReadValue，该方法返回 fastObjectRW.Context 给 JsonFormatter.DeserializeObject。
+#### 解析器继续解析会解析到 '}'，然会返回到 FastObjectInterface&lt;Demo&gt;.ReadValue，该方法返回 fastObjectRW.Context 给 JsonFormatter.DeserializeObject。
 
 #### JsonFormatter.DeserializeObject 再返回对象给调用者，解析就完成了。
 
