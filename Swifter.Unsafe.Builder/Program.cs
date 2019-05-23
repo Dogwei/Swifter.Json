@@ -1,22 +1,27 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace Swifter
 {
     class Program
     {
-        static unsafe void Main(string[] args)
+        static async void Main(string[] args)
         {
-            var builder = new UnsafeBuilder();
 
-            builder.BuildAll();
+        Applier:
 
-            builder.Save();
+            Console.WriteLine("Fuck");
 
-#if NET20 
-            // Console.WriteLine(Unsafe.Equal(decimal.Zero, decimal.Zero));
 
-#endif
+            Stream stream = default;
+
+            int num = await stream.ReadAsync(null, 0, 0);
+
+            Console.WriteLine(num);
+
+            goto Applier;
+
         }
     }
 }

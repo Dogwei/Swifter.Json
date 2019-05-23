@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Globalization;
+using System.Threading;
 
 namespace Swifter.Test.Debug
 {
@@ -8,11 +10,6 @@ namespace Swifter.Test.Debug
 
         public static void Main()
         {
-            var obj = new { Name = "Fuck", Id = 1 };
-
-            Console.WriteLine(obj);
-
-            // Console.WriteLine(JsonFormatter.SerializeObject(obj));
         }
     }
 }

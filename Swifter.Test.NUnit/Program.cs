@@ -1,30 +1,18 @@
-﻿using System;
+﻿using Swifter.Json;
+using Swifter.RW;
+using Swifter.Tools;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Swifter.Test.NUnit
+public class Demo
 {
-    class Program
+    public int Id { get; set; }
+
+    public string Name { get; set; }
+
+    public static void Main()
     {
-        public static void Main()
-        {
-            //Console.WriteLine(typeof(TypedReference));
-            //while (true)
-            //{
-                
-            //    var test = new _Boolean();
-
-            //    test.Setup();
-
-            //    try
-            //    {
-            //        test.SS();
-            //    }
-            //    catch (Exception)
-            //    {
-            //        test.SS();
-            //    }
-            //}
-        }
+        JsonFormatter.DeserializeObject<Demo>(json);
     }
 }
