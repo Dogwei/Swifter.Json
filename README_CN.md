@@ -12,7 +12,7 @@
 
 #### 1: 支持 .Net 上绝大多是的数据类型，且轻松扩展；包括但不限于：实体，字典，集合，迭代器，数据读取器和表格。
 
-#### 2: 支持 .Net 我已知的大多数平台，包括但不限于：Framework2.0+, Core 2.0+, Standard 2.0+, Mono, Xamarin, Unity(测试版本为 2018.3).
+#### 2: 支持 .Net 我已知的大多数平台，包括但不限于：.Net Framework 2.0+, .Net Core 2.0+, .Net Standard 2.0+, Mono, Xamarin, Unity(测试版本为 2018.3).
 
 #### 3: 它几乎是无 BUG 的，如果您遇到了问题，可以在 Github 上发布一个 issue，或者 QQ:1287905882，我会尽力帮助您。
 
@@ -23,9 +23,9 @@
 #### 1: 暂没有英文接口说明，但成员命名是英文的。
 
 #### 2：总共有三个 DLL 文件，Swifter.Core(278KB)(这是 Swifter 的核心库，我不希望它与 Json 挂钩，而是它作为一个巨人，为类库开发者提供很多帮助)，Swifter.Unsafe(10KB)(这是用 IL 生成的 DLL，用于指针操作；并不是不安全的)，Swifter.Json(52KB)(Swifter 的 Json 解析部分)；文件不大也不小。
-##### ：在 Standard 下还需要 System.Reflection.Emit 和 System.Reflection.Emit.Lightweight 库。
+###### 在 .Net Standard 下还需要 System.Reflection.Emit 和 System.Reflection.Emit.Lightweight 库。
 
-#### 3：在 Standard 和 Framework 3.5 及更低版本，Swifter.Json 可能性能略减，因为我不敢在这些版本上使用针对性优化，这些版本缺少一些接口，并且可能会在一个未知的平台上运行（如 Unity 和 Xamarin）。
+#### 3：在 Standard 和 Framework 3.5 及更低版本，Swifter.Json 性能可能略减；因为我不敢在这些版本上使用针对性的优化，因为这些版本缺少一些接口，并且可能会在一个未知的平台上运行（如 Unity 和 Xamarin）。
 
 ## 部分 .Net 现有的 JSON 工具特性对比
 
@@ -49,12 +49,12 @@
 
 ![.Net Framework 4.7.1 Previews running results](benckmark_for_framework_4.7.1.png)
 
-##### 图中的数字代表用时(ms). 表格颜色随用时从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
-##### Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类(FastObjectRW&lt;T&gt;)” 后续会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。如果您的程序不适用这种模式，那么下面介绍的 XObjectRW&lt;T&gt; 也许适合您。
+###### 图中的数字代表用时(ms). 表格颜色随用时从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
+###### Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类(FastObjectRW&lt;T&gt;)” 后续会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。如果您的程序不适用这种模式，那么下面介绍的 XObjectRW&lt;T&gt; 也许适合您。
 
 ## Swifter.Json 的工作原理
 
-#### 以下的实体类作为例子，解释 Swifter.Json 序列化的全过程。
+#### 以下面的实体类作为例子，解释 Swifter.Json 是如何序列化的。
 
 ```C#
 
@@ -121,7 +121,7 @@ JsonFormatter.SerializeObject(new Demo { Id = 1, Name = "Dogwei" });
 
 #### 至此，JSON 序列化工作就完成了。
 
-## 以下解释 Swifter.Json 的反序列化过程。还是那个 Demo 类。
+### 以下解释 Swifter.Json 的反序列化过程。还是那个 Demo 类。
 
 ```C#
 
