@@ -209,7 +209,7 @@ JsonFormatter.DeserializeObject<Demo>(json);
 
 ## 这里还有几个关于 Swifter.Json 的注意事项：
 
-#### 1：Swifter.Json 解析器支持 "\uAAAA" 这样的格式，但序列化时永远也不会将中文字符或其它多字节字符序列化为 "\uAAAA" 格式，我希望这事由编码去做。
+#### 1：Swifter.Json 解析器支持 "\uAAAA" 这样的格式，但序列化时永远也不会将中文字符或其它多字节字符序列化为 "\uAAAA" 格式，我希望这事由编码器去做。
 #### 2：Swifter.Json 解析器支持没有引号的键，但是序列化时绝对不会出现没有引号的键，因为这不是 JSON 标准。
 #### 3：Swifter.Json 可能会将一个错误的 JSON 正常处理(如:{Id:123,})，但绝对不会将一个正确的 JSON 错误处理！
 
