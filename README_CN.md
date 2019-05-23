@@ -205,7 +205,7 @@ JsonFormatter.DeserializeObject<Demo>(json);
 
 #### 解析器继续解析会解析到 '}'，然会返回到 FastObjectInterface&lt;Demo&gt;.ReadValue，该方法返回 fastObjectRW.Context 给 JsonFormatter.DeserializeObject。
 
-#### JsonFormatter.DeserializeObject 再返回对象给调用者，解析就完成了。
+#### JsonFormatter.DeserializeObject 再返回对象给调用者，解析工作就完成了。
 
 ## 这里还有几个关于 Swifter.Json 的注意事项：
 
