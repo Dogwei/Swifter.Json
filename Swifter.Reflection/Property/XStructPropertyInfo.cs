@@ -88,7 +88,7 @@ namespace Swifter.Reflection
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         ref TStruct GetRef(object obj)
         {
-            return ref Unsafe.Unbox<TStruct>(obj);
+            return ref TypeHelper.Unbox<TStruct>(obj);
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]

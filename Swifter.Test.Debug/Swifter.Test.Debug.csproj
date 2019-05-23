@@ -5,8 +5,8 @@
     <TargetFramework>net471</TargetFramework>
   </PropertyGroup>
 
-  <!--<ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Swifter.Json\Swifter.Json.csproj" />
-  </ItemGroup>-->
+  </ItemGroup>
 
 </Project>

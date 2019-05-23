@@ -28,9 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
     <ProjectReference Include="..\Swifter.Json\Swifter.Json.csproj" />
-    <ProjectReference Include="..\Swifter.Reflection\Swifter.Reflection.csproj" />
   </ItemGroup>
 
   <ItemGroup>
