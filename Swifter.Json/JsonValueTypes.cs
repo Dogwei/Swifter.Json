@@ -10,6 +10,7 @@
         False = 6,
         Null = 7,
         NaN = 8,
+        Text = 9,
         Undefined = 0
     }
 }

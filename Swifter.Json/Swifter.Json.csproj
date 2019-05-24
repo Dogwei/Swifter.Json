@@ -12,7 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Swifter.Core" Version="1.2.2" />
+    <!--<PackageReference Include="Swifter.Core" Version="1.2.2" />-->
+    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

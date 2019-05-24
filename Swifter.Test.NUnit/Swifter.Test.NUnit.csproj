@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp2.1</TargetFramework>
-    <StartupObject>Swifter.Test.NUnit.Program</StartupObject>
   </PropertyGroup>
 
 

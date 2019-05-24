@@ -78,9 +78,14 @@ namespace Swifter.Tools
         /// 非数字符号的首字符。
         /// </summary>
         public const char NSign = 'N';
+        /// <summary>
+        /// 数字之间的分隔符。
+        /// </summary>
+        public const char SplitSign = '_';
 
         private const char ErrorDigital = (char)999;
         private const byte ErrorRadix = 99;
+        private const byte SplitRadix = 255;
 
         private const double DoubleMinPositive = 4.94065645841246544E-324;
         private const double DoubleMaxPositive = 1.79769313486231570E+308;
@@ -147,7 +152,7 @@ namespace Swifter.Tools
         private readonly double[] positiveExponents;
         /* 1, 0.1, 0.01, 0.001, 1e-4, 1e-5, 1e-6,... 1e-324 */
         private readonly double[] negativeExponents;
-        
+
         /* 5 */
         private const int maxFractionalLength = 5;
         /* 16 */
@@ -537,7 +542,7 @@ namespace Swifter.Tools
         internal static void DecimalAppendD15(char* chars, ulong value)
         {
             var digitals = Decimal.threeDigitals;
-            
+
             var v = value;
             var d = v / 1000;
             var c = d / 1000;
@@ -612,9 +617,16 @@ namespace Swifter.Tools
         {
             int r = 0;
 
-            for (int i = 0; i < count; i++)
+            for (int i = 0, j = 0; i < count; j++)
             {
-                r = r * radix + ToRadix(chars[i]);
+                var digit = ToRadix(chars[j]);
+
+                if (digit < radix)
+                {
+                    r = r * radix + digit;
+
+                    i++;
+                }
             }
 
             return r;

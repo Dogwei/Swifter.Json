@@ -17,254 +17,123 @@ namespace Swifter.Json
 
         public override void ReadObject(IDataWriter<string> dataWriter)
         {
-            if (GetValueType() != JsonValueTypes.Object)
+            if (!IsObject)
             {
                 NoObjectOrArray(dataWriter);
 
                 return;
             }
 
-            while (index < length)
+            ++current;
+
+            dataWriter.Initialize();
+
+        Loop:
+
+            SkipWhiteSpace();
+
+            if (current < end)
             {
-                switch (chars[index])
+                string name;
+
+                switch (*current)
                 {
-                    case ' ':
-                    case '\n':
-                    case '\r':
-                    case '\t':
-                        ++index;
-
-                        continue;
-                    case '{':
-
-                        dataWriter.Initialize();
-
-                        goto case ',';
-
                     case '}':
-                    EndCase:
-
-                        ++index;
-
-                        goto ReturnValue;
-                    case ',':
-
-                    Loop:
-
-                        ++index;
-
-                        if (index >= length)
-                        {
-                            throw GetException();
-                        }
-
-                        char c = chars[index];
-
-                        string name;
-
-                        int flag;
-
-                        switch (c)
-                        {
-                            case ' ':
-                            case '\n':
-                            case '\r':
-                            case '\t':
-                                goto Loop;
-                            case '}':
-                                goto EndCase;
-                            case '"':
-                            case '\'':
-                                name = InternalReadString();
-
-                                flag = StringHelper.IndexOf(chars, index, length, ':');
-
-                                break;
-                            default:
-                                flag = StringHelper.IndexOf(chars, index, length, ':');
-
-                                name = StringHelper.Trim(chars, index, flag);
-
-                                break;
-
-                        }
-
-                        if (flag == -1)
-                        {
-                            goto Exception;
-                        }
-
-                        index = flag + 1;
-
-                        while (index < length)
-                        {
-                            switch (chars[index])
-                            {
-                                case ' ':
-                                case '\n':
-                                case '\r':
-                                case '\t':
-                                    ++index;
-                                    continue;
-                                default:
-                                    goto ReadValue;
-                            }
-                        }
-
-                        goto Exception;
-
-                    ReadValue:
-
-                        dataWriter.OnWriteValue(name, this);
-
-                        continue;
+                        goto Return;
+                    case '"':
+                    case '\'':
+                        name = InternalReadString();
+                        break;
                     default:
-                        goto Exception;
+                        name = InternalReadText();
+                        break;
+                }
+
+                SkipWhiteSpace();
+
+                if (current < end && *current == ':')
+                {
+                    ++current;
+
+                    SkipWhiteSpace();
+
+                    dataWriter.OnWriteValue(name, this);
+
+                    SkipWhiteSpace();
+
+                    if (current < end)
+                    {
+                        switch (*current)
+                        {
+                            case '}':
+                                goto Return;
+                            case ',':
+                                ++current;
+
+                                goto Loop;
+                        }
+                    }
                 }
             }
 
-
-        Exception:
             throw GetException();
 
-        ReturnValue:
+        Return:
 
-            return;
+            ++current;
         }
 
         public override void ReadArray(IDataWriter<int> dataWriter)
         {
-            if (GetValueType() != JsonValueTypes.Array)
+            if (!IsArray)
             {
                 NoObjectOrArray(dataWriter);
 
                 return;
             }
 
-            int index = 0;
+            var i = 0;
 
-            while (this.index < length)
+            ++current;
+
+            dataWriter.Initialize();
+
+        Loop:
+
+            SkipWhiteSpace();
+
+            if (current < end)
             {
-                switch (chars[this.index])
+                if (*current == ']')
                 {
-                    case ' ':
-                    case '\n':
-                    case '\r':
-                    case '\t':
-
-                        ++this.index;
-
-                        continue;
-
-                    case '[':
-
-                        dataWriter.Initialize();
-
-                        goto case ',';
-
-                    case ']':
-                    EndCase:
-
-                        ++this.index;
-
-                        goto ReturnValue;
-
-                    case ',':
-
-                        ++this.index;
-
-                        while (this.index < length)
-                        {
-                            switch (chars[this.index])
-                            {
-                                case ' ':
-                                case '\n':
-                                case '\r':
-                                case '\t':
-                                    ++this.index;
-                                    continue;
-                                case ']':
-                                    goto EndCase;
-                                default:
-                                    goto ReadValue;
-                            }
-                        }
-
-                        goto Exception;
-
-                    ReadValue:
-
-                        dataWriter.OnWriteValue(index, this);
-
-                        ++index;
-
-                        continue;
-
-                    default:
-
-                        goto Exception;
+                    goto Return;
                 }
-            }
 
-        Exception:
-            throw GetException();
+                dataWriter.OnWriteValue(i, this); ++i;
 
-        ReturnValue:
+                SkipWhiteSpace();
 
-            return;
-        }
-
-
-
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public IEnumerable<char> GetNameId64(int end)
-        {
-            char CharAt(int i) => chars[i];
-
-            for (; index < end; ++index)
-            {
-                if (CharAt(index) == '\\')
+                if (current < end)
                 {
-                    ++index;
-
-                    switch (CharAt(index))
+                    switch (*current)
                     {
-                        case 'b':
-                            yield return '\b';
-                            continue;
-                        case 'f':
-                            yield return '\f';
-                            continue;
-                        case 'n':
-                            yield return '\n';
-                            continue;
-                        case 't':
-                            yield return '\t';
-                            continue;
-                        case 'r':
-                            yield return '\r';
-                            continue;
-                        case 'u':
+                        case ']':
+                            goto Return;
+                        case ',':
+                            ++current;
 
-                            yield return (char)(
-                                (GetDigital(CharAt(index + 1)) << 12) |
-                                (GetDigital(CharAt(index + 2)) << 8) |
-                                (GetDigital(CharAt(index + 3)) << 4) |
-                                (GetDigital(CharAt(index + 4)))
-                                );
-
-                            index += 4;
-
-                            continue;
+                            goto Loop;
                     }
                 }
-
-                yield return CharAt(index);
             }
 
-            ++index;
+            throw GetException();
+
+        Return:
+
+            ++current;
         }
+
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public long InternalReadNameId64(IId64DataRW<char> id64DataRW)
@@ -272,35 +141,35 @@ namespace Swifter.Json
             const char escape_char = '\\';
             const char unicode_char = 'u';
 
-            var text_char = chars[index];
+            var text_char = *current;
             var text_length = 0;
 
-            for (int i = (++index); i < length; ++i, ++text_length)
+            for (var index = (++current); index < end; ++index, ++text_length)
             {
-                var current_char = chars[i];
+                var current_char = *index;
 
                 if (current_char == text_char)
                 {
                     /* 内容没有转义符，直接截取返回。 */
-                    if (i - index == text_length)
+                    if (index - current == text_length)
                     {
-                        var result = id64DataRW.GetId64(ref chars[index], text_length);
+                        var result = id64DataRW.GetId64(ref current[0], text_length);
 
-                        index = i + 1;
+                        current = index + 1;
 
                         return result;
                     }
 
-                    return id64DataRW.GetId64(GetNameId64(i));
+                    return id64DataRW.GetId64Ex(InternalReadEscapeString(index, text_length));
                 }
 
                 if (current_char == escape_char)
                 {
-                    ++i;
+                    ++index;
 
-                    if (i < length && chars[i] == unicode_char)
+                    if (index < end && *index == unicode_char)
                     {
-                        i += 4;
+                        index += 4;
                     }
                 }
             }
@@ -308,142 +177,72 @@ namespace Swifter.Json
             throw GetException();
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public long InternalTrimNameId64<TDataWriter>(TDataWriter id64DataRW, int begin, int end) where TDataWriter : IDataRW, IId64DataRW<char>
-        {
-            while (begin < end && StringHelper.IsWhiteSpace(chars[begin]))
-            {
-                ++begin;
-            }
-
-            do
-            {
-                --end;
-            } while (end >= begin && StringHelper.IsWhiteSpace(chars[end]));
-
-            if (end >= begin)
-            {
-                return id64DataRW.GetId64(ref chars[begin], end - begin + 1);
-            }
-
-            return id64DataRW.GetId64(ref chars[begin], 0);
-        }
-
         public void FillValue<TDataWriter>(TDataWriter dataWriter) where TDataWriter : IDataRW, IId64DataRW<char>
         {
-            if (GetValueType() != JsonValueTypes.Object)
+            if (!IsObject)
             {
                 NoObjectOrArray(dataWriter);
 
                 return;
             }
 
-            while (index < length)
+            ++current;
+
+            dataWriter.Initialize();
+
+        Loop:
+
+            SkipWhiteSpace();
+
+            if (current < end)
             {
-                switch (chars[index])
+                long id64;
+
+                switch (*current)
                 {
-                    case ' ':
-                    case '\n':
-                    case '\r':
-                    case '\t':
-                        ++index;
-
-                        continue;
-                    case '{':
-
-                        dataWriter.Initialize();
-
-                        goto case ',';
-
                     case '}':
-                    EndCase:
-
-                        ++index;
-
-                        goto ReturnValue;
-                    case ',':
-
-                    Loop:
-
-                        ++index;
-
-                        if (index >= length)
-                        {
-                            throw GetException();
-                        }
-
-                        char c = chars[index];
-
-                        long id64;
-
-                        int flag;
-
-                        switch (c)
-                        {
-                            case ' ':
-                            case '\n':
-                            case '\r':
-                            case '\t':
-                                goto Loop;
-                            case '}':
-                                goto EndCase;
-                            case '"':
-                            case '\'':
-                                id64 = InternalReadNameId64(dataWriter);
-
-                                flag = StringHelper.IndexOf(chars, index, length, ':');
-
-                                break;
-                            default:
-                                flag = StringHelper.IndexOf(chars, index, length, ':');
-
-                                id64 = InternalTrimNameId64(dataWriter, index, flag);
-
-                                break;
-
-                        }
-
-                        if (flag == -1)
-                        {
-                            goto Exception;
-                        }
-
-                        index = flag + 1;
-
-                        while (index < length)
-                        {
-                            switch (chars[index])
-                            {
-                                case ' ':
-                                case '\n':
-                                case '\r':
-                                case '\t':
-                                    ++index;
-                                    continue;
-                                default:
-                                    goto ReadValue;
-                            }
-                        }
-
-                        goto Exception;
-
-                    ReadValue:
-
-                        dataWriter.OnWriteValue(id64, this);
-
-                        continue;
+                        goto Return;
+                    case '"':
+                    case '\'':
+                        id64 = InternalReadNameId64(dataWriter);
+                        break;
                     default:
-                        goto Exception;
+                        id64 = dataWriter.GetId64Ex(InternalReadText());
+                        break;
+                }
+
+                SkipWhiteSpace();
+
+                if (current < end && *current == ':')
+                {
+                    ++current;
+
+                    SkipWhiteSpace();
+
+                    dataWriter.OnWriteValue(id64, this);
+
+                    SkipWhiteSpace();
+
+                    if (current < end)
+                    {
+                        switch (*current)
+                        {
+                            case '}':
+                                goto Return;
+                            case ',':
+                                ++current;
+
+                                goto Loop;
+                        }
+                    }
                 }
             }
 
-
-        Exception:
             throw GetException();
 
-        ReturnValue:
+        Return:
 
-            return;
+            ++current;
         }
     }
 }

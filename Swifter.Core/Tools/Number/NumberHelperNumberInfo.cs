@@ -73,35 +73,139 @@ namespace Swifter.Tools
                 var add = (int)(c - chars);
 
                 numberInfo.chars = chars;
-                numberInfo.integerBegin += add;
-                numberInfo.fractionalBegin += add;
-                numberInfo.exponentBegin += add;
-                numberInfo.end += add;
-            }
 
+                if (numberInfo.integerBegin != -1)
+                {
+                    numberInfo.integerBegin += add;
+                }
+                if (numberInfo.fractionalBegin != -1)
+                {
+                    numberInfo.fractionalBegin += add;
+                }
+                if (numberInfo.exponentBegin != -1)
+                {
+                    numberInfo.exponentBegin += add;
+                }
+                if (numberInfo.end != -1)
+                {
+                    numberInfo.end += add;
+                }
+            }
 
             return numberInfo;
         }
 
         /// <summary>
-        /// 创建一个 NumberInfo。
+        /// 创建一个 NumberInfo，注意：此方法返回 NumberInfo 实例包含一个 GCHandle，表示固定此字符串的内存。
         /// </summary>
         /// <param name="chars">字符串</param>
         /// <param name="defaultRadix">默认进制数</param>
-        /// <param name="gcHandle">返回 Pinned 的字符串 GCHandle</param>
         /// <returns>返回一个 NumberInfo</returns>
-        public static unsafe NumberInfo GetNumberInfo(string chars, byte defaultRadix, out GCHandle gcHandle)
+        public static unsafe NumberInfo GetNumberInfo(string chars, byte defaultRadix)
         {
-            gcHandle = GCHandle.Alloc(chars, GCHandleType.Pinned);
-            
-            fixed (char* pChars = chars)
-            {
-                var numberInfo = GetNumberInfo(pChars, chars.Length, defaultRadix);
+            var gcHandle = GCHandle.Alloc(chars, GCHandleType.Pinned);
 
-                return numberInfo;
+            var pChars = (char*)Unsafe.AsPointer(ref StringHelper.GetRawStringData(chars));
+
+            var numberInfo = GetNumberInfo(pChars, chars.Length, defaultRadix);
+
+            numberInfo.gcHandle = gcHandle;
+
+            return numberInfo;
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private void GetNumberCount(char* chars, int length,ref int index, ref int count, ref int splitCount)
+        {
+        Loop:
+
+            while (index < length && ToRadix(chars[index]) < radix)
+            {
+                ++count;
+                ++index;
+            }
+
+            if (index < length && ToRadix(chars[index]) == SplitRadix)
+            {
+                ++splitCount;
+                ++index;
+
+                goto Loop;
             }
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private void SubBeginingZeroOrSplitAndEndingSplit(char* chars, ref int begin, ref int numberCount, ref int splitCount)
+        {
+            while (numberCount > 1)
+            {
+                switch (ToRadix(chars[begin]))
+                {
+                    case 0:
+                        ++begin;
+                        --numberCount;
+                        continue;
+                    case SplitRadix:
+                        ++begin;
+                        --splitCount;
+                        continue;
+                }
+
+                break;
+            }
+
+            while (ToRadix(chars[begin]) == SplitRadix)
+            {
+                ++begin;
+                --splitCount;
+            }
+
+            var end = begin + numberCount + splitCount - 1;
+
+            while (ToRadix(chars[end]) == SplitRadix)
+            {
+                --end;
+                --splitCount;
+            }
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private void SubBeginingSplitAndEndingZeroOrSplit(char* chars, ref int begin, ref int numberCount, ref int splitCount)
+        {
+            var end = begin + numberCount + splitCount - 1;
+
+            while (numberCount > 0)
+            {
+                switch (ToRadix(chars[end]))
+                {
+                    case 0:
+                        --end;
+                        --numberCount;
+                        continue;
+                    case SplitRadix:
+                        --end;
+                        --splitCount;
+                        continue;
+                }
+
+                break;
+            }
+
+            if (numberCount > 1)
+            {
+                while (ToRadix(chars[end]) == SplitRadix)
+                {
+                    --end;
+                    --splitCount;
+                }
+
+                while (ToRadix(chars[begin]) == SplitRadix)
+                {
+                    ++begin;
+                    --splitCount;
+                }
+            }
+        }
 
         /// <summary>
         /// 创建一个 NumberInfo。
@@ -137,32 +241,19 @@ namespace Swifter.Tools
                         break;
                 }
 
-                var beforeZeroCount = 0;
-
-                while (index < length && chars[index] == DigitalsZeroValue)
-                {
-                    ++beforeZeroCount;
-                    ++index;
-                }
-
                 var integerBegin = index;
                 var integerCount = 0;
+                var integerSplitCount = 0;
 
-                while (index < length && ToRadix(chars[index]) < radix)
-                {
-                    ++integerCount;
-                    ++index;
-                }
+                GetNumberCount(chars, length, ref index, ref integerCount, ref integerSplitCount);
 
                 if (integerCount != 0)
                 {
+                    SubBeginingZeroOrSplitAndEndingSplit(chars, ref integerBegin, ref integerCount, ref integerSplitCount);
+
                     number.integerBegin = integerBegin;
                     number.integerCount = integerCount;
-                }
-                else if (beforeZeroCount != 0)
-                {
-                    number.integerBegin = index - 1;
-                    number.integerCount = 1;
+                    number.integerSplitCount = integerSplitCount;
                 }
 
                 if (index < length && chars[index] == DotSign)
@@ -173,29 +264,18 @@ namespace Swifter.Tools
 
                     var fractionalBegin = index;
                     var fractionalCount = 0;
+                    var fractionalSplitCount = 0;
 
-                    while (index < length && ToRadix(chars[index]) < radix)
-                    {
-                        ++fractionalCount;
-                        ++index;
-                    }
+                    GetNumberCount(chars, length, ref index, ref fractionalCount, ref fractionalSplitCount);
 
                     if (fractionalCount != 0)
                     {
-
-                        for (int fractionalRight = fractionalBegin + fractionalCount - 1; fractionalRight >= 0; --fractionalRight)
-                        {
-                            if (chars[fractionalRight] != DigitalsZeroValue)
-                            {
-                                break;
-                            }
-
-                            --fractionalCount;
-                        }
+                        SubBeginingSplitAndEndingZeroOrSplit(chars, ref integerBegin, ref integerCount, ref integerSplitCount);
 
                         number.haveFractional = fractionalCount != 0;
                         number.fractionalBegin = fractionalBegin;
                         number.fractionalCount = fractionalCount;
+                        number.fractionalSplitCount = fractionalSplitCount;
                     }
                 }
 
@@ -253,32 +333,18 @@ namespace Swifter.Tools
                         }
 
                         var exponentBegin = index;
-
-                        var exponentBeforeZeroCount = 0;
-
-                        while (index < length && chars[index] == DigitalsZeroValue)
-                        {
-                            ++exponentBeforeZeroCount;
-                            ++index;
-                        }
-
                         var exponentCount = 0;
+                        var exponentSplitCount = 0;
 
-                        while (index < length && ToRadix(chars[index]) < radix)
-                        {
-                            ++exponentCount;
-                            ++index;
-                        }
+                        GetNumberCount(chars, length, ref index, ref exponentCount, ref exponentSplitCount);
 
                         if (exponentCount != 0)
                         {
+                            SubBeginingZeroOrSplitAndEndingSplit(chars, ref exponentBegin, ref exponentCount, ref exponentSplitCount);
+
                             number.exponentBegin = exponentBegin;
                             number.exponentCount = exponentCount;
-                        }
-                        else if (beforeZeroCount != 0)
-                        {
-                            number.exponentBegin = index - 1;
-                            number.exponentCount = 1;
+                            number.exponentSplitCount = exponentSplitCount;
                         }
                     }
                 }
@@ -306,7 +372,7 @@ namespace Swifter.Tools
                 return numberInfo;
             }
         }
-        
+
 
         /// <summary>
         /// 将 NumberInfo 转换为 UInt64。失败将引发异常。
@@ -345,49 +411,62 @@ namespace Swifter.Tools
                 return 0;
             }
 
-            byte l = 0;
             var c = count;
             var r = 0UL;
 
-            for (int i = 0, j = numberInfo.integerBegin; i < numberInfo.integerCount; ++i, ++j, --c)
+            byte digit;
+
+            for (int i = 0, j = numberInfo.integerBegin; i < numberInfo.integerCount; ++j)
             {
-                l = ToRadix(numberInfo.chars[j]);
+                digit = ToRadix(numberInfo.chars[j]);
 
                 if (c <= 1)
                 {
                     goto End;
                 }
 
-                r = r * radix + l;
+                if (digit < radix)
+                {
+                    r = r * radix + digit;
+
+                    --c;
+                    ++i;
+                }
             }
 
-            for (int i = 0, j = numberInfo.fractionalBegin; i < numberInfo.fractionalCount; ++i, ++j, --c)
+            for (int i = 0, j = numberInfo.fractionalBegin; i < numberInfo.fractionalCount; ++j)
             {
-                l = ToRadix(numberInfo.chars[j]);
+                digit = ToRadix(numberInfo.chars[j]);
 
                 if (c <= 1)
                 {
                     goto End;
                 }
 
-                r = r * radix + l;
+                if (digit < radix)
+                {
+                    r = r * radix + digit;
+
+                    --c;
+                    ++i;
+                }
             }
 
-            l = 0;
+            digit = 0;
 
             for (; c > 1; --c)
             {
-                r = r * radix;
+                r *= radix;
             }
 
         End:
 
-            if (count == uInt64NumbersLength && r > (UInt64MaxValue - l) / radix)
+            if (count == uInt64NumbersLength && r > (UInt64MaxValue - digit) / radix)
             {
                 throw new OverflowException("Number out of UInt64 range.");
             }
 
-            r = r * radix + l;
+            r = r * radix + digit;
 
             return r;
         }
@@ -457,14 +536,28 @@ namespace Swifter.Tools
 
             var r = 0D;
 
-            for (int i = 0, j = numberInfo.integerBegin; i < numberInfo.integerCount; ++i, ++j)
+            for (int i = 0, j = numberInfo.integerBegin; i < numberInfo.integerCount; ++j)
             {
-                r = r * radix + ToRadix(numberInfo.chars[j]);
+                var digit = ToRadix(numberInfo.chars[j]);
+
+                if (digit < radix)
+                {
+                    r = r * radix + digit;
+
+                    ++i;
+                }
             }
 
-            for (int i = 0, j = numberInfo.fractionalBegin; i < numberInfo.fractionalCount; ++i, ++j)
+            for (int i = 0, j = numberInfo.fractionalBegin; i < numberInfo.fractionalCount; ++j)
             {
-                r = r * radix + ToRadix(numberInfo.chars[j]);
+                var digit = ToRadix(numberInfo.chars[j]);
+
+                if (digit < radix)
+                {
+                    r = r * radix + digit;
+
+                    ++i;
+                }
             }
 
             var e = exponent - numberInfo.fractionalCount;
