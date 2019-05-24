@@ -2,7 +2,7 @@
 
 ### [Github](https://github.com/Dogwei/Swifter.Json)
 
-### [Wiki](https://github.com/Dogwei/Swifter.Json/wiki/Swifter.Json)
+### [Wiki](https://github.com/Dogwei/Swifter.Json/wiki)
 
 #### 在 .Net 平台上的一个功能强大，简单易用，稳定又不失高性能的 JSON 序列化和反序列化工具。
 
