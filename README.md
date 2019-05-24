@@ -1,6 +1,6 @@
 # Swifter.Json
 
-### [使用文档： Wiki](https://github.com/Dogwei/Swifter.Json/wiki/Swifter.Json)
+### [使用文档： Wiki](https://github.com/Dogwei/Swifter.Json/wiki)
 
 ### 1.2.2 更新:
 
