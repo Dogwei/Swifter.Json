@@ -6,7 +6,7 @@ namespace Swifter.Tools
     /// <summary>
     /// 储存一个字符串的数字信息
     /// </summary>
-    public sealed unsafe class NumberInfo
+    public unsafe ref struct NumberInfo
     {
         internal char* chars;
         internal bool isFloat;
@@ -24,16 +24,6 @@ namespace Swifter.Tools
         internal int exponentSplitCount;
         internal byte radix;
         internal int end;
-
-        internal GCHandle? gcHandle;
-
-        /// <summary>
-        /// 释放 GCHandle。
-        /// </summary>
-        ~NumberInfo()
-        {
-            gcHandle?.Free();
-        }
 
         /// <summary>
         /// 获取该数字是否为浮点数。

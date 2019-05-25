@@ -112,13 +112,34 @@ namespace Swifter.Json
             end = chars + length;
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void InternalSkipWhiteSpace()
+        {
+            Loop:
+
+            switch (*current)
+            {
+                case ' ':
+                case '\b':
+                case '\f':
+                case '\n':
+                case '\t':
+                case '\r':
+                    ++current;
+                    if (current < end)
+                    {
+                        goto Loop;
+                    }
+                    break;
+            }
+        }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void SkipWhiteSpace()
         {
-            while (current < end && *current <= 0x20)
+            if (current < end && *current <= 0x20)
             {
-                ++current;
+                InternalSkipWhiteSpace();
             }
         }
 
@@ -184,32 +205,32 @@ namespace Swifter.Json
             var text_char = *current;
             var text_length = 0;
 
-            for (var i = (++current); i < end; ++i, ++text_length)
+            for (var curr = (++current); curr < end; ++curr, ++text_length)
             {
-                var current_char = *i;
+                var current_char = *curr;
 
                 if (current_char == text_char)
                 {
                     /* 内容没有转义符，直接截取返回。 */
-                    if (i - current == text_length)
+                    if (curr - current == text_length)
                     {
                         var result = new string(current, 0, text_length);
 
-                        current = i + 1;
+                        current = curr + 1;
 
                         return result;
                     }
 
-                    return InternalReadEscapeString(i, text_length);
+                    return InternalReadEscapeString(curr, text_length);
                 }
 
                 if (current_char == escape_char)
                 {
-                    ++i;
+                    ++curr;
 
-                    if (i < end && *i == unicode_char)
+                    if (curr < end && *curr == unicode_char)
                     {
-                        i += 4;
+                        curr += 4;
                     }
                 }
             }

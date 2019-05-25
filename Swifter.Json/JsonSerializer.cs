@@ -15,7 +15,7 @@ namespace Swifter.Json
         public readonly int maxDepth;
         
         public string indentedChars;
-        public string lineBreak;
+        public string lineBreakChars;
         public string middleChars;
 
         /// <summary>
@@ -150,7 +150,7 @@ namespace Swifter.Json
             {
                 if (isInArray)
                 {
-                    Append(lineBreak);
+                    Append(lineBreakChars);
 
                     for (int i = depth; i > 0; --i)
                     {
@@ -173,7 +173,7 @@ namespace Swifter.Json
             {
                 if (!isInArray)
                 {
-                    Append(lineBreak);
+                    Append(lineBreakChars);
 
                     for (int i = depth; i > 0; --i)
                     {
@@ -210,7 +210,7 @@ namespace Swifter.Json
         {
             if ((options & JsonFormatterOptions.Indented) != 0)
             {
-                Append(lineBreak);
+                Append(lineBreakChars);
 
                 for (int i = depth; i > 0; --i)
                 {

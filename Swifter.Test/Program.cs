@@ -10,12 +10,8 @@ namespace Swifter.Test
     {
         public static void Main()
         {
-            // Application.Run(new MyForm());
-
-            var jsonFormatter = new JsonFormatter(JsonFormatterOptions.Indented |
-                JsonFormatterOptions.IgnoreNull);
-
-            Console.WriteLine(jsonFormatter.Serialize(new int[] { 1,2,3}));
+            // Console.WriteLine((int)'\r');
+            Application.Run(new MyForm());
         }
     }
 }

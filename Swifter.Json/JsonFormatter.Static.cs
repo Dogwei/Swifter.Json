@@ -309,7 +309,7 @@ namespace Swifter.Json
                     return new JsonReferenceSerializer(options)
                     {
                         indentedChars = DefaultIndentedChars,
-                        lineBreak = DefaultLineCharsBreak,
+                        lineBreakChars = DefaultLineCharsBreak,
                         middleChars = DefaultMiddleChars
                     };
                 }
@@ -327,7 +327,7 @@ namespace Swifter.Json
                 return new JsonSerializer(options, DefaultMaxDepth)
                 {
                     indentedChars = DefaultIndentedChars,
-                    lineBreak = DefaultLineCharsBreak,
+                    lineBreakChars = DefaultLineCharsBreak,
                     middleChars = DefaultMiddleChars
                 };
             }

@@ -96,22 +96,17 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 创建一个 NumberInfo，注意：此方法返回 NumberInfo 实例包含一个 GCHandle，表示固定此字符串的内存。
+        /// 创建一个 NumberInfo，注意：实用此方法请保证字符串内容不会被移址。
         /// </summary>
         /// <param name="chars">字符串</param>
         /// <param name="defaultRadix">默认进制数</param>
         /// <returns>返回一个 NumberInfo</returns>
         public static unsafe NumberInfo GetNumberInfo(string chars, byte defaultRadix)
         {
-            var gcHandle = GCHandle.Alloc(chars, GCHandleType.Pinned);
-
-            var pChars = (char*)Unsafe.AsPointer(ref StringHelper.GetRawStringData(chars));
-
-            var numberInfo = GetNumberInfo(pChars, chars.Length, defaultRadix);
-
-            numberInfo.gcHandle = gcHandle;
-
-            return numberInfo;
+            fixed (char* pChars = chars)
+            {
+                return GetNumberInfo(pChars, chars.Length, defaultRadix);
+            }
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -356,20 +351,15 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 创建一个 NumberInfo。
+        /// 获取一个字符串的 NumberInfo。注意：实用此方法请保证字符串内容不会被移址。
         /// </summary>
         /// <param name="chars">字符串</param>
-        /// <param name="gcHandle">返回 Pinned 的字符串 GCHandle</param>
         /// <returns>返回一个 NumberInfo</returns>
-        public NumberInfo GetNumberInfo(string chars, out GCHandle gcHandle)
+        public NumberInfo GetNumberInfo(string chars)
         {
-            gcHandle = GCHandle.Alloc(chars, GCHandleType.Pinned);
-
             fixed (char* pChars = chars)
             {
-                var numberInfo = GetNumberInfo(pChars, chars.Length);
-
-                return numberInfo;
+                return GetNumberInfo(pChars, chars.Length);
             }
         }
 

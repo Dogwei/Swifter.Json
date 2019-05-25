@@ -1,8 +1,6 @@
 ﻿using Swifter.Readers;
 using Swifter.RW;
-using Swifter.Tools;
 using Swifter.Writers;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.Json
@@ -57,20 +55,23 @@ namespace Swifter.Json
 
                     SkipWhiteSpace();
 
-                    dataWriter.OnWriteValue(name, this);
-
-                    SkipWhiteSpace();
-
                     if (current < end)
                     {
-                        switch (*current)
-                        {
-                            case '}':
-                                goto Return;
-                            case ',':
-                                ++current;
+                        dataWriter.OnWriteValue(name, this);
 
-                                goto Loop;
+                        SkipWhiteSpace();
+
+                        if (current < end)
+                        {
+                            switch (*current)
+                            {
+                                case '}':
+                                    goto Return;
+                                case ',':
+                                    ++current;
+
+                                    goto Loop;
+                            }
                         }
                     }
                 }
@@ -177,6 +178,7 @@ namespace Swifter.Json
             throw GetException();
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void FillValue<TDataWriter>(TDataWriter dataWriter) where TDataWriter : IDataRW, IId64DataRW<char>
         {
             if (!IsObject)
