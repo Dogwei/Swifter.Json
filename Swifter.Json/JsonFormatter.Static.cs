@@ -26,7 +26,7 @@ namespace Swifter.Json
         /// <summary>
         /// 读取或设置默认换行符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
         /// </summary>
-        public static string DefaultLineBreak { get; set; } = "\n";
+        public static string DefaultLineCharsBreak { get; set; } = "\n";
 
         /// <summary>
         /// 读取或设置默认 Key 与 Value 之间的分隔符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
@@ -309,7 +309,7 @@ namespace Swifter.Json
                     return new JsonReferenceSerializer(options)
                     {
                         indentedChars = DefaultIndentedChars,
-                        lineBreak = DefaultLineBreak,
+                        lineBreak = DefaultLineCharsBreak,
                         middleChars = DefaultMiddleChars
                     };
                 }
@@ -327,7 +327,7 @@ namespace Swifter.Json
                 return new JsonSerializer(options, DefaultMaxDepth)
                 {
                     indentedChars = DefaultIndentedChars,
-                    lineBreak = DefaultLineBreak,
+                    lineBreak = DefaultLineCharsBreak,
                     middleChars = DefaultMiddleChars
                 };
             }
