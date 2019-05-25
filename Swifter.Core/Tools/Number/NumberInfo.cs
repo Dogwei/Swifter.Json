@@ -1,11 +1,12 @@
 ﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Swifter.Tools
 {
     /// <summary>
     /// 储存一个字符串的数字信息
     /// </summary>
-    public unsafe ref struct NumberInfo
+    public sealed unsafe class NumberInfo
     {
         internal char* chars;
         internal bool isFloat;
@@ -14,12 +15,25 @@ namespace Swifter.Tools
         internal bool exponentIsNegative;
         internal int integerBegin;
         internal int integerCount;
+        internal int integerSplitCount;
         internal int fractionalBegin;
         internal int fractionalCount;
+        internal int fractionalSplitCount;
         internal int exponentBegin;
         internal int exponentCount;
+        internal int exponentSplitCount;
         internal byte radix;
         internal int end;
+
+        internal GCHandle? gcHandle;
+
+        /// <summary>
+        /// 释放 GCHandle。
+        /// </summary>
+        ~NumberInfo()
+        {
+            gcHandle?.Free();
+        }
 
         /// <summary>
         /// 获取该数字是否为浮点数。
@@ -112,9 +126,7 @@ namespace Swifter.Tools
                     ++index;
                 }
 
-                Copy(this.chars, integerBegin, integerCount, chars, index);
-
-                index += integerCount;
+                Copy(this.chars, integerBegin, integerCount + integerSplitCount, chars, ref index);
 
                 if (haveFractional && fractionalCount != 0)
                 {
@@ -122,9 +134,7 @@ namespace Swifter.Tools
 
                     ++index;
 
-                    Copy(this.chars, fractionalBegin, fractionalCount, chars, index);
-
-                    index += fractionalCount;
+                    Copy(this.chars, fractionalBegin, fractionalCount + fractionalSplitCount, chars, ref index);
                 }
 
                 if (exponentBegin != -1 && exponentCount != 0)
@@ -136,13 +146,15 @@ namespace Swifter.Tools
                     if (exponentIsNegative)
                     {
                         chars[index] = NumberHelper.NegativeSign;
-
-                        ++index;
+                    }
+                    else
+                    {
+                        chars[index] = NumberHelper.PositiveSign;
                     }
 
-                    Copy(this.chars, exponentBegin, exponentCount, chars, index);
+                    ++index;
 
-                    index += exponentCount;
+                    Copy(this.chars, exponentBegin, exponentCount + exponentSplitCount, chars, ref index);
                 }
 
                 return index;
@@ -162,7 +174,11 @@ namespace Swifter.Tools
             {
                 if (IsNumber)
                 {
-                    return (isNegative ? 1 : 0) + integerCount + ((haveFractional && fractionalBegin != -1 && fractionalCount != 0) ? 1 + fractionalCount : 0) + ((exponentBegin != -1 && exponentCount != 0) ? (exponentIsNegative ? 1 : 0) + 1 + exponentCount : 0);
+                    return 
+                        (isNegative ? 1 : 0) 
+                        + integerCount + integerSplitCount 
+                        + ((haveFractional && fractionalBegin != -1 && fractionalCount != 0) ? 1 + fractionalCount + fractionalSplitCount : 0) 
+                        + ((exponentBegin != -1 && exponentCount != 0) ? 2 + exponentCount + exponentSplitCount : 0);
                 }
 
                 return NumberHelper.NaNSign.Length;
@@ -170,7 +186,7 @@ namespace Swifter.Tools
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static void Copy(char* source, int begin, int count, char* destination, int index)
+        private static void Copy(char* source, int begin, int count, char* destination, ref int index)
         {
             int end = begin + count;
 

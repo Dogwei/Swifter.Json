@@ -84,6 +84,9 @@ namespace Swifter.Tools
                 IgnoreCaseRadixes[i] = ErrorRadix;
             }
 
+            Radixes[SplitSign] = SplitRadix;
+            IgnoreCaseRadixes[SplitSign] = SplitRadix;
+
             for (uint i = 0; i < MaxRadix; i++)
             {
                 char digital = SlowToDigital(i);

@@ -247,7 +247,7 @@ namespace Swifter.RW
             }
         }
 
-        private static bool ChackMult()
+        private static bool CheckMult()
         {
             var cache = new IdCache<bool>();
 
@@ -338,7 +338,7 @@ namespace Swifter.RW
 
                 foreach (var item in Keys) LongestKeyLength = Math.Max(LongestKeyLength, item.Length);
 
-                do Mult = RandomInstance.Next(int.MinValue, int.MaxValue) & long.MaxValue; while (!ChackMult());
+                do Mult = RandomInstance.Next(int.MinValue, int.MaxValue) & long.MaxValue; while (!CheckMult());
 
                 ContentField = typeof(FastObjectRW<T>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 

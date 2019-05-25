@@ -66,6 +66,11 @@ namespace Swifter.RW
             {
                 if (ReadValueMethod != null)
                 {
+                    if (ReadValueMethod.IsStatic)
+                    {
+                        return;
+                    }
+
                     var index = Array.IndexOf(Fields, this);
 
                     ilGen.LoadConstant(index);
@@ -120,6 +125,11 @@ namespace Swifter.RW
             {
                 if (WriteValueMethod != null)
                 {
+                    if (ReadValueMethod.IsStatic)
+                    {
+                        return;
+                    }
+
                     var index = Array.IndexOf(Fields, this);
 
                     ilGen.LoadConstant(index);

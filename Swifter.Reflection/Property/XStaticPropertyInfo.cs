@@ -68,7 +68,7 @@ namespace Swifter.Reflection
 
         public int Order => RWFieldAttribute.DefaultOrder;
 
-        public Type BeforeType => typeof(TValue);
+        public Type BeforeType => propertyInfo.PropertyType;
 
         public Type AfterType => typeof(TValue);
 

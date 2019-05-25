@@ -53,6 +53,11 @@ namespace Swifter.Json
         public IEnumerable<string> ObjectKeys => Object.Keys;
 
         /// <summary>
+        /// 获取这个 Json 对象的键值对集合。
+        /// </summary>
+        public IEnumerable<KeyValuePair<string, object>> ObjectItems => Object;
+
+        /// <summary>
         /// 获取这个 Json 数组的长度。
         /// </summary>
         public int ArrayLength => Array.Count;

@@ -50,8 +50,12 @@ namespace Swifter.Test
             testers.Add(new JilTester());
             testers.Add(new NetJSONTestter());
             testers.Add(new Utf8JsonTester());
-            testers.Add(new SpanJsonJsonTester());
+
+#if NETCOREAPP
             testers.Add(new System_Text_JsonTester());
+            testers.Add(new SpanJsonJsonTester());
+#endif
+
             testers.Add(new SwifterTester());
 
             tests.Add(new CommonDataTest(100000));
@@ -506,7 +510,8 @@ namespace Swifter.Test
         {
             new Thread(() =>
             {
-                Program.Main();
+                Application.Run(new MyForm());
+
             }).Start();
         }
     }

@@ -3,11 +3,13 @@
   <PropertyGroup>
     <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;netcoreapp2.1;netstandard2.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.2.1</Version>
+    <Version>1.2.2</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Core.xml</DocumentationFile>
     <Description>Swifter Core components.</Description>
     <LangVersion>latest</LangVersion>
+    <Copyright />
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
   
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
@@ -17,6 +19,13 @@
   
   <ItemGroup>
     <PackageReference Include="Swifter.Unsafe" Version="1.0.2" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
   </ItemGroup>
   
 </Project>

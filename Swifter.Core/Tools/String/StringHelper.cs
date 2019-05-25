@@ -1,4 +1,5 @@
 ﻿using Swifter.RW;
+using System;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -492,6 +493,23 @@ namespace Swifter.Tools
                     goto FormatLoop;
                 }
             }
+        }
+
+        /// <summary>
+        /// 去除尾部的空格，然后返回一个字符串。
+        /// </summary>
+        /// <param name="chars">原始字符串</param>
+        /// <param name="length">原始长度</param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe string TrimEnd(char* chars, int length)
+        {
+            while (length > 0 && IsWhiteSpace(chars[length - 1]))
+            {
+                --length;
+            }
+
+            return new string(chars, 0, length);
         }
 
         /// <summary>

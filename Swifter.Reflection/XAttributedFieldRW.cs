@@ -96,32 +96,49 @@ namespace Swifter.Reflection
 
             if (read != null && write != null)
             {
-                var type = firstArg.GetType();
-                var rwType = typeof(XInterfaceAttributedFieldRW<>).MakeGenericType(read.ReturnType);
-                var interfaceType = rwType.GetField(
-                    nameof(XInterfaceAttributedFieldRW<object>.valueInterface),
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).FieldType;
+                var valueType = write.GetParameters()[1].ParameterType;
 
-                if (interfaceType.IsAssignableFrom(type))
+                if (valueType != read.ReturnType)
                 {
-                    var map = type.GetInterfaceMap(interfaceType);
+                    throw new NotSupportedException("The type of the value of the Read method is inconsistent with the value of the Write method.");
+                }
 
-                    if ((map.TargetMethods.Contains(read) || map.InterfaceMethods.Contains(read)) &&
-                        (map.TargetMethods.Contains(write) || map.InterfaceMethods.Contains(write))
-                        )
+                var type = firstArg.GetType();
+
+                foreach (var item in type.GetInterfaces())
+                {
+                    if (item.IsGenericType && item.GetGenericTypeDefinition() == typeof(IValueInterface<>))
                     {
-                        return (XAttributedFieldRW)Activator.CreateInstance(
-                            rwType,
-                            new object[] {
-                            infos.fieldRW,
-                            infos.attribute,
-                            firstArg
-                            });
+                        var arguments = item.GetGenericArguments();
+
+                        if (arguments.Length == 1 && arguments[0] == valueType)
+                        {
+                            var rwType = typeof(XInterfaceAttributedFieldRW<>).MakeGenericType(valueType);
+
+                            var map = type.GetInterfaceMap(item);
+
+                            if ((map.TargetMethods.Contains(read) || map.InterfaceMethods.Contains(read)) &&
+                                (map.TargetMethods.Contains(write) || map.InterfaceMethods.Contains(write)))
+                            {
+                                return (XAttributedFieldRW)Activator.CreateInstance(
+                                    rwType,
+                                    new object[] {
+                                        infos.fieldRW,
+                                        infos.attribute,
+                                        firstArg
+                                    });
+                            }
+                        }
                     }
                 }
 
+                if (valueType.IsByRef || valueType.IsPointer)
+                {
+                    valueType = typeof(IntPtr);
+                }
+
                 return (XAttributedFieldRW)Activator.CreateInstance(
-                    typeof(XAttributedFieldRW<>).MakeGenericType(read.ReturnType),
+                    typeof(XAttributedFieldRW<>).MakeGenericType(valueType),
                     new object[] {
                             infos.fieldRW,
                             infos.attribute,
@@ -137,27 +154,43 @@ namespace Swifter.Reflection
 
     sealed class XAttributedFieldRW<T> : XAttributedFieldRW, IObjectField
     {
-        internal readonly object firstArg;
-        internal readonly Func<object, IValueReader, T> read;
-        internal readonly Action<object, IValueWriter, T> write;
+        internal readonly Func<IValueReader, T> read;
+        internal readonly Action<IValueWriter, T> write;
 
         public XAttributedFieldRW(IXFieldRW fieldRW, RWFieldAttribute attribute, object firstArg, MethodInfo read, MethodInfo write)
             : base(fieldRW, attribute)
         {
-            this.firstArg = firstArg;
+            if (read.IsStatic)
+            {
+                this.read = MethodHelper.CreateDelegate<Func<IValueReader, T>>(read, SignatureLevels.Cast);
+            }
+            else
+            {
+                var _read = MethodHelper.CreateDelegate<Func<object, IValueReader, T>>(read, SignatureLevels.Cast);
 
-            this.read = MethodHelper.CreateDelegate<Func<object, IValueReader, T>>(read, SignatureLevels.Cast);
-            this.write = MethodHelper.CreateDelegate<Action<object, IValueWriter, T>>(write, SignatureLevels.Cast);
+                this.read = valueReader => _read(firstArg, valueReader);
+            }
+
+            if (write.IsStatic)
+            {
+                this.write = MethodHelper.CreateDelegate<Action<IValueWriter, T>>(write, SignatureLevels.Cast);
+            }
+            else
+            {
+                var _write = MethodHelper.CreateDelegate<Action<object, IValueWriter, T>>(write, SignatureLevels.Cast);
+
+                this.write = (valueWriter, value) => _write(firstArg, valueWriter, value);
+            }
         }
 
         public override void OnReadValue(object obj, IValueWriter valueWriter)
         {
-            write(firstArg, valueWriter, ReadValue<T>(obj));
+            write(valueWriter, ReadValue<T>(obj));
         }
 
         public override void OnWriteValue(object obj, IValueReader valueReader)
         {
-            WriteValue(obj, read(firstArg, valueReader));
+            WriteValue(obj, read(valueReader));
         }
 
         Type IObjectField.AfterType => typeof(T);

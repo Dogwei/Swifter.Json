@@ -1,18 +1,14 @@
 ﻿using Swifter.Json;
-using Swifter.Reflection;
-using Swifter.Tools;
+using Swifter.RW;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace Swifter.Test
 {
-    internal class Program
+    public class Demo
     {
-        public unsafe static void Main()
+        public static void Main()
         {
             // Application.Run(new MyForm());
 

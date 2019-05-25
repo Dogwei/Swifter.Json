@@ -12,6 +12,11 @@ namespace Swifter.Json
 {
     internal abstract unsafe class BaseJsonDeserializer : IFormatReader, IValueReader<Guid>, IValueReader<DateTimeOffset>, ISingleThreadOptimize
     {
+        const string TrueString = "true";
+        const string FalseString = "false";
+        const string NullString = "null";
+        const string UndefinedString = "undefined";
+
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool IsExp(char c)
         {
@@ -24,18 +29,75 @@ namespace Swifter.Json
                 case NumberHelper.BinarySign:
                 case NumberHelper.binarySign:
                 case NumberHelper.DotSign:
+                case NumberHelper.SplitSign:
                     return true;
             }
 
             return false;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool IsEnding(int offset)
+        {
+            var swap = current;
+
+            current += offset;
+
+            SkipWhiteSpace();
+
+            char c = default;
+
+            if (current < end)
+            {
+                c = *current;
+            }
+
+            current = swap;
+
+            switch (c)
+            {
+                case '}':
+                case ']':
+                case ',':
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public bool EqualsByLower(string lowerstr)
+        {
+            var comparison = Length - lowerstr.Length;
+
+            if (comparison < 0)
+            {
+                return false;
+            }
+
+            if (comparison > 0 && !IsEnding(lowerstr.Length))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < lowerstr.Length; i++)
+            {
+                if (StringHelper.ToLower(current[i]) != lowerstr[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public const NumberStyles NumberStyle = NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign;
 
-        public readonly char* chars;
+        public char* current;
+        public readonly char* begin;
+        public readonly char* end;
 
-        public int index;
-        public readonly int length;
+        public int Length => (int)(end - current);
 
         public JsonFormatter jsonFormatter;
 
@@ -44,31 +106,36 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public BaseJsonDeserializer(char* chars, int length)
         {
-            if (index >= length)
+            current = chars;
+
+            begin = chars;
+            end = chars + length;
+        }
+
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void SkipWhiteSpace()
+        {
+            while (current < end && *current <= 0x20)
             {
-                throw new ArgumentException("Json text cannot be empty.");
+                ++current;
             }
-
-            this.chars = chars;
-            this.length = length;
-
-            index = 0;
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public string InternalReadEscapeString(int text_end, int text_length)
+        public string InternalReadEscapeString(char* text_end, int text_length)
         {
             var text = StringHelper.MakeString(text_length);
 
             fixed (char* ptr = text)
             {
-                for (var current = ptr; index < text_end; ++current, ++index)
+                for (var current = ptr; this.current < text_end; ++current, ++this.current)
                 {
-                    if (chars[index] == '\\')
+                    if (*this.current == '\\')
                     {
-                        ++index;
+                        ++this.current;
 
-                        switch (chars[index])
+                        switch (*this.current)
                         {
                             case 'b':
                                 *current = '\b';
@@ -88,22 +155,22 @@ namespace Swifter.Json
                             case 'u':
 
                                 *current = (char)(
-                                    (GetDigital(chars[index + 1]) << 12) |
-                                    (GetDigital(chars[index + 2]) << 8) |
-                                    (GetDigital(chars[index + 3]) << 4) |
-                                    (GetDigital(chars[index + 4])));
+                                    (GetDigital(this.current[1]) << 12) |
+                                    (GetDigital(this.current[2]) << 8) |
+                                    (GetDigital(this.current[3]) << 4) |
+                                    (GetDigital(this.current[4])));
 
-                                index += 4;
+                                this.current += 4;
 
                                 continue;
                         }
                     }
 
-                    *current = chars[index];
+                    *current = *this.current;
                 }
             }
 
-            ++index;
+            ++current;
 
             return text;
         }
@@ -114,21 +181,21 @@ namespace Swifter.Json
             const char escape_char = '\\';
             const char unicode_char = 'u';
 
-            var text_char = chars[index];
+            var text_char = *current;
             var text_length = 0;
 
-            for (int i = (++index); i < length; ++i, ++text_length)
+            for (var i = (++current); i < end; ++i, ++text_length)
             {
-                var current_char = chars[i];
+                var current_char = *i;
 
                 if (current_char == text_char)
                 {
                     /* 内容没有转义符，直接截取返回。 */
-                    if (i - index == text_length)
+                    if (i - current == text_length)
                     {
-                        var result = new string(chars, index, text_length);
+                        var result = new string(current, 0, text_length);
 
-                        index = i + 1;
+                        current = i + 1;
 
                         return result;
                     }
@@ -140,7 +207,7 @@ namespace Swifter.Json
                 {
                     ++i;
 
-                    if (i < length && chars[i] == unicode_char)
+                    if (i < end && *i == unicode_char)
                     {
                         i += 4;
                     }
@@ -174,44 +241,42 @@ namespace Swifter.Json
         [MethodImpl(MethodImplOptions.NoInlining)]
         public Exception GetException()
         {
-            var begin = index;
+            int line = 1;
+            var lineBegin = begin;
 
-            if (begin >= length)
+            if (current >= end)
             {
-                begin = length - 1;
+                current = end;
             }
 
-            int line = 1;
-            int lineBegin = 0;
-            int column = 1;
-
-            for (int i = 0; i < begin; ++i)
+            for (var i = begin; i <= current; ++i)
             {
-                if (chars[i] == '\n')
+                if (*i == '\n')
                 {
                     ++line;
-
                     lineBegin = i;
                 }
             }
 
-            column = begin - lineBegin + 1;
-
+            var column = (int)(current - lineBegin + 1);
             var exception = new JsonDeserializeException
             {
                 Line = line,
                 Column = column,
-                Index = begin,
-                Text = chars[begin].ToString()
+                Index = (int)(current - begin),
+                Text = (*current).ToString()
             };
 
             return exception;
         }
 
+        public bool IsObject => *current == '{';
+        public bool IsArray => *current == '[';
+
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public JsonValueTypes GetValueType()
         {
-            switch (chars[index])
+            switch (*current)
             {
                 case '"':
                 case '\'':
@@ -233,277 +298,122 @@ namespace Swifter.Json
                 case '8':
                 case '9':
                     return JsonValueTypes.Number;
+                case 't':
+                case 'T':
+                    return JsonValueTypes.True;
+                case 'f':
+                case 'F':
+                    return JsonValueTypes.False;
+                case 'n':
+                case 'N':
+                    return JsonValueTypes.Null;
+                case 'u':
+                case 'U':
+                    return JsonValueTypes.Undefined;
+                default:
+                    return JsonValueTypes.Text;
             }
-
-            return Other();
-
-            JsonValueTypes Other()
-            {
-                var start = chars + index;
-                var count = length - index;
-
-                switch (*start)
-                {
-                    case 't':
-                    case 'T':
-                        if (StringHelper.StartWithByLower(start, count, "true"))
-                        {
-                            return JsonValueTypes.True;
-                        }
-                        break;
-                    case 'f':
-                    case 'F':
-                        if (StringHelper.StartWithByLower(start, count, "false"))
-                        {
-                            return JsonValueTypes.False;
-                        }
-                        break;
-                    case 'n':
-                    case 'N':
-                        if (StringHelper.StartWithByLower(start, count, "null"))
-                        {
-                            return JsonValueTypes.Null;
-                        }
-                        break;
-                    case 'u':
-                    case 'U':
-                        if (StringHelper.StartWithByLower(start, count, "undefined"))
-                        {
-                            return JsonValueTypes.Undefined;
-                        }
-                        break;
-                }
-
-                throw GetException();
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private double InternalReadDouble()
-        {
-            var index = NumberHelper.Decimal.TryParse(chars + this.index, length - this.index, out double r);
-
-            if (index != 0)
-            {
-                this.index += index;
-
-                return r;
-            }
-
-            return double.Parse(ReadString(), NumberStyle);
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public long ReadNumberInfoToInt64()
-        {
-            var number = NumberHelper.GetNumberInfo(chars + index, length - index, 10);
-
-            if (number.IsNumber)
-            {
-                index += number.End;
-
-                return number.ToInt64();
-            }
-
-            return ReadOtherToInt64();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public long ReadOtherToInt64()
-        {
-            switch (GetValueType())
-            {
-                case JsonValueTypes.String:
-                    return long.Parse(InternalReadString());
-                case JsonValueTypes.Object:
-                case JsonValueTypes.Array:
-                    throw new InvalidCastException("Cannot convert object/array to Number.");
-                case JsonValueTypes.True:
-                    index += 4;
-                    return 1;
-                case JsonValueTypes.False:
-                    index += 5;
-                    return 0;
-                case JsonValueTypes.Null:
-                    throw new InvalidCastException("Cannot convert NULL to Number.");
-                case JsonValueTypes.Undefined:
-                    index += 9;
-                    return 0;
-            }
-
-            return long.Parse(ReadString(), NumberStyle);
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public long ReadInt64()
         {
-            var start = chars + index;
-            var count = length - index;
+            var length = Length;
 
-            var num = NumberHelper.DecimalTryParse(start, count, out long r);
+            var num = NumberHelper.DecimalTryParse(current, length, out long r);
 
-            if (num != 0)
+            if (num != 0 && !(num < length && IsExp(current[num])))
             {
-                if (num < count && IsExp(start[num]))
-                {
-                    return ReadNumberInfoToInt64();
-                }
-
-                index += num;
+                current += num;
 
                 return r;
             }
 
-            return ReadOtherToInt64();
+            return Convert.ToInt64(DirectRead());
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public double ReadDouble()
         {
-            var type = GetValueType();
+            var length = Length;
 
-            if (type == JsonValueTypes.Number)
+            var num = NumberHelper.Decimal.TryParse(current, length, out double r);
+
+            if (num != 0 && !(num < length && IsExp(current[num])))
             {
-                return InternalReadDouble();
+                current += num;
+
+                return r;
             }
 
-            return Other();
+            return Convert.ToDouble(DirectRead());
+        }
 
-            double Other()
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public string InternalReadText()
+        {
+            var temp = current;
+
+            while (current < end)
             {
-                switch (type)
+                switch (*current)
                 {
-                    case JsonValueTypes.String:
-                        return double.Parse(InternalReadString());
-                    case JsonValueTypes.True:
-                        index += 4;
-                        return 1;
-                    case JsonValueTypes.False:
-                        index += 5;
-                        return 0;
-                    case JsonValueTypes.Null:
-                        throw new InvalidCastException("Cannot convert NULL to Number.");
-                    case JsonValueTypes.Undefined:
-                        index += 9;
-                        return 0;
+                    case ',':
+                    case ':':
+                    case '}':
+                    case ']':
+                        goto Return;
+                    default:
+                        ++current;
+                        continue;
                 }
-
-                throw new InvalidCastException("Cannot convert object/array to Number.");
             }
+
+        Return:
+
+            return StringHelper.TrimEnd(temp, (int)(current - temp));
         }
 
         public string ReadString()
         {
-            var type = GetValueType();
-
-            if (type == JsonValueTypes.String)
+            switch (GetValueType())
             {
-                return InternalReadString();
+                case JsonValueTypes.String:
+                    return InternalReadString();
+                case JsonValueTypes.Text:
+                    return InternalReadText();
+                case JsonValueTypes.Object:
+                case JsonValueTypes.Array:
+                    throw new InvalidCastException("Cannot convert object/array to String.");
             }
 
-            return Other();
-
-            string Other()
-            {
-                switch (type)
-                {
-                    case JsonValueTypes.Number:
-                        return Number();
-                    case JsonValueTypes.True:
-                        index += 4;
-                        return true.ToString();
-                    case JsonValueTypes.False:
-                        index += 5;
-                        return false.ToString();
-                    case JsonValueTypes.Null:
-                        index += 4;
-                        return null;
-                    case JsonValueTypes.Undefined:
-                        index += 9;
-                        return null;
-                }
-
-                throw new InvalidCastException("Cannot convert object/array to String.");
-            }
-
-            string Number()
-            {
-                int num = index;
-
-                while (num < length)
-                {
-                    switch (chars[num])
-                    {
-                        case '-':
-                        case '+':
-                        case '.':
-                        case 'e':
-                        case 'E':
-                        case '0':
-                        case '1':
-                        case '2':
-                        case '3':
-                        case '4':
-                        case '5':
-                        case '6':
-                        case '7':
-                        case '8':
-                        case '9':
-                            ++num;
-
-                            continue;
-                        default:
-                            goto Return;
-                    }
-                }
-
-            Return:
-
-                var r = new string(chars, index, num - index);
-
-                index = num;
-
-                return r;
-            }
+            return Convert.ToString(DirectRead());
         }
 
         public bool ReadBoolean()
         {
-            var type = GetValueType();
-
-            switch (type)
+            switch (GetValueType())
             {
                 case JsonValueTypes.True:
-                    index += 4;
-                    return true;
+                    if (EqualsByLower(TrueString))
+                    {
+                        current += TrueString.Length;
+                        return true;
+                    }
+                    break;
                 case JsonValueTypes.False:
-                    index += 5;
-                    return false;
+                    if (EqualsByLower(FalseString))
+                    {
+                        current += FalseString.Length;
+                        return false;
+                    }
+                    break;
+                case JsonValueTypes.Object:
+                case JsonValueTypes.Array:
+                    throw new InvalidCastException("Cannot convert object/array to Boolean.");
             }
 
-            return Other();
-
-            bool Other()
-            {
-                switch (type)
-                {
-                    case JsonValueTypes.String:
-                        return bool.Parse(InternalReadString());
-                    case JsonValueTypes.Number:
-                        return InternalReadDouble() != 0;
-                    case JsonValueTypes.Object:
-                    case JsonValueTypes.Array:
-                        throw new InvalidCastException("Cannot convert object/array to Boolean.");
-                    case JsonValueTypes.Null:
-                        index += 4;
-                        return false;
-                    case JsonValueTypes.Undefined:
-                        index += 9;
-                        return false;
-                }
-
-                return false;
-            }
+            return Convert.ToBoolean(DirectRead());
         }
 
         public byte ReadByte() => checked((byte)ReadInt64());
@@ -511,128 +421,131 @@ namespace Swifter.Json
         public char ReadChar() => char.Parse(ReadString());
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public T ReadDataTime<T>() where T : struct
+        public T InternalReadParse<T>() where T : struct
         {
-            switch (GetValueType())
-            {
-                case JsonValueTypes.Number:
-                    throw new InvalidCastException("Cannot convert Number to DateTime.");
-                case JsonValueTypes.Object:
-                case JsonValueTypes.Array:
-                    throw new InvalidCastException("Cannot convert object/array to DateTime.");
-                case JsonValueTypes.True:
-                case JsonValueTypes.False:
-                    throw new InvalidCastException("Cannot convert Boolean to DateTime.");
-                case JsonValueTypes.Null:
-                case JsonValueTypes.Undefined:
-                    throw new InvalidCastException("Cannot convert Null to DateTime.");
-            }
-
-
             const char escape_char = '\\';
 
-            var text_char = chars[index];
+            var text_char = *current;
             var text_length = 0;
 
-            for (int i = index + 1; i < length; ++i, ++text_length)
+            for (var i = current + 1; i < end; ++i, ++text_length)
             {
-                var current_char = chars[i];
+                var current_char = *i;
 
                 if (current_char == text_char)
                 {
-                    var result = InternalParse(chars + index + 1, text_length);
+                    var result = InternalReadParse<T>(current + 1, text_length);
 
-                    index = i + 1;
+                    current = i + 1;
 
                     return result;
                 }
 
                 if (current_char == escape_char)
                 {
-                    return DefaultParse(InternalReadString());
+                    return DefaultReadParse<T>(InternalReadString());
                 }
             }
 
             throw GetException();
-
-            T InternalParse(char* chars, int length)
-            {
-                if (typeof(T) == typeof(DateTime))
-                {
-                    if (DateTimeHelper.TryParseISODateTime(chars, length, out DateTime date_time))
-                    {
-                        return Unsafe.As<DateTime, T>(ref date_time);
-                    }
-                }
-                else if (typeof(T) == typeof(DateTimeOffset))
-                {
-                    if (DateTimeHelper.TryParseISODateTime(chars, length, out DateTimeOffset date_time_offset))
-                    {
-                        return Unsafe.As<DateTimeOffset, T>(ref date_time_offset);
-                    }
-                }
-
-                return DefaultParse(new string(chars, 0, length));
-            }
-
-
-            T DefaultParse(string str)
-            {
-                if (typeof(T) == typeof(DateTime))
-                {
-                    var date_time = DateTime.Parse(str);
-
-                    return Unsafe.As<DateTime, T>(ref date_time);
-                }
-                else if (typeof(T) == typeof(DateTimeOffset))
-                {
-                    var date_time_offset = DateTimeOffset.Parse(str);
-
-                    return Unsafe.As<DateTimeOffset, T>(ref date_time_offset);
-                }
-
-                return default;
-            }
         }
 
-        public DateTime ReadDateTime() => ReadDataTime<DateTime>();
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T InternalReadParse<T>(char* chars, int length) where T : struct
+        {
+            if (typeof(T) == typeof(DateTime))
+            {
+                if (DateTimeHelper.TryParseISODateTime(chars, length, out DateTime date_time))
+                {
+                    return Unsafe.As<DateTime, T>(ref date_time);
+                }
+            }
+            else if (typeof(T) == typeof(DateTimeOffset))
+            {
+                if (DateTimeHelper.TryParseISODateTime(chars, length, out DateTimeOffset date_time_offset))
+                {
+                    return Unsafe.As<DateTimeOffset, T>(ref date_time_offset);
+                }
+            }
+            else if (typeof(T) == typeof(Guid))
+            {
+                if (NumberHelper.TryParse(chars, length, out Guid guid) != 0)
+                {
+                    return Unsafe.As<Guid, T>(ref guid);
+                }
+            }
+
+            return DefaultReadParse<T>(new string(chars, 0, length));
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T DefaultReadParse<T>(string str) where T : struct
+        {
+            if (typeof(T) == typeof(DateTime))
+            {
+                var date_time = DateTime.Parse(str);
+
+                return Unsafe.As<DateTime, T>(ref date_time);
+            }
+            else if (typeof(T) == typeof(DateTimeOffset))
+            {
+                var date_time_offset = DateTimeOffset.Parse(str);
+
+                return Unsafe.As<DateTimeOffset, T>(ref date_time_offset);
+            }
+            else if (typeof(T) == typeof(Guid))
+            {
+                var guid = new Guid(str);
+
+                return Unsafe.As<Guid, T>(ref guid);
+            }
+
+            return default;
+        }
+
+        public DateTime ReadDateTime()
+        {
+            switch (GetValueType())
+            {
+                case JsonValueTypes.String:
+                    return InternalReadParse<DateTime>();
+                case JsonValueTypes.Object:
+                case JsonValueTypes.Array:
+                    throw new InvalidCastException("Cannot convert object/array to DateTime.");
+            }
+
+            return Convert.ToDateTime(DirectRead());
+        }
 
         public decimal ReadDecimal()
         {
-            var index = NumberHelper.TryParse(chars + this.index, length - this.index, out decimal r);
+            var length = Length;
 
-            if (index != 0)
+            var num = NumberHelper.TryParse(current, Length, out decimal r);
+
+            if (num != 0 && !(num < length && IsExp(current[num])))
             {
-                this.index += index;
+                current += num;
 
                 return r;
             }
 
+            return Convert.ToDecimal(DirectRead());
+        }
+
+        DateTimeOffset IValueReader<DateTimeOffset>.ReadValue()
+        {
             switch (GetValueType())
             {
                 case JsonValueTypes.String:
-                    return decimal.Parse(InternalReadString());
+                    return InternalReadParse<DateTimeOffset>();
                 case JsonValueTypes.Object:
                 case JsonValueTypes.Array:
-                    throw new InvalidCastException("Cannot convert object/array to Number.");
-                case JsonValueTypes.True:
-                    this.index += 4;
-                    return 1;
-                case JsonValueTypes.False:
-                    this.index += 5;
-                    return 0;
-                case JsonValueTypes.Null:
-                    this.index += 4;
-                    return 0;
-                case JsonValueTypes.Undefined:
-                    this.index += 9;
-                    return 0;
+                    throw new InvalidCastException("Cannot convert object/array to DateTimeOffset.");
             }
 
-            return decimal.Parse(ReadString(), NumberStyle);
+            return DateTimeOffset.Parse(ReadString());
         }
-
-        DateTimeOffset IValueReader<DateTimeOffset>.ReadValue() => ReadDataTime<DateTimeOffset>();
 
         public short ReadInt16() => checked((short)ReadInt64());
 
@@ -646,70 +559,24 @@ namespace Swifter.Json
 
         public uint ReadUInt32() => checked((uint)ReadInt64());
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public ulong ReadNumberInfoToUInt64()
-        {
-            var number = NumberHelper.GetNumberInfo(chars + index, length - index, 10);
-
-            if (number.IsNumber)
-            {
-                index += number.End;
-
-                return number.ToUInt64();
-            }
-
-            return ReadOtherToUInt64();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public ulong ReadOtherToUInt64()
-        {
-            switch (GetValueType())
-            {
-                case JsonValueTypes.String:
-                    return ulong.Parse(InternalReadString());
-                case JsonValueTypes.Object:
-                case JsonValueTypes.Array:
-                    throw new InvalidCastException("Cannot convert object/array to Number.");
-                case JsonValueTypes.True:
-                    index += 4;
-                    return 1;
-                case JsonValueTypes.False:
-                    index += 5;
-                    return 0;
-                case JsonValueTypes.Null:
-                    throw new InvalidCastException("Cannot convert NULL to Number.");
-                case JsonValueTypes.Undefined:
-                    index += 9;
-                    return 0;
-            }
-
-            return ulong.Parse(ReadString(), NumberStyle);
-        }
-
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public ulong ReadUInt64()
         {
-            var chars = this.chars + index;
-            var length = this.length - index;
+            var length = Length;
 
-            var num = NumberHelper.DecimalTryParse(chars, length, out ulong r);
+            var num = NumberHelper.DecimalTryParse(current, length, out ulong r);
 
-            if (num != 0)
+            if (num != 0 && !(num < length && IsExp(current[num])))
             {
-                if (num < length && IsExp(chars[num]))
-                {
-                    return ReadNumberInfoToUInt64();
-                }
-
-                index += num;
+                current += num;
 
                 return r;
             }
 
-            return ReadOtherToUInt64();
+            return Convert.ToUInt64(DirectRead());
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public object DirectRead()
         {
             switch (GetValueType())
@@ -721,30 +588,46 @@ namespace Swifter.Json
                 case JsonValueTypes.Array:
                     return ValueInterface<List<object>>.ReadValue(this);
                 case JsonValueTypes.True:
-                    index += 4;
-                    return true;
+                    if (EqualsByLower(TrueString))
+                    {
+                        current += TrueString.Length;
+                        return true;
+                    }
+                    break;
                 case JsonValueTypes.False:
-                    index += 5;
-                    return false;
+                    if (EqualsByLower(FalseString))
+                    {
+                        current += FalseString.Length;
+                        return true;
+                    }
+                    break;
                 case JsonValueTypes.Null:
-                    index += 4;
-                    return null;
+                    if (EqualsByLower(NullString))
+                    {
+                        current += NullString.Length;
+                        return null;
+                    }
+                    break;
                 case JsonValueTypes.Undefined:
-                    index += 9;
-                    return null;
+                    if (EqualsByLower(UndefinedString))
+                    {
+                        current += UndefinedString.Length;
+                        return null;
+                    }
+                    break;
                 case JsonValueTypes.Number:
 
-                    var numberInfo = NumberHelper.Decimal.GetNumberInfo(chars + index, length - index);
+                    var numberInfo = NumberHelper.GetNumberInfo(current, Length, 10);
 
-                    if (numberInfo.IsNumber)
+                    if (numberInfo.IsNumber && IsEnding(numberInfo.End))
                     {
-                        index += numberInfo.End;
+                        current += numberInfo.End;
 
                         if (numberInfo.HaveExponent)
                         {
-                            if (numberInfo.IntegerCount + numberInfo.FractionalCount <= 16 && numberInfo.ExponentCount <= 2)
+                            if (numberInfo.IntegerCount + numberInfo.FractionalCount <= 16 && numberInfo.ExponentCount <= 3)
                             {
-                                return NumberHelper.Decimal.ToDouble(numberInfo);
+                                return numberInfo.ToDouble();
                             }
 
                             return numberInfo.ToString();
@@ -754,12 +637,12 @@ namespace Swifter.Json
                         {
                             if (numberInfo.IntegerCount + numberInfo.FractionalCount <= 16)
                             {
-                                return NumberHelper.Decimal.ToDouble(numberInfo);
+                                return numberInfo.ToDouble();
                             }
 
-                            if (numberInfo.IntegerCount + numberInfo.FractionalCount <= 28)
+                            if (numberInfo.IntegerCount + numberInfo.FractionalCount <= 28 && numberInfo.IsDecimal)
                             {
-                                return NumberHelper.ToDecimal(numberInfo);
+                                return numberInfo.ToDecimal();
                             }
 
                             return numberInfo.ToString();
@@ -767,7 +650,7 @@ namespace Swifter.Json
 
                         if (numberInfo.IntegerCount <= 18)
                         {
-                            var int64 = NumberHelper.Decimal.ToInt64(numberInfo);
+                            var int64 = numberInfo.ToInt64();
 
                             if (int64 <= int.MaxValue && int64 >= int.MinValue)
                             {
@@ -777,59 +660,31 @@ namespace Swifter.Json
                             return int64;
                         }
 
-                        if (numberInfo.IntegerCount <= 28)
+                        if (numberInfo.IntegerCount <= 28 && numberInfo.IsDecimal)
                         {
-                            return NumberHelper.ToDecimal(numberInfo);
+                            return numberInfo.ToDecimal();
                         }
 
                         return numberInfo.ToString();
                     }
-
                     break;
             }
 
-            throw GetException();
+            return InternalReadText();
         }
 
         public Guid ReadValue()
         {
             switch (GetValueType())
             {
-                case JsonValueTypes.Number:
-                    throw new InvalidCastException("Cannot convert Number to Guid.");
+                case JsonValueTypes.String:
+                    return InternalReadParse<Guid>();
                 case JsonValueTypes.Object:
                 case JsonValueTypes.Array:
                     throw new InvalidCastException("Cannot convert object/array to Guid.");
-                case JsonValueTypes.True:
-                case JsonValueTypes.False:
-                    throw new InvalidCastException("Cannot convert Boolean to Guid.");
-                case JsonValueTypes.Null:
-                case JsonValueTypes.Undefined:
-                    throw new InvalidCastException("Cannot convert Null to Guid.");
             }
 
-            var index = this.index;
-
-            var textChar = chars[index];
-
-            ++index;
-
-            index = NumberHelper.TryParse(chars + index, length, out Guid r);
-
-            if (index >= 32)
-            {
-                this.index += index + 1;
-
-                if (chars[this.index] == textChar)
-                {
-                    ++this.index;
-                }
-
-
-                return r;
-            }
-
-            return new Guid(InternalReadString());
+            return new Guid(ReadString());
         }
 
         public T? ReadNullable<T>() where T : struct
@@ -837,10 +692,10 @@ namespace Swifter.Json
             switch (GetValueType())
             {
                 case JsonValueTypes.Null:
-                    index += 4;
+                    current += 4;
                     return null;
                 case JsonValueTypes.Undefined:
-                    index += 9;
+                    current += 9;
                     return null;
             }
 
@@ -866,13 +721,22 @@ namespace Swifter.Json
                 case JsonValueTypes.False:
                     throw new InvalidCastException("Cannot convert Boolean to object/array.");
                 case JsonValueTypes.Null:
-                    /* 空对象直接返回 */
-                    index += 4;
-                    return;
+                    if (EqualsByLower(NullString))
+                    {
+                        current += NullString.Length;
+                        return;
+                    }
+                    break;
                 case JsonValueTypes.Undefined:
-                    index += 9;
-                    return;
+                    if (EqualsByLower(UndefinedString))
+                    {
+                        current += UndefinedString.Length;
+                        return;
+                    }
+                    break;
             }
+
+            throw GetException();
         }
 
         public abstract void ReadObject(IDataWriter<string> valueWriter);
