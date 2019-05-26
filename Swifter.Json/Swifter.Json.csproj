@@ -3,17 +3,17 @@
   <PropertyGroup>
     <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;netcoreapp2.1;netstandard2.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.2.2</Version>
+    <Version>1.2.5</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Json.xml</DocumentationFile>
-    <Description>fastest JSON serialize and deserialize tool in the world.</Description>
+    <Description>A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.</Description>
     <LangVersion>latest</LangVersion>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <!--<PackageReference Include="Swifter.Core" Version="1.2.2" />-->
-    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
+    <PackageReference Include="Swifter.Core" Version="1.2.5" />
+    <!--<ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />-->
   </ItemGroup>
 
   <ItemGroup>

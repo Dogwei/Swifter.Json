@@ -47,12 +47,9 @@ namespace Swifter.Test.NUnit
 
             str = NumberHelper.InstanceByRadix((byte)radix).ToString(val);
 
-            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str, out var gcHandle);
+            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str);
 
             val = numberInfo.ToDouble();
-
-            gcHandle.Free();
-
 
             if (val == value)
             {
@@ -89,11 +86,9 @@ namespace Swifter.Test.NUnit
 
             str = NumberHelper.InstanceByRadix((byte)radix).ToString(val);
 
-            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str, out var gcHandle);
+            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str);
 
             val = (float)numberInfo.ToDouble();
-
-            gcHandle.Free();
 
             if (val == value)
             {
@@ -121,11 +116,9 @@ namespace Swifter.Test.NUnit
 
             str = NumberHelper.InstanceByRadix((byte)radix).ToString(val);
 
-            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str, out var gcHandle);
+            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str);
 
             val = numberInfo.ToInt64();
-
-            gcHandle.Free();
 
             if (val != value)
             {
@@ -145,11 +138,9 @@ namespace Swifter.Test.NUnit
 
             str = NumberHelper.InstanceByRadix((byte)radix).ToString(val);
 
-            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str, out var gcHandle);
+            var numberInfo = NumberHelper.InstanceByRadix((byte)radix).GetNumberInfo(str);
 
             val = numberInfo.ToUInt64();
-
-            gcHandle.Free();
 
             if (val != value)
             {
@@ -181,11 +172,9 @@ namespace Swifter.Test.NUnit
 
             str = NumberHelper.ToString(val);
 
-            var numberInfo = NumberHelper.Decimal.GetNumberInfo(str, out var gcHandle);
+            var numberInfo = NumberHelper.Decimal.GetNumberInfo(str);
 
             val = numberInfo.ToDecimal();
-
-            gcHandle.Free();
 
             if (val != value)
             {
