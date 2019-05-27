@@ -1,19 +1,27 @@
 # Swifter.Json
 
 ### [使用文档： Wiki](https://github.com/Dogwei/Swifter.Json/wiki)
+### [如果您打算使用 Swifter.Json，请在 Nuget 包管理上安装](https://www.nuget.org/packages/Swifter.Json/)
+
+### 1.2.5 更新：
+
+#### 1：因为更新时疏忽了 Swifter.Core 的引用关系，所以跳过了 1.2.3 和 1.2.4 版本。
+#### 2：增加了对类似 1_000_1000 这样的数字值的支持。
+#### 2：允许字符串键和值不使用引号包裹！（这样的字符串不能使用前后空格，也不能使用转义符）
+#### 4：终于魔鬼战胜了天使，Swifter.Json 终于牺牲的部分性能，成了完全验证的 Json 解析器（除了点 2 和点 3）。
 
 ### 1.2.2 更新:
 
-#### 1：增加异步方法。
-#### 2：修改 AspNetCore 使用异步方法。
-#### 3：型新版本需要一些测试，所以暂不发布到 Nuget。
+#### 1：增加了异步方法，JsonFormatter 中以 Async 结尾的方法均为异步方法。
+#### 2：修改 Swifter.Extensions.AspNetCore 的扩展使用异步方法。
 
 ### 1.2.1 更新:
 
-#### 1: 再度提高性能 (主要原理是对不常见行为禁止内联，提高常见行为的内联成功率)。
-#### 2: 解决枚举序列化出错，ValueInterface&lt;T&gt;.SetInterface() 不起作用等 BUG。
-#### 3: 增加特性定义 (反)序列化行为 ([RWFormat], [RWField], [RWObject] 等特性)。
-#### 4: 增加 AspNetCore 的扩展方法 ConfigureJsonFormatter(this IServiceCollection services)。现在可以很方便将 Swifter.Json 配置到 MVC 了。
+#### 1：再度提高性能 (主要原理是对不常见行为禁止内联，提高常见行为的内联成功率)。
+#### 2：解决枚举序列化出错，ValueInterface&lt;T&gt;.SetInterface() 不起作用等 BUG。
+#### 3：增加特性定义 (反)序列化行为 ([RWFormat], [RWField], [RWObject] 等特性)。
+#### 4：增加 AspNetCore 的扩展方法 ConfigureJsonFormatter(this IServiceCollection services)。现在可以很方便将 Swifter.Json 配置到 MVC 了。
+#### 5：新增 JsonValue 类，此类可以表示 JSON 反序列化时的任何值（包括对象和数组）。
 
 ### 效率评测图
 
