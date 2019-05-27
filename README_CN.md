@@ -50,7 +50,7 @@
 ![.Net Framework 4.7.1 Previews running results](benckmark_for_framework_4.7.1.png)
 
 ###### 图中的数字代表用时(ms). 表格颜色随用时从 绿色 渐变为 黄色。当用时超过 3 倍时将以亮黄色显示。
-###### Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类(FastObjectRW&lt;T&gt;)” 后续会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。如果您的程序不适用这种模式，那么下面介绍的 XObjectRW&lt;T&gt; 也许适合您。
+###### Swifter.Json 第一次执行需要额外的时间来生成一个 “操作类(FastObjectRW&lt;T&gt;)” 后续会越来越快。所以如果您的程序需要长期运行，那么 Swifter.Json 是您优的选择。如果您的程序不适用这种模式，那么 Swifter.Reflection 的 XObjectRW&lt;T&gt; 也许适合您，详情请看 Wiki。
 
 ## Swifter.Json 的工作原理
 
