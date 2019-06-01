@@ -213,7 +213,7 @@ JsonFormatter.DeserializeObject<Demo>(json);
 ### 1.2.8 更新：
 
 #### 1：将 Swifter.Reflection 整合到 Swifter.Core 中。
-#### 2：判断如果平台支持 Emit 则默认使用 FastObjectRW&lt;T&gt，如果不支持则默认使用 XObjectRW&lt;T&gt（因 Xamarin.iOS 不支持 Emit）。
+#### 2：判断如果平台支持 Emit 则默认使用 FastObjectRW&lt;T&gt;，如果不支持则默认使用 XObjectRW&lt;T&gt;（因 Xamarin.iOS 不支持 Emit）。
 
 ### 1.2.5 更新：
 
