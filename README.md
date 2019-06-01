@@ -3,6 +3,11 @@
 ### [使用文档： Wiki](https://github.com/Dogwei/Swifter.Json/wiki)
 ### [如果您打算使用 Swifter.Json，请在 Nuget 包管理上安装](https://www.nuget.org/packages/Swifter.Json/)
 
+### 1.2.8 更新：
+
+#### 1：将 Swifter.Reflection 整合到 Swifter.Core 中。
+#### 2：判断如果平台支持 Emit 则默认使用 FastObjectRW&lt;T&gt，如果不支持则默认使用 XObjectRW&lt;T&gt（因 Xamarin.iOS 不支持 Emit）。
+
 ### 1.2.5 更新：
 
 #### 1：因为更新时疏忽了 Swifter.Core 的引用关系，所以跳过了 1.2.3 和 1.2.4 版本。
