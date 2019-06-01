@@ -11,8 +11,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Test", "Swifter.Tes
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Unsafe.Builder", "Swifter.Unsafe.Builder\Swifter.Unsafe.Builder.csproj", "{8D8E3D14-0D46-40C5-AC05-038079293D87}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Reflection", "Swifter.Reflection\Swifter.Reflection.csproj", "{72E00999-6D22-41F4-9D25-97FF58E900F3}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Test.NUnit", "Swifter.Test.NUnit\Swifter.Test.NUnit.csproj", "{67E8893E-A842-4F06-BB8D-09B26CFBD953}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Test.AspNetCore", "Swifter.Test.AspNetCore\Swifter.Test.AspNetCore.csproj", "{609B6640-1C3B-46EE-A9AD-8351A942E035}"
@@ -21,7 +19,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Extensions.AspNetCo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Test.Debug", "Swifter.Test.Debug\Swifter.Test.Debug.csproj", "{2BD245BA-D4AB-465D-8B24-71B74B47E154}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swifter.Test.AspNetCore3_0", "Swifter.Test.AspNetCore3_0\Swifter.Test.AspNetCore3_0.csproj", "{D9D39ED4-CE93-4C89-80CB-BA43D366BC8B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Test.AspNetCore3_0", "Swifter.Test.AspNetCore3_0\Swifter.Test.AspNetCore3_0.csproj", "{D9D39ED4-CE93-4C89-80CB-BA43D366BC8B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -45,10 +43,6 @@ Global
 		{8D8E3D14-0D46-40C5-AC05-038079293D87}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D8E3D14-0D46-40C5-AC05-038079293D87}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8D8E3D14-0D46-40C5-AC05-038079293D87}.Release|Any CPU.Build.0 = Release|Any CPU
-		{72E00999-6D22-41F4-9D25-97FF58E900F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{72E00999-6D22-41F4-9D25-97FF58E900F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{72E00999-6D22-41F4-9D25-97FF58E900F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{72E00999-6D22-41F4-9D25-97FF58E900F3}.Release|Any CPU.Build.0 = Release|Any CPU
 		{67E8893E-A842-4F06-BB8D-09B26CFBD953}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{67E8893E-A842-4F06-BB8D-09B26CFBD953}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{67E8893E-A842-4F06-BB8D-09B26CFBD953}.Release|Any CPU.ActiveCfg = Release|Any CPU

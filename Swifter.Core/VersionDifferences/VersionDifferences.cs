@@ -12,12 +12,27 @@ namespace Swifter
     /// </summary>
     public static partial class VersionDifferences
     {
-#if NETSTANDARD2_0
-        internal static readonly bool? DynamicAssemblyCanAccessNonPublicTypes = null;
-        internal static readonly bool? DynamicAssemblyCanAccessNonPublicMembers = null;
+        /// <summary>
+        /// 获取当前平台是否支持 Emit。
+        /// </summary>
+#if NETCOREAPP
+        public const bool IsSupportEmit = true;
 #else
-        internal static readonly bool? DynamicAssemblyCanAccessNonPublicTypes = false;
-        internal static readonly bool? DynamicAssemblyCanAccessNonPublicMembers = false;
+        public static readonly bool IsSupportEmit = TestIsSupportEmit();
+
+        private static bool TestIsSupportEmit()
+        {
+            try
+            {
+                DynamicAssembly.DefineType(nameof(TestIsSupportEmit), TypeAttributes.Public).CreateTypeInfo();
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
 #endif
         /// <summary>
         /// 获取对象的 TypeHandle 值。

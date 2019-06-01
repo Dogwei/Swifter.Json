@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.2.5</Version>
+    <Version>1.2.8</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Extensions.AspNetCore.xml</DocumentationFile>
     <Description>Swifter AspNetCore Extensions.</Description>
@@ -13,8 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.1.0" />
-    <PackageReference Include="Swifter.Json" Version="1.2.5" />
-    <PackageReference Include="Swifter.Reflection" Version="1.2.5" />
+    <PackageReference Include="Swifter.Json" Version="1.2.8" />
   </ItemGroup>
 
   <ItemGroup>

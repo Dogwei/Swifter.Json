@@ -511,6 +511,16 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 将值类型的已装箱的表示形式转换为其未装箱的形式。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="type">类型</param>
+        public static void Unbox(this ILGenerator ilGen, Type type)
+        {
+            ilGen.Emit(OpCodes.Unbox, type);
+        }
+
+        /// <summary>
         /// 将栈顶的值尝试转化为指定的类型。
         /// </summary>
         /// <param name="ilGen">ilGen</param>

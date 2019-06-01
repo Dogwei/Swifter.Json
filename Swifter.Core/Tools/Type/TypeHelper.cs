@@ -170,6 +170,16 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 判断一个类型能否作为泛型参数。
+        /// </summary>
+        /// <param name="type">类型</param>
+        /// <returns>返回一个 bool 值</returns>
+        public static bool CanBeGenericParameter(this Type type)
+        {
+            return !(type.IsByRef || type.IsByRefLike() || type.IsPointer || type == typeof(void));
+        }
+
+        /// <summary>
         /// 获取实例的 ObjectHandle 值。
         /// </summary>
         /// <param name="obj">实例</param>

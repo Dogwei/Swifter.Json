@@ -10,8 +10,8 @@ namespace Swifter.Tools
         static CloneHelper()
         {
             FuncMemberwiseClone = MethodHelper.CreateDelegate<Func<object, object>>(
-                typeof(object).GetMethod("MemberwiseClone", BindingFlags.NonPublic | BindingFlags.Instance),
-                SignatureLevels.Cast);
+                typeof(object).GetMethod(nameof(MemberwiseClone), BindingFlags.NonPublic | BindingFlags.Instance),
+                false);
         }
     }
 }

@@ -194,6 +194,11 @@ namespace Swifter.Tools
 
         public static object CreateInstanceByIL<TSource, TDestination>(MethodBase method)
         {
+            if (VersionDifferences.IsSupportEmit)
+            {
+                return null;
+            }
+
             var typeBuilder = DynamicAssembly.DefineType(
                 $"{typeof(TSource).Name}_To_{typeof(TDestination).Name}_{Guid.NewGuid().ToString("N")}",
                 TypeAttributes.Public | TypeAttributes.Sealed);

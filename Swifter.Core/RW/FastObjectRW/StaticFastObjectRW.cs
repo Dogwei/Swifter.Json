@@ -54,58 +54,44 @@ namespace Swifter.RW
 
         static StaticFastObjectRW()
         {
-            if (VersionDifferences.DynamicAssemblyCanAccessNonPublicTypes == null)
+            try
             {
-                try
-                {
-                    DynamicAssembly.DefineType(nameof(TestClass) + 1, TypeAttributes.Public, typeof(TestClass)).CreateTypeInfo();
+                DynamicAssembly.DefineType(nameof(TestClass) + 1, TypeAttributes.Public, typeof(TestClass)).CreateTypeInfo();
 
-                    DynamicAssemblyCanAccessNonPublicTypes = true;
-                }
-                catch (Exception)
-                {
-                    DynamicAssemblyCanAccessNonPublicTypes = false;
-                }
+                DynamicAssemblyCanAccessNonPublicTypes = true;
             }
-            else
+            catch (Exception)
             {
-                DynamicAssemblyCanAccessNonPublicTypes = VersionDifferences.DynamicAssemblyCanAccessNonPublicTypes.Value;
+                DynamicAssemblyCanAccessNonPublicTypes = false;
             }
 
-            if (VersionDifferences.DynamicAssemblyCanAccessNonPublicMembers == null)
+            try
             {
-                try
-                {
-                    var dynamicMethodName = nameof(TestClass.TestMethod);
+                var dynamicMethodName = nameof(TestClass.TestMethod);
 
-                    var typeBuilder = DynamicAssembly.DefineType(nameof(TestClass) + 2, TypeAttributes.Public);
+                var typeBuilder = DynamicAssembly.DefineType(nameof(TestClass) + 2, TypeAttributes.Public);
 
-                    var methodBuilder = typeBuilder.DefineMethod(
-                        dynamicMethodName,
-                        MethodAttributes.Public | MethodAttributes.Static,
-                        CallingConventions.Standard,
-                        typeof(void),
-                        Type.EmptyTypes);
+                var methodBuilder = typeBuilder.DefineMethod(
+                    dynamicMethodName,
+                    MethodAttributes.Public | MethodAttributes.Static,
+                    CallingConventions.Standard,
+                    typeof(void),
+                    Type.EmptyTypes);
 
-                    var ilGen = methodBuilder.GetILGenerator();
+                var ilGen = methodBuilder.GetILGenerator();
 
-                    ilGen.Call(typeof(TestClass).GetMethod(nameof(TestClass.TestMethod), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance));
-                    ilGen.Return();
+                ilGen.Call(typeof(TestClass).GetMethod(nameof(TestClass.TestMethod), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance));
+                ilGen.Return();
 
-                    var method = typeBuilder.CreateTypeInfo().GetMethod(dynamicMethodName);
+                var method = typeBuilder.CreateTypeInfo().GetMethod(dynamicMethodName);
 
-                    method.Invoke(null, null);
+                method.Invoke(null, null);
 
-                    DynamicAssemblyCanAccessNonPublicMembers = true;
-                }
-                catch (Exception)
-                {
-                    DynamicAssemblyCanAccessNonPublicMembers = false;
-                }
+                DynamicAssemblyCanAccessNonPublicMembers = true;
             }
-            else
+            catch (Exception)
             {
-                DynamicAssemblyCanAccessNonPublicMembers = VersionDifferences.DynamicAssemblyCanAccessNonPublicMembers.Value;
+                DynamicAssemblyCanAccessNonPublicMembers = false;
             }
         }
 

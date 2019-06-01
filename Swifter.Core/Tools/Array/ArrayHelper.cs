@@ -242,5 +242,62 @@ namespace Swifter.Tools
         /// <param name="starts">返回一个起始位置的内容备份，此实例长度加临时数组长度刚好等于元素数量</param>
         /// <returns>返回一个临时数组</returns>
         public static unsafe T[] AsTempOneRankValueArray<T>(IntPtr address, int length, out T[] starts) where T : struct => AsTempOneRankValueArray((void*)address, length, out starts);
+
+        /// <summary>
+        /// 合并一个数组和一个元素。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="array">数组</param>
+        /// <param name="tail">尾部元素</param>
+        /// <returns>返回一个新的数组</returns>
+        public static T[] Merge<T>(T[] array, T tail)
+        {
+            var result = new T[array.Length + 1];
+
+            Unsafe.CopyBlock(ref Unsafe.As<T, byte>(ref result[0]), ref Unsafe.As<T, byte>(ref array[0]), (uint)array.Length * (uint)Unsafe.SizeOf<T>());
+
+            result[array.Length] = tail;
+
+            return result;
+        }
+
+        /// <summary>
+        /// 合并一个头部元素和一个数组。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="array">数组</param>
+        /// <param name="head">头部元素</param>
+        /// <returns>返回一个新的数组</returns>
+        public static T[] Merge<T>(T head, T[] array)
+        {
+            var result = new T[array.Length + 1];
+
+            result[0] = head;
+
+            Unsafe.CopyBlock(ref Unsafe.As<T, byte>(ref result[1]), ref Unsafe.As<T, byte>(ref array[0]), (uint)array.Length * (uint)Unsafe.SizeOf<T>());
+
+            return result;
+        }
+
+        /// <summary>
+        /// 合并一个头部元素和一个数组和一个尾部元素。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="array">数组</param>
+        /// <param name="head">头部元素</param>
+        /// <param name="tail">尾部元素</param>
+        /// <returns>返回一个新的数组</returns>
+        public static T[] Merge<T>(T head, T[] array, T tail)
+        {
+            var result = new T[array.Length + 2];
+
+            result[0] = head;
+
+            Unsafe.CopyBlock(ref Unsafe.As<T, byte>(ref result[1]), ref Unsafe.As<T, byte>(ref array[0]), (uint)array.Length * (uint)Unsafe.SizeOf<T>());
+
+            result[result.Length - 1] = tail;
+
+            return result;
+        }
     }
 }

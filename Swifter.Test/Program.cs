@@ -1,4 +1,5 @@
 ﻿using Swifter.Json;
+using Swifter.Reflection;
 using Swifter.RW;
 using System;
 using System.Collections.Generic;
@@ -10,6 +11,8 @@ namespace Swifter.Test
     {
         public static void Main()
         {
+            ValueInterface.DefaultObjectInterfaceType = typeof(XObjectInterface<>);
+
             // Console.WriteLine((int)'\r');
             Application.Run(new MyForm());
         }

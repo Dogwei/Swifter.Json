@@ -10,25 +10,25 @@ namespace Swifter.Tools
         /// <summary>
         /// 构造函数参数签名标识
         /// </summary>
-        /// <param name="Name">函数的名称</param>
-        /// <param name="ParametersTypes">函数的参数类型</param>
-        /// <param name="ResultType">函数的返回值类型</param>
-        /// <param name="Internal">内部调用</param>
-        internal MethodSign(string Name, Type[] ParametersTypes, Type ResultType, bool Internal)
+        /// <param name="name">函数的名称</param>
+        /// <param name="parametersTypes">函数的参数类型</param>
+        /// <param name="returnType">函数的返回值类型</param>
+        /// <param name="internal">内部调用</param>
+        internal MethodSign(string name, Type[] parametersTypes, Type returnType, bool @internal)
         {
-            methodName = Name;
-            parametersTypes = ParametersTypes;
-            resultType = ResultType;
+            methodName = name;
+            this.parametersTypes = parametersTypes;
+            this.resultType = returnType;
 
             // 计算 HashCode。
-            int TempHashCode = Name.GetHashCode();
+            int TempHashCode = name.GetHashCode();
 
-            foreach (var Item in ParametersTypes)
+            foreach (var Item in parametersTypes)
             {
                 TempHashCode ^= Item.GetHashCode();
             }
 
-            TempHashCode ^= ResultType.GetHashCode();
+            TempHashCode ^= returnType.GetHashCode();
 
             hashCode = TempHashCode;
         }
@@ -36,10 +36,10 @@ namespace Swifter.Tools
         /// <summary>
         /// 构造函数参数签名标识
         /// </summary>
-        /// <param name="Name">函数的名称</param>
-        /// <param name="ParametersTypes">函数的参数类型</param>
-        /// <param name="ResultType">函数的返回值类型</param>
-        public MethodSign(string Name, Type[] ParametersTypes, Type ResultType) : this(Name, (Type[])ParametersTypes.Clone(), ResultType, true)
+        /// <param name="name">函数的名称</param>
+        /// <param name="parametersTypes">函数的参数类型</param>
+        /// <param name="returnType">函数的返回值类型</param>
+        public MethodSign(string name, Type[] parametersTypes, Type returnType) : this(name, (Type[])parametersTypes.Clone(), returnType, true)
         {
         }
 
