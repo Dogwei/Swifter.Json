@@ -4,6 +4,7 @@ using Swifter.Json;
 using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Text;
 
 namespace Swifter.Test
@@ -180,6 +181,11 @@ namespace Swifter.Test
 
         public string Serialize<T>(T obj)
         {
+            if (typeof(T) == typeof(DataTable))
+            {
+                throw new TimeoutException();
+            }
+
             return System.Text.Json.Serialization.JsonSerializer.ToString(obj);
         }
     }
@@ -212,6 +218,11 @@ namespace Swifter.Test
 
         public string Serialize<T>(T obj)
         {
+            if (typeof(T) == typeof(DataTable))
+            {
+                throw new TimeoutException();
+            }
+
             return ServiceStack.Text.JsonSerializer.SerializeToString(obj);
         }
     }

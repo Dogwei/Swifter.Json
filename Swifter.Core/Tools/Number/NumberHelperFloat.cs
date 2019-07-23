@@ -48,6 +48,10 @@ namespace Swifter.Tools
             {
                 return GetPositiveExponent(value);
             }
+            else if (value == 0)
+            {
+                return 0;
+            }
 
             return -GetNegativeExponent(value);
         }

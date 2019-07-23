@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;netcoreapp2.1;netstandard2.0</TargetFrameworks>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>1.2.8</Version>
+    <Authors>Dogwei</Authors>
+    <!--<DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.MessagePack.xml</DocumentationFile>-->
+    <Description></Description>
+    <LangVersion>preview</LangVersion>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--<PackageReference Include="Swifter.Core" Version="1.2.8" />-->
+    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+
+
+</Project>

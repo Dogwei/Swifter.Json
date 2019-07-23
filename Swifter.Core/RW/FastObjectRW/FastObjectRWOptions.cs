@@ -1,8 +1,11 @@
-﻿namespace Swifter.RW
+﻿using System;
+
+namespace Swifter.RW
 {
     /// <summary>
     /// FastObjectRW 初始化配置。
     /// </summary>
+    [Flags]
     public enum FastObjectRWOptions : int
     {
         /// <summary>

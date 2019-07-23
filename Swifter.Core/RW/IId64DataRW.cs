@@ -11,7 +11,7 @@ namespace Swifter.RW
     /// 即一个读写器类型的 Keys 内容必须始终相同，并且同一个键始终获取的 Id64 值都相同。
     /// </summary>
     /// <typeparam name="TSymbol">集合元素的类型</typeparam>
-    public interface IId64DataRW<TSymbol>
+    public interface IId64DataRW<TSymbol> : IId64DataRW where TSymbol : struct
     {
         /// <summary>
         /// 计算 Id64 值。
@@ -27,7 +27,16 @@ namespace Swifter.RW
         /// <param name="symbols">TSymbol 集合</param>
         /// <returns>返回 Id64 值</returns>
         long GetId64(IEnumerable<TSymbol> symbols);
+    }
 
+    /// <summary>
+    /// 提供以某元素类型集合计算 Id64 值为键的数据读写器。
+    /// 仅提供 OnReadValue 和 OnWriteValue 接口。
+    /// 并且实现此接口的类型，必须具有类型唯一性。
+    /// 即一个读写器类型的 Keys 内容必须始终相同，并且同一个键始终获取的 Id64 值都相同。
+    /// </summary>
+    public interface IId64DataRW : IDataRW
+    {
         /// <summary>
         /// 以 Id64 值为键，从数据读写器中读取一个值到值写入器中。
         /// </summary>

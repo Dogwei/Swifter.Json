@@ -8,13 +8,8 @@
         /// <summary>
         /// 默认配置项。
         /// </summary>
-        Default = 0,
-
-        /// <summary>
-        /// 序列化时不考虑对象多引用关系。该选项不能和其他引用配置复用。
-        /// </summary>
-        MultiReferencingNone = 0,
-
+        Default = OutOfDepthException,
+        
         /// <summary>
         /// 序列化是出现循环引用的对象时将发生异常。该选项不能和其他引用配置复用。
         /// </summary>
@@ -36,40 +31,48 @@
         MultiReferencingReference = 0x8,
 
         /// <summary>
-        /// 在序列化之前先先检查成员的引用，这可以有效均衡分布多引用关系的序列化结构。
-        /// 该选项和 MultiReferencingNull 或 MultiReferencingReference 一起使用。
-        /// 注: 瞬态数据（如 DbDataReader，IEnumerable 等）不会做该检查。
+        /// 执行假定紧凑（无多余空格）且标准的 JSON 反序列化，此配置有效提高反序列化性能。
         /// </summary>
-        PriorCheckReferences = 0x10,
+        DeflateDeserialize = 0x10,
+
+        /// <summary>
+        /// 执行假定标准的 JSON 反序列化（即 不执行部分验证）。
+        /// </summary>
+        StandardDeserialize = 0x20,
+
+        /// <summary>
+        /// 执行完全验证的 JSON 反序列化（这是默认行为）。
+        /// </summary>
+        VerifiedDeserialize = 0x0,
 
         /// <summary>
         /// 序列化时对 JSON 进行缩进美化。
         /// </summary>
-        Indented = 0x20,
+        Indented = 0x80,
 
         /// <summary>
         /// 超出深度时抛出异常，否则将不序列化超出部分。
         /// </summary>
-        OutOfDepthException = 0x40,
+        OutOfDepthException = 0x100,
 
         /// <summary>
         /// 启用筛选并筛选掉 Null 值
         /// </summary>
-        IgnoreNull = 0x80,
+        IgnoreNull = 0x200,
 
         /// <summary>
         /// 启用筛选并筛选掉 0 值
         /// </summary>
-        IgnoreZero = 0x100,
+        IgnoreZero = 0x400,
 
         /// <summary>
         /// 启用筛选并筛选掉 "" 值 (空字符串)
         /// </summary>
-        IgnoreEmptyString = 0x200,
+        IgnoreEmptyString = 0x800,
 
         /// <summary>
         /// 数组元素启用筛选
         /// </summary>
-        ArrayOnFilter = 0x400,
+        ArrayOnFilter = 0x1000,
     }
 }

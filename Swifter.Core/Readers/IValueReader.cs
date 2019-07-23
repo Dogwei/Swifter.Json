@@ -8,9 +8,6 @@ namespace Swifter.Readers
     /// </summary>
     public interface IValueReader
     {
-
-
-
         /// <summary>
         /// 读取 Int64 值。
         /// </summary>
@@ -138,5 +135,18 @@ namespace Swifter.Readers
         /// </summary>
         /// <returns>返回该类型的值</returns>
         T ReadValue();
+    }
+
+    /// <summary>
+    /// 表示一个 Map 读取器。
+    /// </summary>
+    public interface IMapValueReader
+    {
+        /// <summary>
+        /// 读取一个 Map 到写入器中。
+        /// </summary>
+        /// <typeparam name="TKey">Map 的键类型</typeparam>
+        /// <param name="mapWriter">Map 写入器</param>
+        void ReadMap<TKey>(IDataWriter<TKey> mapWriter);
     }
 }

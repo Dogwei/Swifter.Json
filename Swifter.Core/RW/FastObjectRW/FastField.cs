@@ -10,7 +10,7 @@ using static Swifter.RW.StaticFastObjectRW;
 namespace Swifter.RW
 {
 
-    internal static partial class StaticFastObjectRW<T>
+    partial class StaticFastObjectRW<T>
     {
         internal sealed class FastField : BaseField
         {
@@ -109,7 +109,14 @@ namespace Swifter.RW
                 
                 if (methodName != null)
                 {
-                    ilGen.Call(typeof(IValueReader).GetMethod(methodName));
+                    var method = typeof(IValueReader).GetMethod(methodName);
+
+                    if (methodName == nameof(IValueReader.ReadNullable) && method.IsGenericMethodDefinition)
+                    {
+                        method = method.MakeGenericMethod(Nullable.GetUnderlyingType(BeforeType));
+                    }
+
+                    ilGen.Call(method);
 
                     return;
                 }

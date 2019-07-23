@@ -1,15 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;netcoreapp2.1;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;<!--netcoreapp3.0;-->netcoreapp2.1;netstandard2.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.2.8</Version>
+    <Version>1.2.9.1</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Core.xml</DocumentationFile>
     <Description>Swifter Core components.</Description>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>preview</LangVersion>
     <Copyright />
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <NoWarn>1701;1702;0162</NoWarn>
   </PropertyGroup>
   
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">

@@ -207,30 +207,3 @@ JsonFormatter.DeserializeObject<Demo>(json);
 
 #### 1：Swifter.Json 解析器支持 "\uAAAA" 这样的格式，但序列化时永远也不会将中文字符或其它多字节字符序列化为 "\uAAAA" 格式，我希望这事由编码器去做。
 #### 2：Swifter.Json 解析器支持没有引号或单引号的字符串，但是序列化时绝对不会出现这样的字符串，因为这不是 JSON 标准（Swifter.Json 序列化出来的字符串一定是双引号包围的）。
-
-## 更新历史
-
-### 1.2.8 更新：
-
-#### 1：将 Swifter.Reflection 整合到 Swifter.Core 中。
-#### 2：判断如果平台支持 Emit 则默认使用 FastObjectRW&lt;T&gt;，如果不支持则默认使用 XObjectRW&lt;T&gt;（因 Xamarin.iOS 不支持 Emit）。
-
-### 1.2.5 更新：
-
-#### 1：因为更新时疏忽了 Swifter.Core 的引用关系，所以跳过了 1.2.3 和 1.2.4 版本。
-#### 2：增加了对类似 1_000_1000 这样的数字值的支持。
-#### 2：允许字符串键和值不使用引号包裹！（这样的字符串不能使用前后空格，也不能使用转义符）
-#### 4：终于魔鬼战胜了天使，Swifter.Json 终于牺牲的部分性能，成了完全验证的 Json 解析器（除了点 2 和点 3）。
-
-### 1.2.2 更新:
-
-#### 1：增加了异步方法，JsonFormatter 中以 Async 结尾的方法均为异步方法。
-#### 2：修改 Swifter.Extensions.AspNetCore 的扩展使用异步方法。
-
-### 1.2.1 更新:
-
-#### 1：再度提高性能 (主要原理是对不常见行为禁止内联，提高常见行为的内联成功率)。
-#### 2：解决枚举序列化出错，ValueInterface&lt;T&gt;.SetInterface() 不起作用等 BUG。
-#### 3：增加特性定义 (反)序列化行为 ([RWFormat], [RWField], [RWObject] 等特性)。
-#### 4：增加 AspNetCore 的扩展方法 ConfigureJsonFormatter(this IServiceCollection services)。现在可以很方便将 Swifter.Json 配置到 MVC 了。
-#### 5：新增 JsonValue 类，此类可以表示 JSON 反序列化时的任何值（包括对象和数组）。

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Swifter.RW;
+using System;
 
 namespace Swifter.Json
 {
@@ -10,7 +11,7 @@ namespace Swifter.Json
         /// <summary>
         /// 初始化实例
         /// </summary>
-        internal JsonLoopReferencingException(TargetPathInfo ref1, TargetPathInfo ref2) 
+        internal JsonLoopReferencingException(RWPathInfo ref1, RWPathInfo ref2) 
             : base(string.Format("Json serializating members '{0}' and '{1}' loop referencing.", ref1, ref2))
         {
         }

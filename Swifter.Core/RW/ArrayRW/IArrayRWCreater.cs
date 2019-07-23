@@ -3,5 +3,7 @@
     internal interface IArrayRWCreater<TArray> where TArray : class
     {
         ArrayRW<TArray> Create();
+
+        ArrayRW<TArray> CreateArrayBuilder();
     }
 }

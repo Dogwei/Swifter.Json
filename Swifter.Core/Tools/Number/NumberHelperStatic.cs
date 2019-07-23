@@ -6,6 +6,16 @@ namespace Swifter.Tools
 {
     public sealed unsafe partial class NumberHelper
     {
+        /// <summary>
+        /// 十进制数字字符串最大可能的长度。
+        /// </summary>
+        public const int DecimalStringMaxLength = 30;
+        /// <summary>
+        /// Guid 字符串的长度。
+        /// </summary>
+        public const int GuidStringLength = 36;
+
+
         /* ['0', '1', '2', '3',... 'a', 'b', 'c',... 'A', 'B', 'C',... 'Z', '~', '!'] */
         private static readonly char* Digitals;
         /* ['0': 0, '1': 1, '2': 2,... '9': 9, 'a': 10, 'b':11,... 'A': 36, 'B': 37,... 'Z': 61, '~': 62, '!': 63, Other: ErrorRadix] */
@@ -219,16 +229,7 @@ namespace Swifter.Tools
 
 
 
-
-
-
-
-
-
-
-
-
-
+        
 
         /// <summary>
         /// 尝试从字符串开始位置解析一个 Int64 值。
@@ -474,6 +475,18 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 获取一个十进制数字的小数刻度。
+        /// </summary>
+        /// <param name="pDecimal">十进制数字的指针</param>
+        /// <returns>返回小数的位数</returns>
+        public static int GetScale(decimal* pDecimal)
+        {
+            // TODO
+
+            return ((byte*)pDecimal)[2];
+        }
+
+        /// <summary>
         /// 将一个 Decimal 值写入到一个空间足够的字符串中。
         /// </summary>
         /// <param name="value">Decimal 值</param>
@@ -482,7 +495,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int ToString(decimal value, char* chars)
         {
-            var t = value;
+               var t = value;
             var c = chars;
             var n = 0;
 
@@ -1030,6 +1043,30 @@ namespace Swifter.Tools
             False:
             value = Guid.Empty;
             return 0;
+        }
+
+        /// <summary>
+        /// 判断一个字符是否为数字的特殊意义字符。
+        /// </summary>
+        /// <param name="c">字符</param>
+        /// <returns>返回一个 bool 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IsExp(char c)
+        {
+            switch (c)
+            {
+                case ExponentSign:
+                case exponentSign:
+                case HexSign:
+                case hexSign:
+                case BinarySign:
+                case binarySign:
+                case DotSign:
+                case SplitSign:
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1716,7 +1753,6 @@ namespace Swifter.Tools
 
 
 
-
         /// <summary>
         /// 将一个 Guid 值转换为 String 表现形式。转换失败将引发异常。
         /// </summary>
@@ -1725,7 +1761,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static string ToString(Guid value)
         {
-            var result = new string('\0', 36);
+            var result = new string('\0', GuidStringLength);
 
             fixed (char* pResult = result)
             {
@@ -1743,7 +1779,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static string ToString(decimal value)
         {
-            char* chars = stackalloc char[30];
+            char* chars = stackalloc char[DecimalStringMaxLength];
 
             int length = ToString(value, chars);
 

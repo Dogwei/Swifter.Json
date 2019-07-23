@@ -61,8 +61,21 @@ namespace Swifter
             }
         }
 
+        public void BuildByReference()
+        {
+            var byRefBuilder = moduleBuilder.DefineType(
+                "Swifter.ByReference",
+                TypeAttributes.Public | TypeAttributes.Sealed, typeof(ValueType));
+
+            byRefBuilder.DefineField("_ref", typeof(int).MakeByRefType(), FieldAttributes.Public);
+
+            byRefBuilder.CreateType();
+        }
+
         public void BuildAll()
         {
+            BuildByReference();
+
             Add();
 
             AddByteOffset();
@@ -99,9 +112,9 @@ namespace Swifter
 
             Read();
 
-            // ReadAndAdd();
+            ReadAndAdd();
 
-            // ReadAndSubtract();
+            //ReadAndSubtract();
 
             ReadUnaligned();
 
@@ -117,9 +130,9 @@ namespace Swifter
 
             Write();
 
-            // WriteAndAdd();
+            WriteAndAdd();
 
-            // WriteAndSubtract();
+            //WriteAndSubtract();
 
             WriteUnaligned();
 
@@ -1107,7 +1120,7 @@ namespace Swifter
 
                 methodBuilder.SetReturnType(typeT);
 
-                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination");
+                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination").SetCustomAttribute(CreateIsReadOnlyAttributeBuilder());
 
                 var ilGen = methodBuilder.GetILGenerator();
 
@@ -1146,7 +1159,7 @@ namespace Swifter
 
                 methodBuilder.SetReturnType(typeT);
 
-                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination");
+                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination").SetCustomAttribute(CreateIsReadOnlyAttributeBuilder());
 
                 var ilGen = methodBuilder.GetILGenerator();
 
@@ -1548,7 +1561,7 @@ namespace Swifter
 
                 methodBuilder.SetReturnType(typeof(void));
 
-                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination");
+                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination").SetCustomAttribute(CreateIsReadOnlyAttributeBuilder());
                 methodBuilder.DefineParameter(2, ParameterAttributes.None, "value");
 
                 var ilGen = methodBuilder.GetILGenerator();
@@ -1588,7 +1601,7 @@ namespace Swifter
 
                 methodBuilder.SetReturnType(typeof(void));
 
-                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination");
+                methodBuilder.DefineParameter(1, ParameterAttributes.None, "destination").SetCustomAttribute(CreateIsReadOnlyAttributeBuilder());
                 methodBuilder.DefineParameter(2, ParameterAttributes.None, "value");
 
                 var ilGen = methodBuilder.GetILGenerator();

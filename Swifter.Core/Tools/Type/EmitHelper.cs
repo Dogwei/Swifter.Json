@@ -668,6 +668,15 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 将值转换为 Int16 类型。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static void ConvertInt16(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Conv_I2);
+        }
+
+        /// <summary>
         /// 将值转换为 Int64 类型。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
@@ -719,6 +728,51 @@ namespace Swifter.Tools
         public static void Xor(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Xor);
+        }
+
+        /// <summary>
+        /// 对栈顶的两个值进行 按位或，返回一个值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static void Or(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Or);
+        }
+
+        /// <summary>
+        /// 对栈顶的两个值进行 按位与，返回一个值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static void And(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.And);
+        }
+
+        /// <summary>
+        /// 对栈顶的两个值进行 左移。返回一个值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static void ShiftLeft(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Shl);
+        }
+
+        /// <summary>
+        /// 对栈顶的两个值进行 右移。返回一个值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static void ShiftRight(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Shr);
+        }
+
+        /// <summary>
+        /// 对栈顶的两个值进行 无符号右移。返回一个值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static void UnsignedShiftRight(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Shr_Un);
         }
 
         /// <summary>

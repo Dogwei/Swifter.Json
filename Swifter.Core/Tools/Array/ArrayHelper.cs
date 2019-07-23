@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.Tools
 {
@@ -135,7 +136,7 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="dbDataReader">系统数据读取器</param>
         /// <returns>返回一个 yield 关键字实现的迭代器</returns>
-        public static IEnumerable<string> CreateNamesIterator(DbDataReader dbDataReader)
+        public static IEnumerable<string> CreateNamesIterator(IDataReader dbDataReader)
         {
             var length = dbDataReader.FieldCount;
 
@@ -298,6 +299,199 @@ namespace Swifter.Tools
             result[result.Length - 1] = tail;
 
             return result;
+        }
+
+        /// <summary>
+        /// 获取数组指定索引处的引用。（只支持 16 维度以内的数组）
+        /// </summary>
+        /// <typeparam name="TArray">数组类型</typeparam>
+        /// <typeparam name="TElement">元素类型</typeparam>
+        /// <param name="array">数组</param>
+        /// <param name="indices">索引</param>
+        /// <returns>返回一个引用</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static ref TElement Ref<TArray, TElement>(TArray array, int[] indices) where TArray : class
+        {
+            switch (indices.Length)
+            {
+                case 1: return ref Unsafe.As<TElement[]>(array)[indices[0]];
+                case 2: return ref Unsafe.As<TElement[,]>(array)[indices[0], indices[1]];
+                case 3: return ref Unsafe.As<TElement[,,]>(array)[indices[0], indices[1], indices[2]];
+                case 4: return ref Unsafe.As<TElement[,,,]>(array)[indices[0], indices[1], indices[2], indices[3]];
+                case 5: return ref Unsafe.As<TElement[,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4]];
+                case 6: return ref Unsafe.As<TElement[,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5]];
+                case 7: return ref Unsafe.As<TElement[,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6]];
+                case 8: return ref Unsafe.As<TElement[,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7]];
+                case 9: return ref Unsafe.As<TElement[,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8]];
+                case 10: return ref Unsafe.As<TElement[,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9]];
+                case 11: return ref Unsafe.As<TElement[,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10]];
+                case 12: return ref Unsafe.As<TElement[,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11]];
+                case 13: return ref Unsafe.As<TElement[,,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11], indices[12]];
+                case 14: return ref Unsafe.As<TElement[,,,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11], indices[12], indices[13]];
+                case 15: return ref Unsafe.As<TElement[,,,,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11], indices[12], indices[13], indices[14]];
+                case 16: return ref Unsafe.As<TElement[,,,,,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11], indices[12], indices[13], indices[14], indices[15]];
+            }
+
+
+            throw new NotSupportedException("Dimension exceeds maximum limit.");
+        }
+
+        /// <summary>
+        /// 创建数组实例。（只支持 16 维度以内的数组）
+        /// </summary>
+        /// <typeparam name="TArray">数组类型</typeparam>
+        /// <typeparam name="TElement">元素类型</typeparam>
+        /// <param name="lengths">数组各个维度的长度</param>
+        /// <returns>返回一个数组</returns>
+        public static TArray CreateInstance<TArray, TElement>(int[] lengths) where TArray : class
+        {
+            switch (lengths.Length)
+            {
+                case 1: return Unsafe.As<TArray>(new TElement[lengths[0]]);
+                case 2: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1]]);
+                case 3: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2]]);
+                case 4: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3]]);
+                case 5: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4]]);
+                case 6: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5]]);
+                case 7: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6]]);
+                case 8: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7]]);
+                case 9: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8]]);
+                case 10: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9]]);
+                case 11: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10]]);
+                case 12: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11]]);
+                case 13: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11], lengths[12]]);
+                case 14: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11], lengths[12], lengths[13]]);
+                case 15: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11], lengths[12], lengths[13], lengths[14]]);
+                case 16: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11], lengths[12], lengths[13], lengths[14], lengths[15]]);
+            }
+
+
+            throw new NotSupportedException("Dimension exceeds maximum limit.");
+        }
+
+        /// <summary>
+        /// 重写分配数组的大小。（只支持 16 维度以内的数组）
+        /// </summary>
+        /// <typeparam name="TArray">数组类型</typeparam>
+        /// <typeparam name="TElement">元素类型</typeparam>
+        /// <param name="array">数组</param>
+        /// <param name="lengths">新的长度</param>
+        public static void Resize<TArray, TElement>(ref TArray array, int[] lengths) where TArray : class
+        {
+            var temp = Unsafe.As<Array>(array);
+
+            for (int i = 0; i < lengths.Length; i++)
+            {
+                if (lengths[i] != temp.GetLength(i))
+                {
+                    if (array == temp)
+                    {
+                        array = CreateInstance<TArray, TElement>(lengths);
+                    }
+
+                    if (lengths[i] > temp.GetLength(i))
+                    {
+                        lengths[i] = temp.GetLength(i);
+                    }
+                }
+            }
+
+            if (array != temp)
+            {
+                Copy<TArray, TElement>(Unsafe.As<TArray>(temp), array, lengths);
+            }
+        }
+
+        /// <summary>
+        /// 从 0 索引处开始复制数组内容。（只支持 16 维度以内的数组）
+        /// </summary>
+        /// <typeparam name="TArray">数组类型</typeparam>
+        /// <typeparam name="TElement">元素类型</typeparam>
+        /// <param name="source">源数组</param>
+        /// <param name="destination">目标数组</param>
+        /// <param name="lengths">各个维度的长度</param>
+        public static void Copy<TArray, TElement>(TArray source, TArray destination, int[] lengths) where TArray : class
+        {
+            switch (lengths.Length)
+            {
+                case 1: Copy1D();return;
+                case 2: Copy2D(); return;
+                case 3: Copy3D(); return;
+                case 4: Copy4D(); return;
+                case 5: Copy5D(); return;
+                case 6: Copy6D(); return;
+                default: CopyND(new int[lengths.Length], 0); return;
+            }
+
+            void Copy1D()
+            {
+                for (int i1 = lengths[0] - 1; i1 >= 0; --i1)
+                        Unsafe.As<TElement[]>(destination)[i1] = Unsafe.As<TElement[]>(source)[i1];
+            }
+            void Copy2D()
+            {
+                for (int i1 = lengths[0] - 1; i1 >= 0; --i1)
+                    for (int i2 = lengths[1] - 1; i2 >= 0; --i2)
+                        Unsafe.As<TElement[,]>(destination)[i1, i2] = Unsafe.As<TElement[,]>(source)[i1, i2];
+            }
+            void Copy3D()
+            {
+                for (int i1 = lengths[0] - 1; i1 >= 0; --i1)
+                    for (int i2 = lengths[1] - 1; i2 >= 0; --i2)
+                        for (int i3 = lengths[2] - 1; i3 >= 0; --i3)
+                            Unsafe.As<TElement[,,]>(destination)[i1, i2, i3] = Unsafe.As<TElement[,,]>(source)[i1, i2, i3];
+            }
+            void Copy4D()
+            {
+                for (int i1 = lengths[0] - 1; i1 >= 0; --i1)
+                    for (int i2 = lengths[1] - 1; i2 >= 0; --i2)
+                        for (int i3 = lengths[2] - 1; i3 >= 0; --i3)
+                            for (int i4 = lengths[3] - 1; i4 >= 0; --i4)
+                                Unsafe.As<TElement[,,,]>(destination)[i1, i2, i3, i4] = Unsafe.As<TElement[,,,]>(source)[i1, i2, i3, i4];
+            }
+            void Copy5D()
+            {
+                for (int i1 = lengths[0] - 1; i1 >= 0; --i1)
+                    for (int i2 = lengths[1] - 1; i2 >= 0; --i2)
+                        for (int i3 = lengths[2] - 1; i3 >= 0; --i3)
+                            for (int i4 = lengths[3] - 1; i4 >= 0; --i4)
+                                for (int i5 = lengths[4] - 1; i5 >= 0; --i5)
+                                    Unsafe.As<TElement[,,,,]>(destination)[i1, i2, i3, i4, i5] = Unsafe.As<TElement[,,,,]>(source)[i1, i2, i3, i4, i5];
+            }
+            void Copy6D()
+            {
+                for (int i1 = lengths[0] - 1; i1 >= 0; --i1)
+                    for (int i2 = lengths[1] - 1; i2 >= 0; --i2)
+                        for (int i3 = lengths[2] - 1; i3 >= 0; --i3)
+                            for (int i4 = lengths[3] - 1; i4 >= 0; --i4)
+                                for (int i5 = lengths[4] - 1; i5 >= 0; --i5)
+                                    for (int i6 = lengths[5] - 1; i6 >= 0; --i6)
+                                        Unsafe.As<TElement[,,,,,]>(destination)[i1, i2, i3, i4, i5, i6] = Unsafe.As<TElement[,,,,,]>(source)[i1, i2, i3, i4, i5, i6];
+            }
+
+            void CopyND(int[] indices, int dimension)
+            {
+                var length = lengths[dimension];
+
+                ref int index = ref indices[dimension];
+
+                ++dimension;
+
+                if (dimension == lengths.Length)
+                {
+                    for (index = 0; index < length; ++index)
+                    {
+                        Ref<TArray, TElement>(destination, indices) = Ref<TArray, TElement>(source, indices);
+                    }
+                }
+                else
+                {
+                    for (index = 0; index < length; ++index)
+                    {
+                        CopyND(indices, dimension);
+                    }
+                }
+            }
         }
     }
 }

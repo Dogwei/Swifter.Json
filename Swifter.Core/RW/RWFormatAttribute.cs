@@ -54,7 +54,7 @@ namespace Swifter.RW
             }
             else
             {
-                throw new TargetException($"Field type '{fieldType}' does not implement '{nameof(IFormattable)}' interface.");
+                throw new TargetException($"Field type '{fieldType}' does not implement '{typeof(IFormattable)}' interface.");
             }
         }
 

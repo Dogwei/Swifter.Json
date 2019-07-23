@@ -17,39 +17,12 @@ namespace Swifter.Reflection
     /// <typeparam name="T"></typeparam>
     public sealed class XObjectInterface<T> : IValueInterface<T>
     {
-        private static readonly bool CheckChildrenInstance = typeof(T).IsClass && (!typeof(T).IsSealed);
-        private static readonly IntPtr TypeHandle = TypeHelper.GetTypeHandle(typeof(T));
-        private static readonly XBindingFlags CurrentBindingFlags = GetFastObjectRWFlags();
+        /// <summary>
+        /// 表示是否需要进行派生类检查。
+        /// </summary>
+        static readonly bool CheckDerivedInstance = !TypeInfo<T>.IsFinal;
+        static readonly IntPtr TypeHandle = TypeHelper.GetTypeHandle(typeof(T));
 
-        private static XBindingFlags GetFastObjectRWFlags()
-        {
-            var fastOptions = FastObjectRW<T>.CurrentOptions;
-            var xFlags = XBindingFlags.Public | XBindingFlags.Instance;
-
-            if ((fastOptions & FastObjectRWOptions.Allocate) != 0)
-                xFlags |= XBindingFlags.RWAllocate;
-            if ((fastOptions & FastObjectRWOptions.CannotGetException) != 0)
-                xFlags |= XBindingFlags.RWCannotGetException;
-            if ((fastOptions & FastObjectRWOptions.CannotSetException) != 0)
-                xFlags |= XBindingFlags.RWCannotSetException;
-            if ((fastOptions & FastObjectRWOptions.Field) != 0)
-                xFlags |= XBindingFlags.Field;
-            if ((fastOptions & FastObjectRWOptions.IgnoreCase) != 0)
-                xFlags |= XBindingFlags.RWIgnoreCase;
-            if ((fastOptions & FastObjectRWOptions.InheritedMembers) != 0)
-                xFlags |= XBindingFlags.InheritedMembers;
-            if ((fastOptions & FastObjectRWOptions.MembersOptIn) != 0)
-                xFlags |= XBindingFlags.RWMembersOptIn;
-            if ((fastOptions & FastObjectRWOptions.NotFoundException) != 0)
-                xFlags |= XBindingFlags.RWNotFoundException;
-            if ((fastOptions & FastObjectRWOptions.Property) != 0)
-                xFlags |= XBindingFlags.Property;
-            if ((fastOptions & FastObjectRWOptions.SkipDefaultValue) != 0)
-                xFlags |= XBindingFlags.RWSkipDefaultValue;
-
-            return xFlags;
-        }
-        
         /// <summary>
         /// 在值读取器中读取该类型的实例。
         /// </summary>
@@ -57,7 +30,7 @@ namespace Swifter.Reflection
         /// <returns>返回该类型的实例</returns>
         public T ReadValue(IValueReader valueReader)
         {
-            var objectRW = XObjectRW.Create<T>(CurrentBindingFlags);
+            var objectRW = XObjectRW.Create<T>(valueReader is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.None);
 
             valueReader.ReadObject(objectRW);
 
@@ -74,23 +47,65 @@ namespace Swifter.Reflection
             if (value == null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            /* 父类引用，子类实例时使用 Type 获取写入器。 */
-            if (CheckChildrenInstance && TypeHandle != TypeHelper.GetTypeHandle(value))
+            else if (CheckDerivedInstance && TypeHandle != TypeHelper.GetTypeHandle(value))
             {
-                ValueInterface.WriteValue(valueWriter, value);
+                /* 父类引用，子类实例时使用 Type 获取写入器。 */
 
-                return;
+                ValueInterface.WriteValue(valueWriter, value);
+            }
+            else
+            {
+                var objectRW = XObjectRW.Create<T>(valueWriter is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.None);
+
+                objectRW.Initialize(value);
+
+                valueWriter.WriteObject(objectRW);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 提供新反射工具的扩展方法。
+    /// </summary>
+    public static class XObjectRWExtensions
+    {
+        /// <summary>
+        /// 设置对象读写器接口为 XObjectInterface，并设置一个支持针对性接口的对象的默认绑定标识。
+        /// </summary>
+        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <param name="flags">默认绑定标识</param>
+        public static void SetXObjectRWFlags(this ITargetedBind targeted, XBindingFlags flags)
+        {
+            ValueInterface.DefaultObjectInterfaceType = typeof(XObjectInterface<>);
+
+            ValueInterface<XAssistant>.SetTargetedInterface(targeted, new XAssistant(flags));
+        }
+
+        /// <summary>
+        /// 获取一个支持针对性接口的对象的默认绑定标识。
+        /// </summary>
+        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <returns>返回绑定标识</returns>
+        public static XBindingFlags GetXObjectRWFlags(this ITargetedBind targeted)
+        {
+            return ValueInterface<XAssistant>.GetTargetedInterface(targeted) is XAssistant assistant ? assistant.Flags : XObjectRW.DefaultBindingFlags;
+        }
+
+        sealed class XAssistant : IValueInterface<XAssistant>
+        {
+            public readonly XBindingFlags Flags;
+
+            public XAssistant(XBindingFlags flags)
+            {
+                Flags = flags;
             }
 
-            var objectRW = XObjectRW.Create<T>(CurrentBindingFlags);
+            public XAssistant ReadValue(IValueReader valueReader) => default;
 
-            objectRW.Initialize(value);
-
-            valueWriter.WriteObject(objectRW);
+            public void WriteValue(IValueWriter valueWriter, XAssistant value)
+            {
+            }
         }
     }
 }

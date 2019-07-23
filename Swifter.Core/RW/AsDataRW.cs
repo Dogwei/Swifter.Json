@@ -9,9 +9,24 @@ namespace Swifter.RW
     /// <summary>
     /// 数据读写器键类型转换的接口。
     /// </summary>
-    internal interface IAsDataRW
+    public interface IAsDataRW
     {
+        /// <summary>
+        /// 原始数据读写器。
+        /// </summary>
         IDataRW Content { get; }
+
+        /// <summary>
+        /// 执行输入类型。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        void InvokeTIn(IGenericInvoker invoker);
+
+        /// <summary>
+        /// 执行输出类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        void InvokeTOut(IGenericInvoker invoker);
     }
 
     /// <summary>
@@ -19,7 +34,7 @@ namespace Swifter.RW
     /// </summary>
     /// <typeparam name="TIn">输入类型</typeparam>
     /// <typeparam name="TOut">输出类型</typeparam>
-    internal sealed class AsDataRW<TIn, TOut> : IDataRW<TOut>, IAsDataRW, IAsDataReader, IAsDataWriter, IDirectContent
+    public sealed class AsDataRW<TIn, TOut> : IDataRW<TOut>, IAsDataRW, IAsDataReader, IAsDataWriter, IDirectContent
     {
         /// <summary>
         /// 原始数据读写器。
@@ -106,6 +121,24 @@ namespace Swifter.RW
         public void Initialize(int capacity)
         {
             dataRW.Initialize(capacity);
+        }
+
+        /// <summary>
+        /// 执行输入类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        public void InvokeTIn(IGenericInvoker invoker)
+        {
+            invoker.Invoke<TIn>();
+        }
+
+        /// <summary>
+        /// 执行输出类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        public void InvokeTOut(IGenericInvoker invoker)
+        {
+            invoker.Invoke<TOut>();
         }
 
         /// <summary>

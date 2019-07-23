@@ -1,8 +1,15 @@
 ﻿using Swifter.Json;
 using Swifter.Reflection;
 using Swifter.RW;
+using Swifter.Tools;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
 using System.Windows.Forms;
 
 namespace Swifter.Test
@@ -11,9 +18,12 @@ namespace Swifter.Test
     {
         public static void Main()
         {
-            ValueInterface.DefaultObjectInterfaceType = typeof(XObjectInterface<>);
+            //FastObjectRW.DefaultOptions &= ~FastObjectRWOptions.IndexId64;
+            //FastObjectRW.DefaultOptions &= ~FastObjectRWOptions.IgnoreCase;
 
-            // Console.WriteLine((int)'\r');
+            //DataTableRW.DefaultOptions = DataTableRWOptions.SetFirstRowsTypeToColumnTypes | 
+            //    DataTableRWOptions.WriteToArrayFromBeginningSecondRows;
+
             Application.Run(new MyForm());
         }
     }

@@ -1,15 +1,11 @@
 ﻿using Swifter.Readers;
-using Swifter.Tools;
 using Swifter.Writers;
 using System;
 
 namespace Swifter.RW
 {
-
     sealed class DefaultValueReader : IValueReader, IValueReader<Guid>, IValueReader<DateTimeOffset>, IValueReader<TimeSpan>
     {
-        public static readonly DefaultValueReader Instance = new DefaultValueReader();
-
         public object DirectRead() => default;
 
         public void ReadArray(IDataWriter<int> valueWriter) { }
@@ -34,9 +30,7 @@ namespace Swifter.RW
 
         public T? ReadNullable<T>() where T : struct => default;
 
-        public void ReadObject(IDataWriter<string> valueWriter)
-        {
-        }
+        public void ReadObject(IDataWriter<string> valueWriter) { }
 
         public sbyte ReadSByte() => default;
 

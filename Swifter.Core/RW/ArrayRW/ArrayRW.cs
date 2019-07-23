@@ -6,27 +6,40 @@ using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
-    internal abstract class ArrayRW<T> : IDataRW<int>, IDirectContent, IInitialize<T> where T : class
+    internal abstract class ArrayRW<TArray> : IDataRW<int>, IDirectContent, IInitialize<TArray> where TArray : class
     {
-        public const int DefaultInitializeSize = 3;
+        public const int DefaultCapacity = 3;
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ArrayRW<T> Create()
+        public static ArrayRW<TArray> Create(TArray array)
         {
-            return StaticArrayRW<T>.Creater.Create();
+            var rWer = StaticArrayRW<TArray>.Creater.Create();
+
+            rWer.Initialize(array);
+
+            return rWer;
         }
 
-        internal protected T content;
-        internal protected int count;
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        internal static ArrayRW<TArray> CreateAppend()
+        {
+            return StaticArrayRW<TArray>.Creater.CreateArrayBuilder();
+        }
 
-        public abstract T Content { get; }
+        internal protected TArray content;
+
+        public abstract TArray Content { get; }
+
+        public abstract TArray GetCopy();
+
+        public abstract int Count { get; }
 
         public void Initialize()
         {
-            Initialize(DefaultInitializeSize);
+            Initialize(DefaultCapacity);
         }
 
-        public abstract void Initialize(T content);
+        public abstract void Initialize(TArray content);
 
         public abstract void Initialize(int capacity);
 
@@ -34,27 +47,40 @@ namespace Swifter.RW
 
         public abstract void OnReadValue(int key, IValueWriter valueWriter);
 
-        public abstract void OnReadAll(IDataWriter<int> dataWriter);
+        public virtual void OnReadAll(IDataWriter<int> dataWriter)
+        {
+            var length = Count;
 
-        public abstract void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter);
+            for (int i = 0; i < length; i++)
+            {
+                OnReadValue(i, dataWriter[i]);
+            }
+        }
 
-        public abstract void OnWriteAll(IDataReader<int> dataReader);
+        public virtual void OnWriteAll(IDataReader<int> dataReader)
+        {
+            var length = Count;
 
-        public ValueCopyer<int> this[int key] => new ValueCopyer<int>(this, key);
+            for (int i = 0; i < length; i++)
+            {
+                OnWriteValue(i, dataReader[i]);
+            }
+        }
+
+        public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter) => OnReadAll(new DataFilterWriter<int>(dataWriter, valueFilter));
 
         public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
 
-        public virtual int Count => count;
 
         object IDirectContent.DirectContent
         {
             get => Content;
-            set => Initialize((T)value);
+            set => Initialize((TArray)value);
         }
 
-        public virtual object ReferenceToken => content;
+        public object ReferenceToken => content;
 
-        IValueRW IDataRW<int>.this[int key] => this[key];
+        public abstract IValueRW this[int key] { get; }
 
         IValueReader IDataReader<int>.this[int key] => this[key];
 

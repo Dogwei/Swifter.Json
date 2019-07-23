@@ -341,12 +341,21 @@ namespace Swifter.RW
         {
             var dictionaryRW = new DictionaryRW<T, TKey, TValue>();
 
-            if (valueReader is IValueFiller<TKey> tFiller)
+            if (typeof(TKey) == typeof(string))
             {
-                tFiller.FillValue(dictionaryRW);
+                valueReader.ReadObject(Unsafe.As<IDataWriter<string>>(dictionaryRW));
             }
-
-            valueReader.ReadObject(dictionaryRW.As<string>());
+            else
+            {
+                if (valueReader is IMapValueReader mapReader)
+                {
+                    mapReader.ReadMap(dictionaryRW);
+                }
+                else
+                {
+                    valueReader.ReadObject(dictionaryRW.As<string>());
+                }
+            }
 
             return dictionaryRW.Content;
         }
@@ -364,7 +373,22 @@ namespace Swifter.RW
 
             dictionaryRW.Initialize(value);
 
-            valueWriter.WriteObject(dictionaryRW.As<string>());
+            if (typeof(TKey) == typeof(string))
+            {
+                valueWriter.WriteObject(Unsafe.As<IDataReader<string>>(dictionaryRW));
+            }
+            else
+            {
+                if (valueWriter is IMapValueWriter mapWriter)
+                {
+                    mapWriter.WriteMap(dictionaryRW);
+                }
+                else
+                {
+                    valueWriter.WriteObject(dictionaryRW.As<string>());
+                }
+            }
+
         }
     }
 
@@ -374,9 +398,9 @@ namespace Swifter.RW
         {
             var dictionaryRW = new DictionaryRW<T>();
 
-            if (valueReader is IValueFiller<object> tFiller)
+            if (valueReader is IMapValueReader mapReader)
             {
-                tFiller.FillValue(dictionaryRW);
+                mapReader.ReadMap(dictionaryRW);
             }
             else
             {
@@ -399,7 +423,14 @@ namespace Swifter.RW
 
             dictionaryRW.Initialize(value);
 
-            valueWriter.WriteObject(dictionaryRW.As<string>());
+            if (valueWriter is IMapValueWriter mapWriter)
+            {
+                mapWriter.WriteMap(dictionaryRW);
+            }
+            else
+            {
+                valueWriter.WriteObject(dictionaryRW.As<string>());
+            }
         }
     }
 }

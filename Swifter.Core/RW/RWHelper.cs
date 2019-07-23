@@ -1,5 +1,4 @@
 ﻿using Swifter.Readers;
-using Swifter.Tools;
 using Swifter.Writers;
 using System;
 using System.Runtime.CompilerServices;
@@ -14,7 +13,8 @@ namespace Swifter.RW
         /// <summary>
         /// 获取一个所有方法均为获取 default 值的读取器。
         /// </summary>
-        public static IValueReader DefaultValueReader = RW.DefaultValueReader.Instance;
+        public static readonly IValueReader DefaultValueReader = new DefaultValueReader();
+
 
         /// <summary>
         /// 为实例创建读取器。
@@ -25,18 +25,11 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataReader CreateReader<T>(T obj)
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
+            var auxiliary = new AuxiliaryValueRW();
 
-            ValueInterface<T>.WriteValue(auxiliaryValueRW, obj);
+            ValueInterface<T>.WriteValue(auxiliary, obj);
 
-            var value = auxiliaryValueRW.read_writer;
-
-            if (value is IAsDataReader @as)
-            {
-                return @as.Content;
-            }
-
-            return (IDataReader)value;
+            return auxiliary.GetDataReader() ?? throw new NotSupportedException($"Unable create data reader of '{typeof(T)}'.");
         }
 
         /// <summary>
@@ -48,18 +41,11 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataRW CreateRW<T>(T obj)
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
+            var auxiliary = new AuxiliaryValueRW();
 
-            ValueInterface<T>.WriteValue(auxiliaryValueRW, obj);
+            ValueInterface<T>.WriteValue(auxiliary, obj);
 
-            var value = auxiliaryValueRW.read_writer;
-
-            if (value is IAsDataRW @as)
-            {
-                return @as.Content;
-            }
-
-            return (IDataRW)value;
+            return auxiliary.GetDataRW() ?? throw new NotSupportedException($"Unable create data reader-writer of '{typeof(T)}'.");
         }
 
         /// <summary>
@@ -70,18 +56,45 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataWriter CreateWriter<T>()
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
+            var auxiliary = new AuxiliaryValueRW();
 
-            ValueInterface<T>.ReadValue(auxiliaryValueRW);
+            ValueInterface<T>.ReadValue(auxiliary);
 
-            var value = auxiliaryValueRW.read_writer;
+            return auxiliary.GetDataWriter() ?? throw new NotSupportedException($"Unable create data writer of '{typeof(T)}'.");
+        }
 
-            if (value is IAsDataWriter @as)
+        /// <summary>
+        /// 为一个实例创建数据写入器。
+        /// </summary>
+        /// <typeparam name="T">实例类型</typeparam>
+        /// <param name="obj">实例</param>
+        /// <returns>返回一个写入器</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static IDataWriter CreateWriter<T>(T obj)
+        {
+            var auxiliary = new AuxiliaryValueRW();
+
+            ValueInterface<T>.WriteValue(auxiliary, obj);
+
+            var writer = auxiliary.GetDataWriter();
+
+            if (writer != null)
             {
-                return @as.Content;
+                return writer;
             }
 
-            return (IDataWriter)value;
+            ValueInterface<T>.ReadValue(auxiliary);
+
+            writer = auxiliary.GetDataWriter();
+
+            if (writer == null)
+            {
+                return auxiliary.GetDataWriter() ?? throw new NotSupportedException($"Unable create data writer of  '{typeof(T)}'.");
+            }
+
+            SetContent(writer, obj);
+
+            return writer;
         }
 
         /// <summary>
@@ -92,18 +105,16 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataReader CreateReader(object obj)
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
-
-            ValueInterface.GetInterface(obj).Write(auxiliaryValueRW, obj);
-
-            var value = auxiliaryValueRW.read_writer;
-
-            if (value is IAsDataReader @as)
+            if (obj == null)
             {
-                return @as.Content;
+                throw new ArgumentNullException(nameof(obj));
             }
 
-            return (IDataReader)value;
+            var auxiliary = new AuxiliaryValueRW();
+
+            ValueInterface.GetInterface(obj).Write(auxiliary, obj);
+
+            return auxiliary.GetDataReader() ?? throw new NotSupportedException($"Unable create data reader of '{obj.GetType()}'.");
         }
 
         /// <summary>
@@ -114,18 +125,16 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataRW CreateRW(object obj)
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
-
-            ValueInterface.GetInterface(obj).Write(auxiliaryValueRW, obj);
-
-            var value = auxiliaryValueRW.read_writer;
-
-            if (value is IAsDataRW @as)
+            if (obj == null)
             {
-                return @as.Content;
+                throw new ArgumentNullException(nameof(obj));
             }
 
-            return (IDataRW)value;
+            var auxiliary = new AuxiliaryValueRW();
+
+            ValueInterface.GetInterface(obj).Write(auxiliary, obj);
+
+            return auxiliary.GetDataRW() ?? throw new NotSupportedException($"Unable create data reader-writer of '{obj.GetType()}'.");
         }
 
         /// <summary>
@@ -136,18 +145,56 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataWriter CreateWriter(Type type)
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
-
-            ValueInterface.GetInterface(type).Read(auxiliaryValueRW);
-
-            var value = auxiliaryValueRW.read_writer;
-
-            if (value is IAsDataWriter @as)
+            if (type == null)
             {
-                return @as.Content;
+                throw new ArgumentNullException(nameof(type));
             }
 
-            return (IDataWriter)value;
+            var auxiliary = new AuxiliaryValueRW();
+
+            ValueInterface.GetInterface(type).Read(auxiliary);
+
+            return auxiliary.GetDataWriter() ?? throw new NotSupportedException($"Unable create data writer of '{type}'.");
+        }
+
+        /// <summary>
+        /// 为一个实例创建数据写入器。
+        /// </summary>
+        /// <param name="obj">实例</param>
+        /// <returns>返回一个写入器</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static IDataWriter CreateWriter(object obj)
+        {
+            if (obj == null)
+            {
+                throw new ArgumentNullException(nameof(obj));
+            }
+
+            var auxiliary = new AuxiliaryValueRW();
+
+            var @interface = ValueInterface.GetInterface(obj);
+
+            @interface.Write(auxiliary, obj);
+
+            var writer = auxiliary.GetDataWriter();
+
+            if (writer != null)
+            {
+                return writer;
+            }
+
+            @interface.Read(auxiliary);
+
+            writer = auxiliary.GetDataWriter();
+
+            if (writer == null)
+            {
+                return auxiliary.GetDataWriter() ?? throw new NotSupportedException($"Unable create data writer of  '{obj.GetType()}'.");
+            }
+
+            SetContent(writer, obj);
+
+            return writer;
         }
 
         /// <summary>
@@ -160,18 +207,18 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataReader CreateItemReader<TKey>(IDataReader<TKey> dataReader, TKey key)
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
+            var auxiliary = new AuxiliaryValueRW();
 
-            dataReader.OnReadValue(key, auxiliaryValueRW);
-
-            var value = auxiliaryValueRW.read_writer;
-
-            if (value is IAsDataReader @as)
+            if (typeof(TKey) == typeof(long) && ((dataReader as IAsDataReader)?.Content?? dataReader) is IId64DataRW id64DataRW)
             {
-                return @as.Content;
+                id64DataRW.OnReadValue(Unsafe.As<TKey, long>(ref key), auxiliary);
+            }
+            else
+            {
+                dataReader.OnReadValue(key, auxiliary);
             }
 
-            return (IDataReader)value;
+            return auxiliary.GetDataReader() ?? throw new NotSupportedException($"Failed to create data reader of field : '{key}' in {dataReader}.");
         }
 
         /// <summary>
@@ -184,18 +231,18 @@ namespace Swifter.RW
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static IDataRW CreateItemRW<TKey>(IDataReader<TKey> dataReader, TKey key)
         {
-            var auxiliaryValueRW = new AuxiliaryValueRW();
+            var auxiliary = new AuxiliaryValueRW();
 
-            dataReader.OnReadValue(key, auxiliaryValueRW);
-
-            var value = auxiliaryValueRW.read_writer;
-
-            if (value is IAsDataRW @as)
+            if (typeof(TKey) == typeof(long) && ((dataReader as IAsDataReader)?.Content ?? dataReader) is IId64DataRW id64DataRW)
             {
-                return @as.Content;
+                id64DataRW.OnReadValue(Unsafe.As<TKey, long>(ref key), auxiliary);
+            }
+            else
+            {
+                dataReader.OnReadValue(key, auxiliary);
             }
 
-            return (IDataRW)value;
+            return auxiliary.GetDataRW() ?? throw new NotSupportedException($"Failed to create data reader-writer of field : '{key}' in {dataReader}.");
         }
 
         /// <summary>
@@ -282,44 +329,6 @@ namespace Swifter.RW
         public static void Copy(IDataReader dataReader, IDataWriter dataWriter)
         {
             Copy(dataReader.As<object>(), dataWriter.As<object>());
-        }
-
-        /// <summary>
-        /// Copy 数据内容。
-        /// </summary>
-        /// <param name="tableReader">数据源</param>
-        /// <param name="tableWriter">目标</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void Copy(ITableReader tableReader, ITableWriter tableWriter)
-        {
-            while (tableReader.Read())
-            {
-                tableWriter.Next();
-
-                Copy<string>(tableReader, tableWriter);
-            }
-        }
-
-        /// <summary>
-        /// Copy 数据内容。
-        /// </summary>
-        /// <param name="tableReader">数据源</param>
-        /// <param name="dataWriter">目标</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void Copy(ITableReader tableReader, IDataWriter dataWriter)
-        {
-            Copy(new TableToArrayReader(tableReader), dataWriter.As<int>());
-        }
-
-        /// <summary>
-        /// Copy 数据内容。
-        /// </summary>
-        /// <param name="dataReader">数据源</param>
-        /// <param name="tableWriter">目标</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void Copy(IDataReader dataReader, ITableWriter tableWriter)
-        {
-            Copy(dataReader.As<int>(), new TableToArrayWriter(tableWriter));
         }
 
         /// <summary>

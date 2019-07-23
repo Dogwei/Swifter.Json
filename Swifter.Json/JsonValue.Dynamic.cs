@@ -9,21 +9,8 @@ using System.Dynamic;
 
 namespace Swifter.Json
 {
-    sealed partial class JsonValue : DynamicObject
+    partial class JsonValue : DynamicObject
     {
-        static void AssertIgnoreCase(bool value)
-        {
-            if (value)
-            {
-                Throw();
-            }
-
-            void Throw()
-            {
-                throw new NotSupportedException("Not support ignore case.");
-            }
-        }
-
         static void AssertOneArguments(int length)
         {
             if (length != 1)
@@ -45,13 +32,9 @@ namespace Swifter.Json
         /// <returns>是否获取成功</returns>
         public override bool TryGetMember(GetMemberBinder binder, out object result)
         {
-            AssertIgnoreCase(binder.IgnoreCase);
+            result = AsValue(this[binder.Name]);
 
-            var success = Object.TryGetValue(binder.Name, out result);
-
-            result = AsValue(result);
-
-            return success;
+            return result != null;
         }
 
         /// <summary>
@@ -67,22 +50,18 @@ namespace Swifter.Json
 
             var key = indexes[0];
 
-            if (key is int int32Key)
+            if (key is int index)
             {
-                result = Array[int32Key];
-
-                result = AsValue(result);
+                result = AsValue(this[index]);
 
                 return true;
             }
 
-            if (key is string stringKey)
+            if (key is string name)
             {
-                var success = Object.TryGetValue(stringKey, out result);
-
-                result = AsValue(result);
-
-                return success;
+                result = AsValue(this[name]);
+                
+                return result != null;
             }
 
             result = null;
@@ -90,22 +69,7 @@ namespace Swifter.Json
             return false;
         }
 
-        private static object AsValue(object value)
-        {
-            if (value == null)
-            {
-                return null;
-            }
-
-            var jsonValue = new JsonValue(value);
-
-            if (jsonValue.IsValue)
-            {
-                return jsonValue.Value;
-            }
-
-            return jsonValue;
-        }
+        private static object AsValue(JsonValue value) => value != null && value.IsValue ? value.Value : value;
     }
 }
 

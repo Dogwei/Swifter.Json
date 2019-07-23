@@ -5,6 +5,7 @@ using Swifter.Writers;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Globalization;
 
 namespace Swifter.RW
 {
@@ -24,8 +25,12 @@ namespace Swifter.RW
         /// <summary>
         /// 表示是否使用用户自定义的读写方法，如果为 True, FastObjectRW 将不优化基础类型的读写。
         /// </summary>
-        
-        internal static bool IsNoModify { get; private set; }
+        internal static bool IsNotModified { get; private set; }
+
+        /// <summary>
+        /// 表示是否使用用户自定义的读写方法，如果为 True, FastObjectRW 将不优化基础类型的读写。
+        /// </summary>
+        public override bool IsNotModified_ => IsNotModified;
 
         static ValueInterface()
         {
@@ -42,7 +47,7 @@ namespace Swifter.RW
             {
             }
 
-            IsNoModify = true;
+            IsNotModified = true;
 
             if (Content != null)
             {
@@ -180,7 +185,7 @@ namespace Swifter.RW
             {
                 valueInterface = valueInterface ?? throw new ArgumentNullException(nameof(valueInterface));
 
-                IsNoModify = false;
+                IsNotModified = false;
 
                 if (Content is TargetedValueInterface)
                 {
@@ -196,12 +201,22 @@ namespace Swifter.RW
         /// <summary>
         /// 设置针对某一目标值读写器的读写接口实例。
         /// </summary>
-        /// <param name="targetedId">针对目标的 Id</param>
+        /// <param name="targeted">目标</param>
         /// <param name="valueInterface">读写接口实例</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void SetTargetedInterface(long targetedId, IValueInterface<T> valueInterface)
+        public static void SetTargetedInterface(ITargetedBind targeted, IValueInterface<T> valueInterface)
         {
-            TargetedValueInterface.Set(targetedId, valueInterface);
+            TargetedValueInterface.Set(targeted, valueInterface);
+        }
+
+        /// <summary>
+        /// 获取针对某一目标值读写器的读写接口实例。
+        /// </summary>
+        /// <param name="targeted">目标</param>
+        /// <returns>返回读写接口实例</returns>
+        public static IValueInterface<T> GetTargetedInterface(ITargetedBind targeted)
+        {
+            return TargetedValueInterface.Get<T>(targeted);
         }
 
         /// <summary>
@@ -325,6 +340,38 @@ namespace Swifter.RW
 
         }
 
+        /// <summary>
+        /// 设置指定类型在 WriteValue 方法中写入为指定格式的字符串。在 ReadValue 方法是依然使用默认方法。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="format">指定指定格式</param>
+        public static void SetValueFormat<T>(string format) where T : IFormattable
+        {
+            ValueInterface<T>.SetInterface(new SetValueFormatInterface<T>(ValueInterface<T>.Content, format));
+        }
+
+        internal sealed class SetValueFormatInterface<T> : IValueInterface<T> where T : IFormattable
+        {
+            public readonly IValueInterface<T> DefaultInterface;
+            public readonly string Format;
+
+            public SetValueFormatInterface(IValueInterface<T> defaultInterface, string format)
+            {
+                DefaultInterface = defaultInterface;
+                Format = format;
+            }
+
+            public T ReadValue(IValueReader valueReader)
+            {
+                return DefaultInterface.ReadValue(valueReader);
+            }
+
+            public void WriteValue(IValueWriter valueWriter, T value)
+            {
+                valueWriter.WriteString(value.ToString(Format, CultureInfo.CurrentCulture));
+            }
+        }
+
         internal sealed class ValueInterfaceCache : BaseCache<IntPtr, ValueInterface>, BaseCache<IntPtr, ValueInterface>.IGetOrCreate<object>, BaseCache<IntPtr, ValueInterface>.IGetOrCreate<Type>
         {
             public ValueInterfaceCache() : base(0)
@@ -393,6 +440,7 @@ namespace Swifter.RW
             ValueInterface<IntPtr>.Content = new IntPtrInterface();
             ValueInterface<Version>.Content = new VersionInterface();
             ValueInterface<DBNull>.Content = new DbNullInterface();
+            ValueInterface<Uri>.Content = new UriInterface();
 
             Mapers.Add(new EnumerableInterfaceMaper());
             Mapers.Add(new CollectionInterfaceMaper());
@@ -496,11 +544,11 @@ namespace Swifter.RW
         /// <summary>
         /// 移除针对某一目标读写器的读写接口实例。
         /// </summary>
-        /// <param name="targetedId">目标 Id</param>
+        /// <param name="targeted">目标</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void RemoveTargetedInterface(long targetedId)
+        public static void RemoveTargetedInterface(ITargetedBind targeted)
         {
-            TargetedValueInterface.Remove(targetedId);
+            TargetedValueInterface.Remove(targeted);
         }
 
         /// <summary>
@@ -516,5 +564,10 @@ namespace Swifter.RW
         /// <param name="valueWriter">值写入器</param>
         /// <param name="value">该类型的值</param>
         public abstract void Write(IValueWriter valueWriter, object value);
+
+        /// <summary>
+        /// 表示是否使用用户自定义的读写方法，如果为 True, FastObjectRW 将不优化基础类型的读写。
+        /// </summary>
+        public abstract bool IsNotModified_ { get; }
     }
 }

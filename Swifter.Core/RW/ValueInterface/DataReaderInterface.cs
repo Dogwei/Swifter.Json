@@ -34,27 +34,6 @@ namespace Swifter.RW
                 return tReader.ReadValue();
             }
 
-            if (valueReader is IValueFiller<TKey> tFiller &&
-                typeof(IDataWriter<TKey>).IsAssignableFrom(typeof(T)))
-            {
-                T instance = default;
-
-                try
-                {
-                    instance = Activator.CreateInstance<T>(); ;
-                }
-                catch (Exception)
-                {
-                    goto Direct;
-                }
-
-                tFiller.FillValue((IDataWriter<TKey>)instance);
-
-                return instance;
-            }
-
-        Direct:
-
             var value = valueReader.DirectRead();
 
             if (value is T tValue)

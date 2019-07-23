@@ -1,4 +1,4 @@
-﻿#if NET45 || NET41 || NET47 || NET471 || NETSTANDARD2_0 || NETCOREAPP2_0 || NETCOREAPP2_1
+﻿#if NET45 || NET451 || NET47 || NET471 || NETSTANDARD || NETCOREAPP
 
 using Swifter.Tools;
 using System;
@@ -19,7 +19,7 @@ namespace Swifter
         [MethodImpl(AggressiveInlining)]
         public static async Task WriteCharsAsync(TextWriter textWriter, IntPtr chars, int length)
         {
-            if (length > 130 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
+            if (length > 128 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
             {
                 var ends = ArrayHelper.AsTempOneRankValueArray<char>(chars, length, out var starts);
 
@@ -68,7 +68,7 @@ namespace Swifter
         [MethodImpl(AggressiveInlining)]
         public static async Task<int> ReadCharsAsync(TextReader textReader, IntPtr chars, int length)
         {
-            if (length > 130 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
+            if (length > 128 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
             {
                 var ends = ArrayHelper.AsTempOneRankValueArray<char>(chars, length, out var starts);
 
@@ -223,46 +223,6 @@ namespace Swifter
 
                 return total;
             }
-        }
-
-        /// <summary>
-        /// 异步缓冲 TextReader 到 HGlobalCache 中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="textReader">TextReader</param>
-        /// <returns>返回缓冲的长度</returns>
-        [MethodImpl(AggressiveInlining)]
-        public static async Task<int> BufferAsync(this HGlobalCache<char> hGCache, TextReader textReader)
-        {
-            int offset = 0;
-
-        Loop:
-
-            if (offset >= hGCache.Count)
-            {
-                hGCache.Expand(1218);
-            }
-
-            IntPtr address;
-
-            unsafe
-            {
-                address = (IntPtr)(hGCache.GetPointer() + offset);
-            }
-
-            int readCount = await ReadCharsAsync(
-                textReader,
-                address,
-                hGCache.Count - offset);
-
-            offset += readCount;
-
-            if (offset == hGCache.Count)
-            {
-                goto Loop;
-            }
-
-            return offset;
         }
     }
 }

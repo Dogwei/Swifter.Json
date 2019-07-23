@@ -4,9 +4,9 @@ using System.Reflection;
 
 namespace Swifter.RW
 {
-    internal sealed class ErrorFastObjectRWCreater<T> : IFastObjectRWCreater<T>
+    sealed class ErrorFastObjectRWCreater<T> : IFastObjectRWCreater<T>
     {
-        public Exception InnerException { get; set; }
+        public Exception InnerException { get; }
 
         public ErrorFastObjectRWCreater(Exception innerException)
         {

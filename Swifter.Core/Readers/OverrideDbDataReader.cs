@@ -3,28 +3,38 @@ using Swifter.Tools;
 using Swifter.Writers;
 using System;
 using System.Collections.Generic;
-using System.Data.Common;
+using System.Data;
 using System.Runtime.CompilerServices;
+using static Swifter.RW.DataTableRW;
 
 namespace Swifter.Readers
 {
     /// <summary>
     /// 重写数据库读取器，使它成为表格读取器。
     /// </summary>
-    public sealed class OverrideDbDataReader : ITableReader
+    sealed class OverrideDbDataReader : IDataReader<int>
     {
         /// <summary>
         /// 数据源。
         /// </summary>
-        public readonly DbDataReader dbDataReader;
+        public readonly System.Data.IDataReader dbDataReader;
+
+        public readonly RowReader Reader;
+
+        public readonly DataTableRWOptions Options;
 
         /// <summary>
         /// 初始化数据读取器。
         /// </summary>
         /// <param name="dbDataReader">数据源</param>
-        public OverrideDbDataReader(DbDataReader dbDataReader)
+        /// <param name="options">配置项</param>
+        public OverrideDbDataReader(System.Data.IDataReader dbDataReader, DataTableRWOptions options = DataTableRWOptions.None)
         {
             this.dbDataReader = dbDataReader;
+
+            Options = options;
+
+            Reader = new RowReader(dbDataReader);
         }
 
         /// <summary>
@@ -32,27 +42,17 @@ namespace Swifter.Readers
         /// </summary>
         /// <param name="key">指定索引</param>
         /// <returns>返回值读取器</returns>
-        public IValueReader this[int key]=> new ValueReader(dbDataReader, key);
-
-
-        /// <summary>
-        /// 获取位于指定名称的值读取器。
-        /// </summary>
-        /// <param name="key">指定名称</param>
-        /// <returns>返回值读取器</returns>
-        public IValueReader this[string key]=> this[dbDataReader.GetOrdinal(key)];
-
-        IEnumerable<int> IDataReader<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+        public IValueReader this[int key] => new ReadCopyer<int>(this, key);
 
         /// <summary>
         /// 获取表格列的数量。
         /// </summary>
-        public int Count => dbDataReader.FieldCount;
+        public int Count => 0;
 
         /// <summary>
         /// 获取表格列的名称集合。
         /// </summary>
-        public IEnumerable<string> Keys => ArrayHelper.CreateNamesIterator(dbDataReader);
+        public IEnumerable<int> Keys => null;
 
         /// <summary>
         /// 获取数据源的 Id。
@@ -66,26 +66,16 @@ namespace Swifter.Readers
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void OnReadAll(IDataWriter<int> dataWriter)
         {
-            int length = dbDataReader.FieldCount;
-
-            for (int i = 0; i < length; i++)
+            for (int i = 0; dbDataReader.Read(); i++)
             {
-                OnReadValue(i, dataWriter[i]);
-            }
-        }
-
-        /// <summary>
-        /// 读取所有值当前行的所有值，然后写入到数据写入器中。
-        /// </summary>
-        /// <param name="dataWriter">数据写入器</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void OnReadAll(IDataWriter<string> dataWriter)
-        {
-            int length = dbDataReader.FieldCount;
-
-            for (int i = 0; i < length; i++)
-            {
-                OnReadValue(i, dataWriter[dbDataReader.GetName(i)]);
+                if (i != 0 && (Options & DataTableRWOptions.WriteToArrayFromBeginningSecondRows) != 0)
+                {
+                    dataWriter[i].WriteArray(Reader);
+                }
+                else
+                {
+                    dataWriter[i].WriteObject(Reader);
+                }
             }
         }
 
@@ -97,55 +87,13 @@ namespace Swifter.Readers
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void OnReadValue(int key, IValueWriter valueWriter)
         {
-            var value = dbDataReader[key];
-
-            ValueInterface.GetInterface(value).Write(valueWriter, value);
-        }
-
-        /// <summary>
-        /// 读取指定名称的值，然后写入到值写入器中。
-        /// </summary>
-        /// <param name="key">指定名称</param>
-        /// <param name="valueWriter">值写入器</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void OnReadValue(string key, IValueWriter valueWriter)
-        {
-            OnReadValue(dbDataReader.GetOrdinal(key), valueWriter);
-        }
-
-        /// <summary>
-        /// 读取下一行数据。
-        /// </summary>
-        /// <returns>返回是否有下一行数据</returns>
-        public bool Read()
-        {
-            return dbDataReader.Read();
-        }
-
-        /// <summary>
-        /// 读取当前行的所有数据并进行筛选，然后将筛选结果写入器数据写入器中。
-        /// </summary>
-        /// <param name="dataWriter">数据写入器</param>
-        /// <param name="valueFilter">值筛选器</param>
-        public void OnReadAll(IDataWriter<string> dataWriter, IValueFilter<string> valueFilter)
-        {
-            int length = dbDataReader.FieldCount;
-
-            var valueInfo = new ValueFilterInfo<string>();
-
-            for (int i = 0; i < length; i++)
+            if (dbDataReader.Read())
             {
-                var value = dbDataReader[i];
-
-                ValueInterface.GetInterface(value).Write(valueInfo.ValueCopyer, value);
-
-                valueInfo.Key = dbDataReader.GetName(i);
-                valueInfo.Type = dbDataReader.GetFieldType(i);
-
-                if (valueFilter.Filter(valueInfo))
-                {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
-                }
+                valueWriter.WriteObject(Reader);
+            }
+            else
+            {
+                valueWriter.DirectWrite(null);
             }
         }
 
@@ -156,32 +104,76 @@ namespace Swifter.Readers
         /// <param name="valueFilter">值筛选器</param>
         public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
         {
-            int length = dbDataReader.FieldCount;
+            OnReadAll(new DataFilterWriter<int>(dataWriter, valueFilter));
+        }
 
-            var valueInfo = new ValueFilterInfo<int>();
+        public sealed class RowReader : IDataReader<string>, IDataReader<int>
+        {
+            /// <summary>
+            /// 数据源。
+            /// </summary>
+            public readonly System.Data.IDataReader dbDataReader;
 
-            for (int i = 0; i < length; i++)
+            public RowReader(System.Data.IDataReader dbDataReader)
             {
-                var value = dbDataReader[i];
+                this.dbDataReader = dbDataReader;
+            }
 
-                ValueInterface.GetInterface(value).Write(valueInfo.ValueCopyer, value);
+            public IValueReader this[string key] => new ValueReader(dbDataReader, dbDataReader.GetOrdinal(key));
 
-                valueInfo.Key = i;
-                valueInfo.Type = dbDataReader.GetFieldType(i);
+            public IValueReader this[int key] => new ValueReader(dbDataReader, key);
 
-                if (valueFilter.Filter(valueInfo))
+            public IEnumerable<string> Keys => ArrayHelper.CreateNamesIterator(dbDataReader);
+
+            IEnumerable<int> IDataReader<int>.Keys => null;
+
+            public int Count => dbDataReader.FieldCount;
+
+            public object ReferenceToken => dbDataReader;
+
+            public void OnReadAll(IDataWriter<string> dataWriter)
+            {
+                for (int i = 0; i < dbDataReader.FieldCount; i++)
                 {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
+                    ValueInterface.WriteValue(dataWriter[dbDataReader.GetName(i)], dbDataReader[i]);
                 }
+            }
+
+            public void OnReadAll(IDataWriter<string> dataWriter, IValueFilter<string> valueFilter)
+            {
+                OnReadAll(new DataFilterWriter<string>(dataWriter, valueFilter));
+            }
+
+            public void OnReadAll(IDataWriter<int> dataWriter)
+            {
+                for (int i = 0; i < dbDataReader.FieldCount; i++)
+                {
+                    ValueInterface.WriteValue(dataWriter[i], dbDataReader[i]);
+                }
+            }
+
+            public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
+            {
+                OnReadAll(new DataFilterWriter<int>(dataWriter, valueFilter));
+            }
+
+            public void OnReadValue(string key, IValueWriter valueWriter)
+            {
+                ValueInterface.WriteValue(valueWriter, dbDataReader[key]);
+            }
+
+            public void OnReadValue(int key, IValueWriter valueWriter)
+            {
+                ValueInterface.WriteValue(valueWriter, dbDataReader[key]);
             }
         }
 
-        private sealed class ValueReader : IValueReader
+        public sealed class ValueReader : IValueReader
         {
-            public readonly DbDataReader dbDataReader;
+            public readonly System.Data.IDataReader dbDataReader;
             public readonly int ordinal;
 
-            public ValueReader(DbDataReader dbDataReader, int ordinal)
+            public ValueReader(System.Data.IDataReader dbDataReader, int ordinal)
             {
                 this.dbDataReader = dbDataReader;
                 this.ordinal = ordinal;
@@ -243,24 +235,28 @@ namespace Swifter.Readers
         }
     }
 
-    internal sealed class DbDataReaderInterface<T> : IValueInterface<T> where T : DbDataReader
+    internal sealed class DbDataReaderInterface<T> : IValueInterface<T> where T : class, System.Data.IDataReader
     {
         public T ReadValue(IValueReader valueReader)
         {
-            if (valueReader is IValueReader<T>)
+            if (valueReader is IValueReader<T> reader)
             {
-                return ((IValueReader<T>)valueReader).ReadValue();
+                return reader.ReadValue();
             }
 
-            return XConvert.FromObject<T>(valueReader.DirectRead());
+            if (typeof(T).IsAssignableFrom(typeof(DataTableReader)))
+            {
+                return Unsafe.As<T>(ValueInterface<DataTable>.ReadValue(valueReader)?.CreateDataReader());
+            }
+
+            throw new NotSupportedException();
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            var dataReader = new OverrideDbDataReader(value);
-            var toArrayReader = new TableToArrayReader(dataReader);
+            var reader = new OverrideDbDataReader(value, valueWriter is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetDataTableRWOptions() : DefaultOptions);
 
-            valueWriter.WriteArray(toArrayReader);
+            valueWriter.WriteArray(reader);
         }
     }
 }

@@ -17,4 +17,12 @@ namespace Swifter.RW
     public interface IValueRW<T> :IValueReader<T>, IValueWriter<T>
     {
     }
+
+    /// <summary>
+    /// 表示一个 Map 读写器。
+    /// </summary>
+    public interface IMapValueRW : IMapValueReader, IMapValueWriter
+    {
+
+    }
 }

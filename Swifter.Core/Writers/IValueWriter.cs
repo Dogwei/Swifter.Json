@@ -129,4 +129,17 @@ namespace Swifter.Writers
         /// <param name="value">值</param>
         void WriteValue(T value);
     }
+
+    /// <summary>
+    /// 表示允许写入一个 Map 对象。
+    /// </summary>
+    public interface IMapValueWriter
+    {
+        /// <summary>
+        /// 写入 Map 对象。
+        /// </summary>
+        /// <typeparam name="TKey">Map 的键类型</typeparam>
+        /// <param name="mapReader">map 读取器</param>
+        void WriteMap<TKey>(IDataReader<TKey> mapReader);
+    }
 }

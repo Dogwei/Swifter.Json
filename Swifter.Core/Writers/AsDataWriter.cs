@@ -9,9 +9,24 @@ namespace Swifter.Writers
     /// <summary>
     /// 数据写入器键类型转换的接口。
     /// </summary>
-    internal interface IAsDataWriter
+    public interface IAsDataWriter
     {
+        /// <summary>
+        /// 原始数据写入器。
+        /// </summary>
         IDataWriter Content { get; }
+
+        /// <summary>
+        /// 执行输入类型。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        void InvokeTIn(IGenericInvoker invoker);
+
+        /// <summary>
+        /// 执行输出类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        void InvokeTOut(IGenericInvoker invoker);
     }
 
     /// <summary>
@@ -19,7 +34,7 @@ namespace Swifter.Writers
     /// </summary>
     /// <typeparam name="TIn">输入类型</typeparam>
     /// <typeparam name="TOut">输出类型</typeparam>
-    internal sealed class AsDataWriter<TIn, TOut> : IDataWriter<TOut>, IAsDataWriter, IDirectContent
+    public sealed class AsDataWriter<TIn, TOut> : IDataWriter<TOut>, IAsDataWriter, IDirectContent
     {
         /// <summary>
         /// 原始数据写入器。
@@ -96,6 +111,24 @@ namespace Swifter.Writers
         }
 
         /// <summary>
+        /// 执行输入类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        public void InvokeTIn(IGenericInvoker invoker)
+        {
+            invoker.Invoke<TIn>();
+        }
+
+        /// <summary>
+        /// 执行输出类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        public void InvokeTOut(IGenericInvoker invoker)
+        {
+            invoker.Invoke<TOut>();
+        }
+
+        /// <summary>
         /// 从值读取器中读取一个值设置到指定键的值中。
         /// </summary>
         /// <param name="key">指定键</param>
@@ -105,6 +138,10 @@ namespace Swifter.Writers
             dataWriter.OnWriteValue(XConvert<TIn>.Convert(key), valueReader);
         }
 
+        /// <summary>
+        /// 从数据读取器中读取所有数据源字段到数据源的值。
+        /// </summary>
+        /// <param name="dataReader">数据读取器</param>
         public void OnWriteAll(IDataReader<TOut> dataReader)
         {
             dataWriter.OnWriteAll(new AsWriteAllReader<TIn, TOut>(dataReader));

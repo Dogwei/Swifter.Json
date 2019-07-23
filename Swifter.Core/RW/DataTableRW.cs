@@ -5,71 +5,109 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Runtime.CompilerServices;
+using static Swifter.RW.DataTableRW;
+using IDataReader = Swifter.Readers.IDataReader;
 
 namespace Swifter.RW
 {
     /// <summary>
     /// System.Data.DataTable Reader impl.
     /// </summary>
-    internal sealed class DataTableRW<T> : ITableRW, IInitialize<T>, IDirectContent where T : DataTable
+    internal sealed class DataTableRW<T> : IDataRW<int>, IInitialize<T>, IDirectContent where T : DataTable
     {
-        private int readIndex;
-        private int writeIndex;
+        readonly DataTableRWOptions Options;
 
-        public DataTableRW()
+        readonly DataRowRW<DataRow> DataRowRW;
+
+        T DataTable;
+
+        bool Initialized;
+
+        public DataTableRW(DataTableRWOptions options)
         {
+            DataRowRW = new DataRowRW<DataRow>((options & DataTableRWOptions.SetFirstRowsTypeToColumnTypes) != 0);
+
+            Options = options;
         }
 
-        public ValueCopyer<string> this[string key] => new ValueCopyer<string>(this, key);
-
-        public ValueCopyer<int> this[int key] => new ValueCopyer<int>(this, key);
+        public IValueRW this[int key] => new ValueCopyer<int>(this, key);
 
         IValueReader IDataReader<int>.this[int key] => this[key];
 
-        IValueReader IDataReader<string>.this[string key] => this[key];
-
         IValueWriter IDataWriter<int>.this[int key] => this[key];
 
-        IValueWriter IDataWriter<string>.this[string key] => this[key];
-
-        IValueRW IDataRW<int>.this[int key] => this[key];
-
-        IValueRW IDataRW<string>.this[string key] => this[key];
-
-        public IEnumerable<string> Keys => ArrayHelper.CreateNamesIterator(Content);
+        public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
 
         public int Count => Content.Columns.Count;
 
-        IEnumerable<int> IDataRW<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
-
-        IEnumerable<int> IDataReader<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
-
-        IEnumerable<int> IDataWriter<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
-
-        public T Content { get; private set; }
-
-        public object ReferenceToken => null;
+        object IDataReader.ReferenceToken => Content;
 
         object IDirectContent.DirectContent
         {
-            get => Content;
-            set => Initialize((T)value);
+            get
+            {
+                return Content;
+            }
+            set
+            {
+                Initialize((T)value);
+            }
         }
 
-        public void Initialize(T dataTable)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Fill()
         {
-            Content = dataTable;
+            if (DataTable != null)
+            {
+                return;
+            }
 
-            readIndex = -1;
-            writeIndex = -1;
+            var firstRow = DataRowRW.Content;
+
+            if (typeof(T) == typeof(DataTable))
+            {
+                if (firstRow == null)
+                {
+                    DataTable = Unsafe.As<T>(new DataTable());
+                }
+                else
+                {
+                    DataTable = Unsafe.As<T>(firstRow.Table);
+
+                    DataTable.Rows.Add(firstRow);
+                }
+            }
+            else
+            {
+                DataTable = Activator.CreateInstance<T>();
+
+                if (firstRow != null)
+                {
+                    DataTable.ImportRow(firstRow);
+                }
+            }
+        }
+
+        public T Content
+        {
+            get
+            {
+                if (DataTable == null && Initialized)
+                {
+                    Fill();
+                }
+
+                return DataTable;
+            }
         }
 
         public void Initialize()
         {
-            if (Content == null)
-            {
-                Initialize(Activator.CreateInstance<T>());
-            }
+            DataRowRW.Clear();
+
+            DataTable = null;
+
+            Initialized = true;
         }
 
         public void Initialize(int capacity)
@@ -77,168 +115,230 @@ namespace Swifter.RW
             Initialize();
         }
 
-        public void Next()
+        public void Initialize(T obj)
         {
-            ++writeIndex;
+            DataRowRW.Clear();
 
-            Content.Rows.Add(Content.NewRow());
-        }
+            DataTable = obj;
 
-        public void OnReadAll(IDataWriter<string> dataWriter)
-        {
-            foreach (DataColumn item in Content.Columns)
-            {
-                ValueInterface.GetInterface(item.DataType).Write(dataWriter[item.ColumnName], Content.Rows[writeIndex][item.Ordinal]);
-            }
+            Initialized = true;
         }
 
         public void OnReadAll(IDataWriter<int> dataWriter)
         {
-            foreach (DataColumn item in Content.Columns)
+            var index = 0;
+
+            var length = Content.Rows.Count;
+
+            for (int i = 0; i < length; i++)
             {
-                ValueInterface.GetInterface(item.DataType).Write(dataWriter[item.Ordinal], Content.Rows[writeIndex][item.Ordinal]);
-            }
-        }
+                DataRowRW.Initialize(Content.Rows[i]);
 
-        public void OnReadAll(IDataWriter<string> dataWriter, IValueFilter<string> valueFilter)
-        {
-            var valueInfo = new ValueFilterInfo<string>();
-
-            foreach (DataColumn item in Content.Columns)
-            {
-                ValueInterface.GetInterface(item.DataType).Write(valueInfo.ValueCopyer, Content.Rows[writeIndex][item.Ordinal]);
-
-                valueInfo.Key = item.ColumnName;
-                valueInfo.Type = item.DataType;
-
-                if (valueFilter.Filter(valueInfo))
+                if (i != 0 && (Options & DataTableRWOptions.WriteToArrayFromBeginningSecondRows) != 0)
                 {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
+                    dataWriter[index].WriteArray(DataRowRW);
+                }
+                else
+                {
+                    dataWriter[index].WriteObject(DataRowRW);
                 }
             }
         }
 
         public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
         {
-            var valueInfo = new ValueFilterInfo<int>();
-
-            foreach (DataColumn item in Content.Columns)
-            {
-                ValueInterface.GetInterface(item.DataType).Write(valueInfo.ValueCopyer, Content.Rows[writeIndex][item.Ordinal]);
-
-                valueInfo.Key = item.Ordinal;
-                valueInfo.Type = item.DataType;
-
-                if (valueFilter.Filter(valueInfo))
-                {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
-                }
-            }
-        }
-
-        public void OnReadValue(string key, IValueWriter valueWriter)
-        {
-            var dataColumn = Content.Columns[key];
-
-            ValueInterface.GetInterface(dataColumn.DataType).Write(valueWriter, Content.Rows[readIndex][dataColumn.Ordinal]);
+            OnReadAll(new DataFilterWriter<int>(dataWriter, valueFilter));
         }
 
         public void OnReadValue(int key, IValueWriter valueWriter)
         {
-            var dataColumn = Content.Columns[key];
+            DataRowRW<DataRow> reader;
 
-            ValueInterface.GetInterface(dataColumn.DataType).Write(valueWriter, Content.Rows[readIndex][dataColumn.Ordinal]);
-        }
-
-        public void OnWriteValue(string key, IValueReader valueReader)
-        {
-            var dataColumn = Content.Columns[key];
-
-            if (dataColumn == null)
+            if (valueWriter is IUsePool)
             {
-                var type = typeof(object);
-
-                var value = valueReader.DirectRead();
-
-                if (value != null)
-                {
-                    type = value.GetType();
-                }
-
-                dataColumn = Content.Columns.Add(key, type);
-
-                Content.Rows[writeIndex][dataColumn.Ordinal] = value;
-
-                return;
+                reader = DataRowRW;
+            }
+            else
+            {
+                reader = new DataRowRW<DataRow>();
             }
 
-            Content.Rows[writeIndex][dataColumn.Ordinal] = ValueInterface.GetInterface(dataColumn.DataType).Read(valueReader);
-        }
 
-        public void OnWriteValue(int key, IValueReader valueReader)
-        {
-            var dataColumn = Content.Columns[key];
+            reader.Initialize(Content.Rows[key]);
 
-            Content.Rows[writeIndex][dataColumn.Ordinal] = ValueInterface.GetInterface(dataColumn.DataType).Read(valueReader);
-        }
-
-        public bool Read()
-        {
-            ++readIndex;
-
-            return readIndex < Content.Rows.Count;
-        }
-
-        public void OnWriteAll(IDataReader<string> dataReader)
-        {
-            foreach (DataColumn item in Content.Columns)
+            if (key != 0 && (Options & DataTableRWOptions.WriteToArrayFromBeginningSecondRows) != 0)
             {
-                Content.Rows[writeIndex][item.Ordinal] = ValueInterface.GetInterface(item.DataType).Read(dataReader[item.ColumnName]);
+                valueWriter.WriteArray(reader);
+            }
+            else
+            {
+                valueWriter.WriteObject(reader);
             }
         }
 
         public void OnWriteAll(IDataReader<int> dataReader)
         {
-            foreach (DataColumn item in Content.Columns)
+            var index = 0;
+
+            foreach (DataRow item in Content.Rows)
             {
-                Content.Rows[writeIndex][item.Ordinal] = ValueInterface.GetInterface(item.DataType).Read(dataReader[item.Ordinal]);
+                DataRowRW.Initialize(item);
+
+                dataReader[index].ReadObject(DataRowRW);
+
+                ++index;
+            }
+        }
+
+        public void OnWriteValue(int key, IValueReader valueReader)
+        {
+            if (DataTable == null && Initialized && key == 0)
+            {
+                DataRowRW.Clear();
+
+                valueReader.ReadObject(DataRowRW);
+
+                Fill();
+
+                return;
+            }
+
+            DataRowRW<DataRow> writer;
+
+            if (valueReader is IUsePool)
+            {
+                writer = DataRowRW;
+            }
+            else
+            {
+                writer = new DataRowRW<DataRow>();
+            }
+
+            writer.Clear();
+
+            if (key == DataTable.Rows.Count)
+            {
+                writer.Initialize(DataTable.NewRow());
+
+                valueReader.ReadObject(writer);
+
+                DataTable.Rows.Add(writer.Content);
+            }
+            else
+            {
+                writer.Initialize(DataTable.Rows[key]);
+
+                valueReader.ReadObject(writer);
             }
         }
     }
+
+    /// <summary>
+    /// DataTable 读写器的配置。
+    /// </summary>
+    public enum DataTableRWOptions
+    {
+        /// <summary>
+        /// 默认配置项。
+        /// </summary>
+        None = 0,
+
+        /// <summary>
+        /// 设置第一行的数据类型为各个 Column 的类型。否则将设置 Object 为各个 Column 的类型。默认不开启。
+        /// </summary>
+        SetFirstRowsTypeToColumnTypes = 1,
+
+        /// <summary>
+        /// 设置第二行开始的数据写入为数组。
+        /// </summary>
+        WriteToArrayFromBeginningSecondRows = 2
+    }
+
+    /// <summary>
+    /// 提供 DataTable 读写器的扩展方法。
+    /// </summary>
+    public static class DataTableRW
+    {
+        /// <summary>
+        /// 读取或设置 DataTableRW 默认配置项
+        /// </summary>
+        public static DataTableRWOptions DefaultOptions { get; set; } = DataTableRWOptions.None;
+
+        /// <summary>
+        /// 设置一个支持针对性接口的 DataTableRW 默认配置项。
+        /// </summary>
+        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <param name="options">默认配置项</param>
+        public static void SetDataTableRWOptions(this ITargetedBind targeted, DataTableRWOptions options)
+        {
+            ValueInterface<XAssistant>.SetTargetedInterface(targeted, new XAssistant(options));
+        }
+
+        /// <summary>
+        /// 获取一个支持针对性接口的 DataTableRW 默认配置项。
+        /// </summary>
+        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <returns>默认配置项</returns>
+        public static DataTableRWOptions GetDataTableRWOptions(this ITargetedBind targeted)
+        {
+            return ValueInterface<XAssistant>.GetTargetedInterface(targeted) is XAssistant assistant ? assistant.Options : DefaultOptions;
+        }
+
+        sealed class XAssistant : IValueInterface<XAssistant>
+        {
+            public readonly DataTableRWOptions Options;
+
+            public XAssistant(DataTableRWOptions options)
+            {
+                Options = options;
+            }
+
+            public XAssistant ReadValue(IValueReader valueReader) => default;
+
+            public void WriteValue(IValueWriter valueWriter, XAssistant value)
+            {
+            }
+        }
+    }
+
 
     internal sealed class DataTableInterface<T> : IValueInterface<T> where T : DataTable
     {
         public T ReadValue(IValueReader valueReader)
         {
-            var dataWriter = new DataTableRW<T>();
+            if (valueReader is IValueReader<T> reader)
+            {
+                return reader.ReadValue();
+            }
 
-            var toArrayWriter = new TableToArrayWriter(dataWriter);
+            var writer = new DataTableRW<T>(valueReader is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetDataTableRWOptions() : DefaultOptions);
 
-            valueReader.ReadArray(toArrayWriter);
+            valueReader.ReadArray(writer);
 
-            return dataWriter.Content;
+            return writer.Content;
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            TableToArrayReader tableToArrayReader;
-
-            if ((value.Rows.Count * value.Columns.Count) >= 100)
+            if (value == null)
             {
-                var overrideDbDataReader = new OverrideDbDataReader(value.CreateDataReader());
+                valueWriter.DirectWrite(null);
 
-                tableToArrayReader = new TableToArrayReader(overrideDbDataReader);
-            }
-            else
-            {
-                var dataTableRW = new DataTableRW<T>();
-
-                dataTableRW.Initialize(value);
-
-                tableToArrayReader = new TableToArrayReader(dataTableRW);
+                return;
             }
 
-            valueWriter.WriteArray(tableToArrayReader);
+            if (valueWriter is IValueWriter<T> weiter)
+            {
+                weiter.WriteValue(value);
+
+                return;
+            }
+
+            var reader = new DataTableRW<T>(valueWriter is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetDataTableRWOptions() : DefaultOptions);
+
+            reader.Initialize(value);
+
+            valueWriter.WriteArray(reader);
         }
     }
 }

@@ -9,9 +9,24 @@ namespace Swifter.Readers
     /// <summary>
     /// 数据读取器键类型转换的接口。
     /// </summary>
-    internal interface IAsDataReader
+    public interface IAsDataReader
     {
+        /// <summary>
+        /// 原始数据读取器。
+        /// </summary>
         IDataReader Content { get; }
+
+        /// <summary>
+        /// 执行输入类型。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        void InvokeTIn(IGenericInvoker invoker);
+
+        /// <summary>
+        /// 执行输出类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        void InvokeTOut(IGenericInvoker invoker);
     }
 
     /// <summary>
@@ -19,7 +34,7 @@ namespace Swifter.Readers
     /// </summary>
     /// <typeparam name="TIn">输入类型</typeparam>
     /// <typeparam name="TOut">输出类型</typeparam>
-    internal sealed class AsDataReader<TIn, TOut> : IDataReader<TOut>, IAsDataReader, IDirectContent
+    public sealed class AsDataReader<TIn, TOut> : IDataReader<TOut>, IAsDataReader, IDirectContent
     {
         /// <summary>
         /// 原始数据读取器。
@@ -105,5 +120,23 @@ namespace Swifter.Readers
         /// <param name="valueFilter">键值筛选器</param>
         public void OnReadAll(IDataWriter<TOut> dataWriter, IValueFilter<TOut> valueFilter) =>
             dataReader.OnReadAll(new AsReadAllWriter<TIn, TOut>(dataWriter), new AsReadAllFilter<TIn, TOut>(valueFilter));
+
+        /// <summary>
+        /// 执行输入类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        public void InvokeTIn(IGenericInvoker invoker)
+        {
+            invoker.Invoke<TIn>();
+        }
+
+        /// <summary>
+        /// 执行输出类型方法。
+        /// </summary>
+        /// <param name="invoker">泛型执行器</param>
+        public void InvokeTOut(IGenericInvoker invoker)
+        {
+            invoker.Invoke<TOut>();
+        }
     }
 }

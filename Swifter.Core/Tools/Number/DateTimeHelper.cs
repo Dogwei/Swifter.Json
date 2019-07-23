@@ -11,32 +11,42 @@ namespace Swifter.Tools
         /// <summary>
         /// 本地时间与 UTC 时间的时差 Tick 值。
         /// </summary>
-        public static readonly long UTCDifference;
+        public static readonly long TicksOfUTCDifference;
 
         /// <summary>
         /// 一毫秒的 Tick 值。
         /// </summary>
-        public const long OneMillisecond = 10000;
+        public const long TicksOfOneMillisecond = 10000;
 
         /// <summary>
         /// 一秒的 Tick 值。
         /// </summary>
-        public const long OneSecond = OneMillisecond * 1000;
+        public const long TicksOfOneSecond = TicksOfOneMillisecond * 1000;
 
         /// <summary>
         /// 一分钟的 Tick 值。
         /// </summary>
-        public const long OneMinute = OneSecond * 60;
+        public const long TicksOfOneMinute = TicksOfOneSecond * 60;
 
         /// <summary>
         /// 一小时的 Tick 值。
         /// </summary>
-        public const long OneHour = OneMinute * 60;
+        public const long TicksOfOneHour = TicksOfOneMinute * 60;
 
         /// <summary>
         /// 一天的 Tick 值。
         /// </summary>
-        public const long OneDay = OneHour * 24;
+        public const long TicksOfOneDay = TicksOfOneHour * 24;
+
+        /// <summary>
+        /// 1970-01-01 的 Tick 值。
+        /// </summary>
+        public const long TicksOfUnixEpoch = TicksOfOneDay * 719162;
+
+        /// <summary>
+        /// 1 Tick 的纳秒值。
+        /// </summary>
+        public const long NanosecondsOfTick = 100;
 
         /// <summary>
         /// ISO 格式日期字符串的最大长度。
@@ -47,7 +57,7 @@ namespace Swifter.Tools
         {
             var tempDateTime = DateTime.Now;
 
-            UTCDifference = (tempDateTime - tempDateTime.ToUniversalTime()).Ticks;
+            TicksOfUTCDifference = (tempDateTime - tempDateTime.ToUniversalTime()).Ticks;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -103,7 +113,7 @@ namespace Swifter.Tools
             }
 
 
-            long tDHour = uTCDifference / OneHour;
+            long tDHour = uTCDifference / TicksOfOneHour;
 
             if (tDHour < 100)
             {
@@ -116,7 +126,7 @@ namespace Swifter.Tools
 
             *c = ':'; ++c;
 
-            dec.AppendD2(c, (uint)((uTCDifference % OneHour) / OneMinute)); c += 2;
+            dec.AppendD2(c, (uint)((uTCDifference % TicksOfOneHour) / TicksOfOneMinute)); c += 2;
 
         Return:
             return (int)(c - chars);
@@ -131,7 +141,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public unsafe static int ToISOString(DateTime value, char* chars)
         {
-            return ToISOString(value, chars, UTCDifference);
+            return ToISOString(value, chars, TicksOfUTCDifference);
         }
 
         /// <summary>
@@ -155,7 +165,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public unsafe static int ToUTCISOString(DateTime value, char* chars)
         {
-            return ToISOString(value.AddTicks(-UTCDifference), chars, 0);
+            return ToISOString(value.AddTicks(-TicksOfUTCDifference), chars, 0);
         }
 
         /// <summary>
@@ -167,7 +177,7 @@ namespace Swifter.Tools
         {
             char* chars = stackalloc char[ISOStringMaxLength];
 
-            int length = ToISOString(value, chars, UTCDifference);
+            int length = ToISOString(value, chars, TicksOfUTCDifference);
 
             return new string(chars, 0, length);
         }
@@ -254,7 +264,7 @@ namespace Swifter.Tools
                 millisecond = 0,
                 week = 0; // if 0 then no using.
 
-            difference = UTCDifference; // if 0 then no using.
+            difference = TicksOfUTCDifference; // if 0 then no using.
 
             // Date
             // yyyy-MM-dd
@@ -541,6 +551,9 @@ namespace Swifter.Tools
 
             switch (chars[index])
             {
+                case '0':
+                case '1':
+                case '2':
                 case '+':
                 case '-':
                 case 'Z':
@@ -555,6 +568,12 @@ namespace Swifter.Tools
 
             switch (chars[index])
             {
+                case '0':
+                case '1':
+                case '2':
+                    --index;
+                    isPlus = true;
+                    break;
                 case '+':
                     isPlus = true;
                     break;
@@ -607,11 +626,11 @@ namespace Swifter.Tools
 
             if (isPlus)
             {
-                difference = (dHour * OneHour) + (dMinute * OneMinute);
+                difference = (dHour * TicksOfOneHour) + (dMinute * TicksOfOneMinute);
             }
             else
             {
-                difference = -((dHour * OneHour) + (dMinute * OneMinute));
+                difference = -((dHour * TicksOfOneHour) + (dMinute * TicksOfOneMinute));
             }
 
             True:
@@ -645,7 +664,7 @@ namespace Swifter.Tools
 
             if (r)
             {
-                value = value.AddTicks(UTCDifference - difference);
+                value = value.AddTicks(TicksOfUTCDifference - difference);
 
                 return true;
             }

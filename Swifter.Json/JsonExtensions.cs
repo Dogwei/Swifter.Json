@@ -1,73 +1,75 @@
 ﻿using Swifter.Readers;
 using Swifter.RW;
+using Swifter.Tools;
 using Swifter.Writers;
 using System;
+using System.IO;
+using System.Text;
 
 namespace Swifter.Json
 {
     /// <summary>
     /// 提供 Json 格式化工具的扩展方法。
     /// </summary>
-    public static partial class JsonExtensions
+    public static unsafe partial class JsonExtensions
     {
-        /// <summary>
-        /// 设置 Json 格式化工具序列化时的 DateTime 格式。
-        /// </summary>
-        /// <param name="jsonFormatter"></param>
-        /// <param name="format"></param>
-        public static void SetDateTimeFormat(this JsonFormatter jsonFormatter, string format)
-        {
-            jsonFormatter.SetValueInterface(new DateTimeInterface(format));
-        }
+        static readonly HGlobalCachePool<byte> BytesPool = new HGlobalCachePool<byte>();
 
         /// <summary>
-        /// 设置 Json 格式化工具序列化时的 DateTimeOffset 格式。
+        /// 将 HGlobalCache 中的内容写入到流中。
         /// </summary>
-        /// <param name="jsonFormatter"></param>
-        /// <param name="format"></param>
-        public static void SetDateTimeOffsetFormat(this JsonFormatter jsonFormatter, string format)
+        /// <param name="hGCache">HGlobalCache</param>
+        /// <param name="stream">流</param>
+        /// <param name="encoding">编码</param>
+        public static void WriteTo(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
         {
-            jsonFormatter.SetValueInterface(new DateTimeOffsetInterface(format));
+            var hGBytes = BytesPool.Rent();
+
+            var maxBytesCount = encoding.GetMaxByteCount(hGCache.Count);
+
+            if (maxBytesCount > hGBytes.Capacity)
+            {
+                hGBytes.Expand(maxBytesCount - hGBytes.Capacity);
+            }
+
+            hGBytes.Count = encoding.GetBytes(
+                hGCache.GetPointer(),
+                hGCache.Count,
+                hGBytes.GetPointer(),
+                hGBytes.Capacity);
+
+            hGBytes.WriteTo(stream);
+
+            BytesPool.Return(hGBytes);
         }
 
-        sealed class DateTimeInterface : IValueInterface<DateTime>
+        /// <summary>
+        /// 将 Stream 的内容缓存到 HGlobalCache 中。
+        /// </summary>
+        /// <param name="hGCache">HGlobalCache</param>
+        /// <param name="stream">Stream</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回缓冲的长度</returns>
+        public static void ReadFrom(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
         {
-            private readonly string format;
+            var hGBytes = BytesPool.Rent();
 
-            public DateTimeInterface(string format)
+            hGBytes.ReadFrom(stream);
+
+            var maxCharsCount = encoding.GetMaxCharCount(hGBytes.Count);
+
+            if (maxCharsCount >= hGCache.Capacity)
             {
-                this.format = format;
+                hGCache.Expand(maxCharsCount);
             }
 
-            public DateTime ReadValue(IValueReader valueReader)
-            {
-                return valueReader.ReadDateTime();
-            }
+            hGCache.Count = encoding.GetChars(
+                hGBytes.GetPointer(),
+                hGBytes.Count,
+                hGCache.GetPointer(),
+                hGCache.Capacity);
 
-            public void WriteValue(IValueWriter valueWriter, DateTime value)
-            {
-                valueWriter.WriteString(value.ToString(format));
-            }
-        }
-
-        sealed class DateTimeOffsetInterface : IValueInterface<DateTimeOffset>
-        {
-            private readonly string format;
-
-            public DateTimeOffsetInterface(string format)
-            {
-                this.format = format;
-            }
-
-            public DateTimeOffset ReadValue(IValueReader valueReader)
-            {
-                return DateTime.Parse(valueReader.ReadString());
-            }
-
-            public void WriteValue(IValueWriter valueWriter, DateTimeOffset value)
-            {
-                valueWriter.WriteString(value.ToString(format));
-            }
+            BytesPool.Return(hGBytes);
         }
     }
 }

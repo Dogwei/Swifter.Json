@@ -8,7 +8,7 @@ namespace Swifter.Tools
     /// <summary>
     /// 字符串辅助类
     /// </summary>
-    public static class StringHelper
+    public static unsafe class StringHelper
     {
         /// <summary>
         /// HashCode 的乘数。
@@ -21,7 +21,7 @@ namespace Swifter.Tools
         /// <param name="text">字符串</param>
         /// <returns>返回一个新的字符串</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe string Reverse(string text)
+        public static string Reverse(string text)
         {
             var result = MakeString(text.Length);
 
@@ -43,7 +43,7 @@ namespace Swifter.Tools
         /// <param name="length">字符串长度</param>
         /// <returns>返回 Hash 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe int GetUpperedHashCode(char* chars, int length)
+        public static int GetUpperedHashCode(char* chars, int length)
         {
             int r = 0;
 
@@ -62,7 +62,7 @@ namespace Swifter.Tools
         /// <param name="length">字符串长度</param>
         /// <returns>返回 Hash 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe int GetLoweredHashCode(char* chars, int length)
+        public static int GetLoweredHashCode(char* chars, int length)
         {
             int r = 0;
 
@@ -75,13 +75,70 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 获取字符串大写形式的 Hash 值。
+        /// </summary>
+        /// <param name="bytes">字符串</param>
+        /// <param name="length">字符串长度</param>
+        /// <returns>返回 Hash 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static int GetUpperedHashCode(byte* bytes, int length)
+        {
+            int r = 0;
+
+            for (int i = 0; i < length;)
+            {
+                r ^= ToUpper(GetUtf8Char(bytes, ref i)) * Mult;
+            }
+
+            return r;
+        }
+
+        /// <summary>
+        /// 获取字符串小写形式的 Hash 值。
+        /// </summary>
+        /// <param name="bytes">字符串</param>
+        /// <param name="length">字符串长度</param>
+        /// <returns>返回 Hash 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static int GetLoweredHashCode(byte* bytes, int length)
+        {
+            int r = 0;
+
+            for (int i = 0; i < length;)
+            {
+                r ^= ToLower(GetUtf8Char(bytes, ref i)) * Mult;
+            }
+
+            return r;
+        }
+
+        /// <summary>
+        /// 获取 UTF8 字符串的 Hash 值。
+        /// </summary>
+        /// <param name="bytes">字符串</param>
+        /// <param name="length">字符串长度</param>
+        /// <returns>返回 Hash 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static int GetHashCode(byte* bytes, int length)
+        {
+            int r = 0;
+
+            for (int i = 0; i < length;)
+            {
+                r ^= GetUtf8Char(bytes, ref i) * Mult;
+            }
+
+            return r;
+        }
+
+        /// <summary>
         /// 获取字符串的 Hash 值。
         /// </summary>
         /// <param name="chars">字符串</param>
         /// <param name="length">字符串长度</param>
         /// <returns>返回 Hash 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe int GetHashCode(char* chars, int length)
+        public static int GetHashCode(char* chars, int length)
         {
             int r = 0;
 
@@ -138,7 +195,7 @@ namespace Swifter.Tools
         public static int GetHashCode(string st)
         {
             int r = 0;
-            
+
             for (int i = 0; i < st.Length; ++i)
             {
                 r ^= st[i] * Mult;
@@ -227,7 +284,83 @@ namespace Swifter.Tools
 
             return true;
         }
-        
+
+        /// <summary>
+        /// 比较两个字符串。
+        /// </summary>
+        /// <param name="bytes">字符串 1</param>
+        /// <param name="length">字符串 1 长度</param>
+        /// <param name="str">字符串 2</param>
+        /// <returns>返回一个 bool 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool Equals(byte* bytes, int length, string str)
+        {
+            if (length < str.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0, j = 0; i < length && j < str.Length; j++)
+            {
+                if (GetUtf8Char(bytes, ref i) != str[j])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 获取 UTF8 编码的字符。
+        /// </summary>
+        /// <param name="bytes">UTF8 字节内容</param>
+        /// <param name="index">索引</param>
+        /// <returns>返回一个 Unicode 字符</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static char GetUtf8Char(byte* bytes, ref int index)
+        {
+            var chr = (char)bytes[index];
+
+            ++index;
+
+            if (chr <= 0x7f) return chr;
+
+            chr = (char)(((chr & 0x3f) << 6) | (bytes[index] & 0x3f));
+
+            ++index;
+
+            if (chr <= 0x7ff) return chr;
+
+            chr = (char)(((chr & 0x7ff) << 6) | (bytes[index] & 0x3f));
+
+            ++index;
+
+            return chr;
+        }
+
+        /// <summary>
+        /// 获取 Utf8 字符串。
+        /// </summary>
+        /// <param name="bytes">字节内容</param>
+        /// <param name="length">字节长度</param>
+        /// <returns>返回一个字符串</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static string GetUtf8String(byte* bytes, int length)
+        {
+            var chars = stackalloc char[length];
+
+            var count = 0;
+
+            for (int i = 0; i < length;)
+            {
+                chars[count++] = GetUtf8Char(bytes, ref i);
+            }
+
+            return new string(chars, 0, count);
+        }
+
+
         /// <summary>
         /// 比较两个字符串。
         /// </summary>
@@ -236,7 +369,7 @@ namespace Swifter.Tools
         /// <param name="str">字符串 2</param>
         /// <returns>返回一个 bool 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe bool Equals(char* chars, int length, string str)
+        public static bool Equals(char* chars, int length, string str)
         {
             if (length != str.Length)
             {
@@ -262,7 +395,7 @@ namespace Swifter.Tools
         /// <param name="upperedStr">字符串 2，要求已全部大写</param>
         /// <returns>返回一个 bool 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe bool IgnoreCaseEqualsByUpper(char* chars, int length, string upperedStr)
+        public static bool IgnoreCaseEqualsByUpper(char* chars, int length, string upperedStr)
         {
             if (length != upperedStr.Length)
             {
@@ -288,7 +421,7 @@ namespace Swifter.Tools
         /// <param name="loweredStr">字符串 2，要求已全部小写</param>
         /// <returns>返回一个 bool 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe bool IgnoreCaseEqualsByLower(char* chars, int length, string loweredStr)
+        public static bool IgnoreCaseEqualsByLower(char* chars, int length, string loweredStr)
         {
             if (length != loweredStr.Length)
             {
@@ -298,6 +431,58 @@ namespace Swifter.Tools
             while (--length >= 0)
             {
                 if (ToLower(chars[length]) != loweredStr[length])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 比较两个字符串。
+        /// </summary>
+        /// <param name="bytes">字符串 1</param>
+        /// <param name="length">字符串 1 长度</param>
+        /// <param name="upperedStr">字符串 2，要求已全部大写</param>
+        /// <returns>返回一个 bool 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IgnoreCaseEqualsByUpper(byte* bytes, int length, string upperedStr)
+        {
+            if (length < upperedStr.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0, j = 0; i < length && j < upperedStr.Length; j++)
+            {
+                if (ToUpper(GetUtf8Char(bytes, ref i)) != upperedStr[j])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 比较两个字符串。
+        /// </summary>
+        /// <param name="bytes">字符串 1</param>
+        /// <param name="length">字符串 1 长度</param>
+        /// <param name="loweredStr">字符串 2，要求已全部小写</param>
+        /// <returns>返回一个 bool 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IgnoreCaseEqualsByLower(byte* bytes, int length, string loweredStr)
+        {
+            if (length < loweredStr.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0, j = 0; i < length && j < loweredStr.Length; j++)
+            {
+                if (ToLower(GetUtf8Char(bytes, ref i)) != loweredStr[j])
                 {
                     return false;
                 }
@@ -325,7 +510,7 @@ namespace Swifter.Tools
         /// <param name="args">数组</param>
         /// <returns>返回一个新的字符串。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static string Format(string text, params string[] args)
+        public static string Format(string text, params string[] args)
         {
             if (text == null)
             {
@@ -338,7 +523,7 @@ namespace Swifter.Tools
                 int begin = 0;
                 int end = resultLength = text.Length;
 
-                GetLengthLoop:
+            GetLengthLoop:
                 int index = IndexOf(pText, begin, end, '\\', '{');
 
                 if (index == -1)
@@ -405,7 +590,7 @@ namespace Swifter.Tools
 
                 fixed (char* pResult = result)
                 {
-                    FormatLoop:
+                FormatLoop:
                     index = IndexOf(pText, begin, end, '\\', '{');
 
                     if (index == -1)
@@ -496,13 +681,52 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 去除尾部的空格，然后返回一个字符串。
+        /// 去除字符串两端的空白字符，然后返回一个新的字符串。
         /// </summary>
         /// <param name="chars">原始字符串</param>
         /// <param name="length">原始长度</param>
         /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe string TrimEnd(char* chars, int length)
+        public static string Trim(char* chars, int length)
+        {
+            while (length > 0 && IsWhiteSpace(*chars))
+            {
+                ++chars;
+                --length;
+            }
+
+            while (length > 0 && IsWhiteSpace(chars[length - 1]))
+            {
+                --length;
+            }
+
+            return new string(chars, 0, length);
+        }
+        /// <summary>
+        /// 去除字符串头部的空白字符，然后返回一个新的字符串。
+        /// </summary>
+        /// <param name="chars">原始字符串</param>
+        /// <param name="length">原始长度</param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static string TrimStart(char* chars, int length)
+        {
+            while (length > 0 && IsWhiteSpace(*chars))
+            {
+                ++chars;
+                --length;
+            }
+
+            return new string(chars, 0, length);
+        }
+        /// <summary>
+        /// 去除字符串尾部的空白字符，然后返回一个新的字符串。
+        /// </summary>
+        /// <param name="chars">原始字符串</param>
+        /// <param name="length">原始长度</param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static string TrimEnd(char* chars, int length)
         {
             while (length > 0 && IsWhiteSpace(chars[length - 1]))
             {
@@ -520,7 +744,7 @@ namespace Swifter.Tools
         /// <param name="args">对象</param>
         /// <returns>返回一个新的字符串。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static StringBuilder Format<T>(string text, T args)
+        public static StringBuilder Format<T>(string text, T args)
         {
             if (text == null)
             {
@@ -531,7 +755,7 @@ namespace Swifter.Tools
 
             var builder = new StringBuilder();
 
-            fixed(char* pChars = text)
+            fixed (char* pChars = text)
             {
                 var length = text.Length;
 
@@ -557,7 +781,7 @@ namespace Swifter.Tools
                         if (length - i >= 3)
                         {
                             builder.Append(text, startIndex, i - startIndex);
-                            
+
                             startIndex = i;
 
                             for (++i; i < length; i++)
@@ -577,7 +801,7 @@ namespace Swifter.Tools
                                             builder.Append(sb[s]);
                                         }
                                     }
-                                    else if(value != null)
+                                    else if (value != null)
                                     {
                                         builder.Append(value.ToString());
                                     }
@@ -590,7 +814,7 @@ namespace Swifter.Tools
                         }
                     }
                 }
-                
+
                 builder.Append(text, startIndex, length - startIndex);
             }
 
@@ -605,7 +829,7 @@ namespace Swifter.Tools
         /// <param name="str">字符串 2 </param>
         /// <returns>返回一个 bool 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static bool StartWith(char* chars, int length, string str)
+        public static bool StartWith(char* chars, int length, string str)
         {
             if (length < str.Length)
             {
@@ -631,7 +855,7 @@ namespace Swifter.Tools
         /// <param name="upperStr">字符串 2 </param>
         /// <returns>返回一个 bool 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static bool StartWithByUpper(char* chars, int length, string upperStr)
+        public static bool StartWithByUpper(char* chars, int length, string upperStr)
         {
             if (length < upperStr.Length)
             {
@@ -657,7 +881,7 @@ namespace Swifter.Tools
         /// <param name="lowerstr">字符串 2</param>
         /// <returns>返回一个 bool 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static bool StartWithByLower(char* chars, int length, string lowerstr)
+        public static bool StartWithByLower(char* chars, int length, string lowerstr)
         {
             if (length < lowerstr.Length)
             {
@@ -682,7 +906,7 @@ namespace Swifter.Tools
 
             return true;
         }
-        
+
         /// <summary>
         /// 将小写英文字符转为大写英文字符。
         /// </summary>
@@ -721,11 +945,11 @@ namespace Swifter.Tools
         /// <param name="str">字符串</param>
         /// <returns>返回一个新的字符串</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe string ToUpper(string str)
+        public static string ToUpper(string str)
         {
             var ret = MakeString(str.Length);
 
-            fixed(char* pRet = ret)
+            fixed (char* pRet = ret)
             {
                 for (int i = 0; i < ret.Length; ++i)
                 {
@@ -742,7 +966,7 @@ namespace Swifter.Tools
         /// <param name="str">字符串</param>
         /// <returns>返回一个新的字符串</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe string ToLower(string str)
+        public static string ToLower(string str)
         {
             var ret = MakeString(str.Length);
 
@@ -776,7 +1000,7 @@ namespace Swifter.Tools
         /// <param name="end">结束索引，裁剪的位置不包含此值。</param>
         /// <returns>返回一个新的字符串。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static string Trim(char* pText, int begin, int end)
+        public static string Trim(char* pText, int begin, int end)
         {
             while (begin < end && IsWhiteSpace(pText[begin]))
             {
@@ -816,7 +1040,7 @@ namespace Swifter.Tools
         /// <param name="end">结束查找的位置，不包含此值。</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* pText, int begin, int end, char c)
+        public static int IndexOf(char* pText, int begin, int end, char c)
         {
             while (begin < end)
             {
@@ -841,7 +1065,7 @@ namespace Swifter.Tools
         /// <param name="end">结束查找的位置，不包含此值。</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* pText, int begin, int end, char char1, char char2)
+        public static int IndexOf(char* pText, int begin, int end, char char1, char char2)
         {
             while (begin < end)
             {
@@ -865,14 +1089,14 @@ namespace Swifter.Tools
         /// <param name="end">结束查找的位置，不包含此值。</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* pText, int begin, int end, string chars)
+        public static int IndexOf(char* pText, int begin, int end, string chars)
         {
             if (chars.Length == 0)
             {
                 return -1;
             }
 
-            Loop:
+        Loop:
             while (begin < end)
             {
                 if (pText[begin] == chars[0])
@@ -903,7 +1127,7 @@ namespace Swifter.Tools
         /// <param name="end">结束查找的位置，不包含此值。</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* pText, int begin, int end, char[] chars)
+        public static int IndexOf(char* pText, int begin, int end, char[] chars)
         {
             while (begin < end)
             {
@@ -929,7 +1153,7 @@ namespace Swifter.Tools
         /// <param name="length">字符串长度</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* chars, int length, char c)
+        public static int IndexOf(char* chars, int length, char c)
         {
             for (int i = 0; i < length; i++)
             {
@@ -951,7 +1175,7 @@ namespace Swifter.Tools
         /// <param name="item2">字符 2</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* chars, int length, char item1, char item2)
+        public static int IndexOf(char* chars, int length, char item1, char item2)
         {
             for (int i = 0; i < length; i++)
             {
@@ -972,7 +1196,7 @@ namespace Swifter.Tools
         /// <param name="str">字符串 2</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* chars, int length, string str)
+        public static int IndexOf(char* chars, int length, string str)
         {
             var firstChar = str[0];
 
@@ -1007,7 +1231,7 @@ namespace Swifter.Tools
         /// <param name="items">字符集合</param>
         /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public unsafe static int IndexOf(char* chars, int length, char[] items)
+        public static int IndexOf(char* chars, int length, char[] items)
         {
             for (int i = 0; i < length; i++)
             {
@@ -1022,18 +1246,24 @@ namespace Swifter.Tools
 
             return -1;
         }
-
-        /// <summary>
-        /// 获取偏移量，以字节为单位，可以将给定字符串中的数据。
-        /// </summary>
-        public static readonly int OffsetToStringData = RuntimeHelpers.OffsetToStringData;
-
+        
         /// <summary>
         /// 获取字符串的元数据引用。
         /// </summary>
         /// <param name="str">字符串</param>
         /// <returns>返回第一个字符的引用</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref char GetRawStringData(string str) => ref Unsafe.AddByteOffset(ref Unsafe.AsRef<char>(str), OffsetToStringData);
+        public static ref char GetRawStringData(string str) => ref Unsafe.AddByteOffset(ref Unsafe.AsRef<char>(str), RuntimeHelpers.OffsetToStringData);
+
+        /// <summary>
+        /// 创建一个字符串。
+        /// </summary>
+        /// <param name="chars">字符串内容</param>
+        /// <param name="length">字符串长度</param>
+        /// <returns>返回一个新的字符串</returns>
+        public static string ToString(char* chars, int length)
+        {
+            return new string(chars, 0, length);
+        }
     }
 }

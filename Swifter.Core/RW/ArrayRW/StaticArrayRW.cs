@@ -8,35 +8,28 @@ namespace Swifter.RW
 
         static StaticArrayRW()
         {
-            var type = typeof(TArray);
-
-            if (type.IsArray)
+            if (typeof(TArray).IsArray)
             {
-                int rank = type.GetArrayRank();
-
-                var elementType = type.GetElementType();
-
-                Type internalType;
-
-                switch (rank)
-                {
-                    case 1:
-                        internalType = typeof(OneRankArrayRWCreater<>).MakeGenericType(elementType);
-                        break;
-                    case 2:
-                        internalType = typeof(TwoRankArrayRWCreater<>).MakeGenericType(elementType);
-                        break;
-                    default:
-                        internalType = typeof(MultiRankArrayRWCreater<,>).MakeGenericType(type, elementType);
-                        break;
-                }
-
-                Creater = (IArrayRWCreater<TArray>)Activator.CreateInstance(internalType);
+                Creater = (IArrayRWCreater<TArray>)Activator.CreateInstance(GetCreaterType());
             }
             else
             {
                 throw new ArgumentException($"'{typeof(TArray).FullName}' is not a Array type.");
             }
+        }
+
+        public static Type GetCreaterType()
+        {
+            var elementType = typeof(TArray).GetElementType();
+            var rank = typeof(TArray).GetArrayRank();
+
+            switch (rank)
+            {
+                case 1:
+                    return typeof(OneRankArrayRWCreater<>).MakeGenericType(elementType);
+            }
+
+            return typeof(MultRankArrayRWCreater<,>).MakeGenericType(typeof(TArray), elementType);
         }
     }
 }

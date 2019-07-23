@@ -3,16 +3,18 @@
 ### [使用文档： Wiki](https://github.com/Dogwei/Swifter.Json/wiki)
 ### [如果您打算使用 Swifter.Json，请在 Nuget 包管理上安装](https://www.nuget.org/packages/Swifter.Json/)
 
-### 1.2.8 更新：
+### 1.2.9.1 更新：
 
-#### 1：将 Swifter.Reflection 整合到 Swifter.Core 中。
-#### 2：判断如果平台支持 Emit 则默认使用 FastObjectRW&lt;T&gt;，如果不支持则默认使用 XObjectRW&lt;T&gt;（因 Xamarin.iOS 不支持 Emit）。
+#### 1: 合并 JsonDeserializer 和 JsonSerializer -- 在之前版本中，JsonDeserializer 和 JsonSerializer 都有两种模式：1：在默认配置下执行快速的操作；2：在指定了缩进 Json 或引用序列化配置后执行普通的序列化，以前这两种模式由不同的类实现，现在将它们合并，在内部进行判断。理论上，这样做会影响性能，在早期版本的 .Net Freamework 中影响明显，但在新版本 .Net 中因为优化编译，所以影响并不大。这样做的好处是减少代码冗余，无需维护两套代码。
+#### 2: 增加异步序列化和反序列化方法。异步方法内部使用 HGlobalCache<char> 类实现，使用者可以直接使用 HGlobalCache<char> 进行序列化和反序列化，性能更佳。
+#### 3: 解决部分重构时产生的 BUG。
+#### 4: 优化 DataTable 反序列化性能，并在测试中增加 DataTable 的测试。
 
 ### 1.2.5 更新：
 
 #### 1：因为更新时疏忽了 Swifter.Core 的引用关系，所以跳过了 1.2.3 和 1.2.4 版本。
 #### 2：增加了对类似 1_000_1000 这样的数字值的支持。
-#### 3：允许字符串键和值不使用引号包裹！（这样的字符串不能使用前后空格，也不能使用转义符）
+#### 2：允许字符串键和值不使用引号包裹！（这样的字符串不能使用前后空格，也不能使用转义符）
 #### 4：终于魔鬼战胜了天使，Swifter.Json 还是选择了牺牲的部分性能，做一个完全验证的 Json 解析器（除了点 2 和点 3）。
 
 ### 1.2.2 更新:
@@ -27,6 +29,13 @@
 #### 3：增加特性定义 (反)序列化行为 ([RWFormat], [RWField], [RWObject] 等特性)。
 #### 4：增加 AspNetCore 的扩展方法 ConfigureJsonFormatter(this IServiceCollection services)。现在可以很方便将 Swifter.Json 配置到 MVC 了。
 #### 5：新增 JsonValue 类，此类可以表示 JSON 反序列化时的任何值（包括对象和数组）。
+
+### 支持的类型：
+
+#### 1: 基元类型 -- bool, byte, sbyte, short, ushort, int, uint, long, ulong, float, double, char.
+#### 2: 系统类型 -- string, Array, Nullable<T>, Enum, decimal, DataTime, DataTimeOffset, TimeSpan, Guid, Uri, Type.
+#### 3: 数据类型 -- IList, IList<T>, ICollection, ICollection<T>, IDictionary, IDictionary<T>, DataSet, DataTable, DataRow, IDataReader.
+#### 4: 模型类型 -- 其他类型将被当作模型类型处理。自定义类型处理程序请查看 [Wiki](https://github.com/Dogwei/Swifter.Json/wiki)
 
 ### 效率评测图
 
@@ -48,6 +57,7 @@
 #### 之前决定针对 .Net Core 3.0 使用 Avx2 指令优化，但并没有提升效果，可能是我打开方式不对，所以暂没有此类优化。
 
 #### 简单使用
+
 ```C#
     public class Demo
     {

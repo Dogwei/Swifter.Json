@@ -73,6 +73,16 @@ namespace Swifter.Test {
         /// <summary>
         ///   查找 System.Byte[] 类型的本地化资源。
         /// </summary>
+        public static byte[] datatable {
+            get {
+                object obj = ResourceManager.GetObject("datatable", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   查找 System.Byte[] 类型的本地化资源。
+        /// </summary>
         public static byte[] valueType {
             get {
                 object obj = ResourceManager.GetObject("valueType", resourceCulture);

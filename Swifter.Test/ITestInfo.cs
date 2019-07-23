@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -445,31 +447,16 @@ namespace Swifter.Test
 
             bool Equal(float x, float y)
             {
-                var xm = regex.Match(x.ToString());
-                var ym = regex.Match(y.ToString());
-
-                var xp = xm.Groups["P"];
-                var yp = ym.Groups["P"];
-
-                if (xp.Success != yp.Success)
+                if (x == y)
                 {
-                    return false;
+                    return true;
                 }
 
-                if (xp.Success && int.Parse(xp.Value) != int.Parse(yp.Value))
-                {
-                    return false;
-                }
+                var num = x / y;
 
-                var xn = double.Parse(xm.Groups["N"].Value);
-                var yn = double.Parse(ym.Groups["N"].Value);
+                // double 运算允许一定精度丢失，不可避免的。
 
-                if (Math.Abs((xn - yn) / xn) >= 1e-2)
-                {
-                    return false;
-                }
-
-                return true;
+                return num >= 0.9 && num <= 1.1;
             }
         }
 
@@ -534,8 +521,6 @@ namespace Swifter.Test
 
         public bool VerDeser(object obj)
         {
-            var regex = new Regex("^(?<N>[+-]?[0-9]+(\\.[0-9]+)?)([eE](?<P>[+-]?[0-9]+))?$");
-
             if ((obj is double[] arr) && arr.Length == Length)
             {
                 var truth = Newtonsoft.Json.JsonConvert.DeserializeObject<double[]>(Text);
@@ -555,31 +540,16 @@ namespace Swifter.Test
 
             bool Equal(double x, double y)
             {
-                var xm = regex.Match(x.ToString());
-                var ym = regex.Match(y.ToString());
-
-                var xp = xm.Groups["P"];
-                var yp = ym.Groups["P"];
-
-                if (xp.Success != yp.Success)
+                if (x ==y)
                 {
-                    return false;
+                    return true;
                 }
 
-                if (xp.Success && int.Parse(xp.Value) != int.Parse(yp.Value))
-                {
-                    return false;
-                }
+                var num = x / y;
 
-                var xn = double.Parse(xm.Groups["N"].Value);
-                var yn = double.Parse(ym.Groups["N"].Value);
+                // double 运算允许一定精度丢失，不可避免的。
 
-                if (Math.Abs((xn - yn) / xn) >= 1e-10)
-                {
-                    return false;
-                }
-
-                return true;
+                return num >= 0.999999 && num <= 1.000001;
             }
         }
 
@@ -953,6 +923,27 @@ namespace Swifter.Test
         }
     }
 
+    class Utf32StringTest: ITestInfo
+    {
+        public string Name => "Utf32String";
+
+        public string Text => "\"😂😂😂😂😂😂😂😂😂😂\"";
+
+        public Type Type => typeof(string);
+
+        public int Count => 100000;
+
+        public bool VerDeser(object obj)
+        {
+            return obj is string str && str == "😂😂😂😂😂😂😂😂😂😂";
+        }
+
+        public bool VerSer(string json)
+        {
+            return json == Text;
+        }
+    }
+
     class ShortStringTest : ITestInfo
     {
         public string Name => "ShortString";
@@ -1107,6 +1098,27 @@ namespace Swifter.Test
         public bool VerSer(string json)
         {
             return !string.IsNullOrEmpty(json);
+        }
+    }
+
+    class DataTableTest : ITestInfo
+    {
+        public string Name => "DataTable";
+
+        public string Text { get; } = Encoding.UTF8.GetString(Resource.datatable);
+
+        public Type Type => typeof(DataTable);
+
+        public int Count => 1000;
+
+        public bool VerDeser(object obj)
+        {
+            return true;
+        }
+
+        public bool VerSer(string json)
+        {
+            return true;
         }
     }
 }

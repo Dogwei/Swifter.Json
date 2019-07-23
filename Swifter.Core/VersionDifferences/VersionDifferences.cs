@@ -40,7 +40,7 @@ namespace Swifter
         /// <param name="obj">对象</param>
         /// <returns>返回一个 IntPtr 值。</returns>
 
-#if NET451 || NET45 || NET40 || NET35 || NET30 || NET20 || NETCOREAPP2_0 || NETCOREAPP2_1
+#if NETCOREAPP
         [MethodImpl(AggressiveInlining)]
         public static IntPtr GetTypeHandle(object obj)
         {
@@ -121,7 +121,7 @@ namespace Swifter
         /// <returns>返回一个 bool 值</returns>
         public static bool IsByRefLike(this Type type)
         {
-#if NETCOREAPP2_1
+#if NETCOREAPP && !NETCOREAPP2_0
             return type.IsByRefLike;
 #else
             if (type.IsClass || type.IsByRef || type.IsPointer || type.IsEnum || type.IsInterface || !type.IsValueType)
@@ -156,7 +156,7 @@ namespace Swifter
         [MethodImpl(AggressiveInlining)]
         public static unsafe void WriteChars(TextWriter textWriter, char* chars, int length)
         {
-#if NETCOREAPP2_1
+#if NETCOREAPP && !NETCOREAPP2_0
             textWriter.Write(new ReadOnlySpan<char>(chars, length));
 #else
             if (length > 130 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
@@ -203,7 +203,7 @@ namespace Swifter
         [MethodImpl(AggressiveInlining)]
         public static unsafe int ReadChars(TextReader textReader, char* chars, int length)
         {
-#if NETCOREAPP2_1
+#if NETCOREAPP && !NETCOREAPP2_0
             return textReader.Read(new Span<char>(chars, length));
 #else
             if (length > 130 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
@@ -260,7 +260,7 @@ namespace Swifter
         [MethodImpl(AggressiveInlining)]
         public static unsafe void WriteBytes(Stream stream, byte* bytes, int length)
         {
-#if NETCOREAPP2_1
+#if NETCOREAPP && !NETCOREAPP2_0
             stream.Write(new ReadOnlySpan<byte>(bytes, length));
 #else
             if (length > 130 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
@@ -307,7 +307,7 @@ namespace Swifter
         [MethodImpl(AggressiveInlining)]
         public static unsafe int ReadBytes(Stream stream, byte* bytes, int length)
         {
-#if NETCOREAPP2_1
+#if NETCOREAPP && !NETCOREAPP2_0
             return stream.Read(new Span<byte>(bytes, length));
 #else
             if (length > 130 && ArrayHelper.IsSupportedOneRankValueArrayInfo)
@@ -352,40 +352,6 @@ namespace Swifter
                 return total;
             }
 #endif
-        }
-
-
-        /// <summary>
-        /// 缓冲 TextReader 到 HGlobalCache 中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="textReader">TextReader</param>
-        /// <returns>返回缓冲的长度</returns>
-        [MethodImpl(AggressiveInlining)]
-        public static unsafe int Buffer(this HGlobalCache<char> hGCache, TextReader textReader)
-        {
-            int offset = 0;
-
-        Loop:
-
-            if (offset >= hGCache.Count)
-            {
-                hGCache.Expand(1218);
-            }
-
-            int readCount = ReadChars(
-                textReader,
-                hGCache.GetPointer() + offset,
-                hGCache.Count - offset);
-
-            offset += readCount;
-
-            if (offset == hGCache.Count)
-            {
-                goto Loop;
-            }
-
-            return offset;
         }
     }
 }

@@ -194,7 +194,7 @@ namespace Swifter.Tools
 
         public static object CreateInstanceByIL<TSource, TDestination>(MethodBase method)
         {
-            if (VersionDifferences.IsSupportEmit)
+            if (!VersionDifferences.IsSupportEmit)
             {
                 return null;
             }
@@ -358,7 +358,7 @@ namespace Swifter.Tools
             return method != null;
         }
 
-        public static implicit operator ImplicitConvert(int value) => default;
+        public static implicit operator ImplicitConvert(int _) => default;
     }
 
     internal sealed class ExplicitConvert : BaseDynamicConvert
@@ -391,7 +391,7 @@ namespace Swifter.Tools
 
         }
 
-        public static explicit operator ExplicitConvert(int value) => default;
+        public static explicit operator ExplicitConvert(int _) => default;
     }
 
     internal sealed class ParseConvert : BaseDynamicConvert
@@ -439,23 +439,6 @@ namespace Swifter.Tools
             method = null;
 
             return false;
-        }
-
-        private static IEnumerable<Type> GetBaseTypes(Type type)
-        {
-            while (type != null)
-            {
-                yield return type;
-
-                type = type.BaseType;
-            }
-        }
-
-        private static IEnumerable<Type[]> GetParametersTypes(Type tSource, Type tDestination)
-        {
-            yield return new Type[] { tSource };
-            yield return new Type[] { typeof(Type), tSource };
-            yield return new Type[] { tSource, typeof(Type) };
         }
 
         public static ParseConvert Parse(string value) => default;

@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>preview</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--<PackageReference Include="Swifter.Json" Version="1.2.8" />-->
     <ProjectReference Include="..\Swifter.Json\Swifter.Json.csproj" />
   </ItemGroup>
 

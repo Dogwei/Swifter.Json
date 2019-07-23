@@ -17,7 +17,7 @@ namespace Swifter.Writers
         void OnWriteValue(TKey key, IValueReader valueReader);
         
         /// <summary>
-        /// 从数据读取器中读取所有数据源字段到数据源的值
+        /// 从数据读取器中读取所有数据源字段到数据源的值。
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
         void OnWriteAll(IDataReader<TKey> dataReader);

@@ -21,6 +21,7 @@ namespace Swifter.Reflection
             XBindingFlags.Field |
             XBindingFlags.Public |
             XBindingFlags.Instance |
+            XBindingFlags.InheritedMembers |
             XBindingFlags.RWCannotGetException |
             XBindingFlags.RWCannotSetException |
             XBindingFlags.RWNotFoundException |

@@ -49,9 +49,9 @@ namespace Swifter.RW
                 return;
             }
 
-            if (value is string)
+            if (value is string str)
             {
-                valueWriter.WriteString((string)(object)value);
+                valueWriter.WriteString(str);
 
                 return;
             }

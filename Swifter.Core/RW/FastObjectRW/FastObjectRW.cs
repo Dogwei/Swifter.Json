@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using static Swifter.RW.FastObjectRW;
 
 namespace Swifter.RW
@@ -39,7 +40,7 @@ namespace Swifter.RW
                     return DefaultOptions;
                 }
 
-                return GetCurrentOptions(t.BaseType);
+                return GetCurrentOptions(t.BaseType) & ~Initialized;
             });
         }
 
@@ -83,6 +84,8 @@ namespace Swifter.RW
             FastObjectRWOptions.CannotSetException |
             FastObjectRWOptions.BasicTypeDirectCallMethod |
             FastObjectRWOptions.Property |
+            FastObjectRWOptions.IndexId64 |
+            FastObjectRWOptions.IgnoreCase |
             FastObjectRWOptions.InheritedMembers;
     }
 
@@ -90,7 +93,7 @@ namespace Swifter.RW
     /// FastObjectRW 基于 Emit 实现的几乎完美效率的对象读写器。
     /// </summary>
     /// <typeparam name="T">数据源对象的类型</typeparam>
-    public abstract partial class FastObjectRW<T> : IDataRW<string>, IDirectContent, IInitialize<T>, IId64DataRW<char>, ICloneable
+    public abstract partial class FastObjectRW<T> : IDataRW<string>, IDirectContent, IInitialize<T>, IId64DataRW<char>, IId64DataRW<byte>
     {
         /// <summary>
         /// 读取或设置该类型的 FastObjectRWOptions 枚举配置项。
@@ -124,7 +127,7 @@ namespace Swifter.RW
         }
 
         /// <summary>
-        /// 数据源，此字段提供给 Emit 实现类使用。
+        /// 数据源。
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public T content;
@@ -143,12 +146,14 @@ namespace Swifter.RW
         /// 设置数据源。
         /// </summary>
         /// <param name="content">数据源</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Initialize(T content) => this.content = content;
 
         /// <summary>
         /// 调用默认无参的构造函数初始化数据源。
         /// </summary>
         /// <param name="capacity">不使用此参数</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Initialize(int capacity) => Initialize();
 
         /// <summary>
@@ -201,12 +206,13 @@ namespace Swifter.RW
         /// </summary>
         public int Count => StaticFastObjectRW<T>.Keys.Length;
 
-        object IDirectContent.DirectContent { get => content; set => content = (T)value; }
-
-        /// <summary>
-        /// 获取数据源的引用根，全局唯一。如果数据源是值类型或 Null，则返回 Null。
-        /// </summary>
-        public object ReferenceToken => TypeInfo<T>.IsValueType ? null : (object)content;
+        object IDirectContent.DirectContent
+        {
+            get => content;
+            set => content = (T)value;
+        }
+        
+        object IDataReader.ReferenceToken => TypeInfo<T>.IsValueType ? null : (object)Content;
 
         IValueRW IDataRW<string>.this[string key] => this[key];
 
@@ -248,6 +254,28 @@ namespace Swifter.RW
         }
 
         /// <summary>
+        /// 获取 UTF8 字段名称的 Id64 值。
+        /// </summary>
+        /// <param name="firstSymbol">字段名称第一个字符的引用。</param>
+        /// <param name="length">字段名称长度</param>
+        /// <returns>返回 Id64 值</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public abstract long GetId64(ref byte firstSymbol, int length);
+
+        /// <summary>
+        /// 获取 UTF8 字段名称的 Id64 值。
+        /// </summary>
+        /// <param name="symbols">字段名称</param>
+        /// <returns>返回 Id64 值</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public long GetId64(IEnumerable<byte> symbols)
+        {
+            var bytes =  symbols.ToArray();
+
+            return GetId64(ref bytes[0], bytes.Length);
+        }
+
+        /// <summary>
         /// 获取字段 Id64 值为键的值到值写入器中。
         /// </summary>
         /// <param name="id64">Id64 值</param>
@@ -262,14 +290,5 @@ namespace Swifter.RW
         /// <param name="valueReader">值读取器</param>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public abstract void OnWriteValue(long id64, IValueReader valueReader);
-
-        object ICloneable.Clone() => Clone();
-
-        /// <summary>
-        /// 返回一个浅层克隆实例。
-        /// </summary>
-        /// <returns>返回一个浅层克隆实例</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public FastObjectRW<T> Clone() => (FastObjectRW<T>)MemberwiseClone();
     }
 }

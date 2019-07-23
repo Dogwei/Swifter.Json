@@ -1220,7 +1220,7 @@ namespace Swifter.RW
                 case ValueTypeCodes.String:
                     return value.String;
                 case ValueTypeCodes.Direct:
-                    return value.String;
+                    return (string)value.Object;
                 case ValueTypeCodes.Array:
                     throw new InvalidCastException("Can't convert Array to String.");
             }

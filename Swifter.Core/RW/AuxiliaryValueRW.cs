@@ -2,203 +2,146 @@
 using Swifter.Tools;
 using Swifter.Writers;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
-    sealed class AuxiliaryValueRW : IValueRW, IValueWriter<IDataReader>
+    sealed class AuxiliaryValueRW : IValueRW, IValueWriter<IDataReader>, IMapValueRW
     {
-        const string WritingExceptionText_Type = "Unable to create data reader/writer of the type '{0}'.";
+        object RW;
 
-        public object read_writer;
-        
-        public object DirectRead()
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public IDataWriter GetDataWriter()
         {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Object)));
+            if (RW is IAsDataWriter asWriter)
+            {
+                return asWriter.Content;
+            }
+
+            return RW as IDataWriter;
         }
 
-        public void DirectWrite(object value)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public IDataReader GetDataReader()
         {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Object)));
+            if (RW is IAsDataReader asReader)
+            {
+                return asReader.Content;
+            }
+
+            return RW as IDataReader;
         }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public IDataRW GetDataRW()
+        {
+            if (RW is IAsDataRW asRW)
+            {
+                return asRW.Content;
+            }
+
+            return RW as IDataRW;
+        }
+
+        public object DirectRead() => default;
+
+        public void DirectWrite(object value) { }
 
         public void ReadArray(IDataWriter<int> valueWriter)
         {
-            read_writer = valueWriter;
+            RW = valueWriter;
         }
 
-        public bool ReadBoolean()
+        public bool ReadBoolean() => default;
+
+        public byte ReadByte() => default;
+
+        public char ReadChar() => default;
+
+        public DateTime ReadDateTime() => default;
+
+        public decimal ReadDecimal() => default;
+
+        public double ReadDouble() => default;
+
+        public short ReadInt16() => default;
+
+        public int ReadInt32() => default;
+
+        public long ReadInt64() => default;
+
+        public void ReadMap<TKey>(IDataWriter<TKey> mapWriter)
         {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Boolean)));
+            RW = mapWriter;
         }
 
-        public byte ReadByte()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Byte)));
-        }
-
-        public char ReadChar()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Char)));
-        }
-
-        public DateTime ReadDateTime()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(DateTime)));
-        }
-
-        public decimal ReadDecimal()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Decimal)));
-        }
-
-        public double ReadDouble()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Double)));
-        }
-
-        public short ReadInt16()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Int16)));
-        }
-
-        public int ReadInt32()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Int32)));
-        }
-
-        public long ReadInt64()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Int64)));
-        }
-
-        public T? ReadNullable<T>() where T : struct
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, typeof(T?).ToString()));
-        }
+        public T? ReadNullable<T>() where T : struct => default;
 
         public void ReadObject(IDataWriter<string> valueWriter)
         {
-            read_writer = valueWriter;
+            RW = valueWriter;
         }
 
-        public sbyte ReadSByte()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(SByte)));
-        }
+        public sbyte ReadSByte() => default;
 
-        public float ReadSingle()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Single)));
-        }
+        public float ReadSingle() => default;
 
-        public string ReadString()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(String)));
-        }
+        public string ReadString() => default;
 
-        public ushort ReadUInt16()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(UInt16)));
-        }
+        public ushort ReadUInt16() => default;
 
-        public uint ReadUInt32()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(UInt32)));
-        }
+        public uint ReadUInt32() => default;
 
-        public ulong ReadUInt64()
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(UInt64)));
-        }
+        public ulong ReadUInt64() => default;
 
         public void WriteArray(IDataReader<int> dataReader)
         {
-            read_writer = dataReader;
+            RW = dataReader;
         }
 
-        public void WriteBoolean(bool value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Boolean)));
-        }
+        public void WriteBoolean(bool value) { }
 
-        public void WriteByte(byte value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Byte)));
-        }
+        public void WriteByte(byte value) { }
 
-        public void WriteChar(char value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Char)));
-        }
+        public void WriteChar(char value) { }
 
-        public void WriteDateTime(DateTime value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(DateTime)));
-        }
+        public void WriteDateTime(DateTime value) { }
 
-        public void WriteDecimal(decimal value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Decimal)));
-        }
+        public void WriteDecimal(decimal value) { }
 
-        public void WriteDouble(double value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Double)));
-        }
+        public void WriteDouble(double value) { }
 
-        public void WriteInt16(short value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Int16)));
-        }
+        public void WriteInt16(short value) { }
 
-        public void WriteInt32(int value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Int32)));
-        }
+        public void WriteInt32(int value) { }
 
-        public void WriteInt64(long value)
+        public void WriteInt64(long value) { }
+
+        public void WriteMap<TKey>(IDataReader<TKey> mapReader)
         {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Int64)));
+            RW = mapReader;
         }
 
         public void WriteObject(IDataReader<string> dataReader)
         {
-            read_writer = dataReader;
+            RW = dataReader;
         }
 
-        public void WriteSByte(sbyte value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(SByte)));
-        }
+        public void WriteSByte(sbyte value) { }
 
-        public void WriteSingle(float value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(Single)));
-        }
+        public void WriteSingle(float value) { }
 
-        public void WriteString(string value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(String)));
-        }
+        public void WriteString(string value) { }
 
-        public void WriteUInt16(ushort value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(UInt16)));
-        }
+        public void WriteUInt16(ushort value) { }
 
-        public void WriteUInt32(uint value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(UInt32)));
-        }
+        public void WriteUInt32(uint value) { }
 
-        public void WriteUInt64(ulong value)
-        {
-            throw new NotSupportedException(StringHelper.Format(WritingExceptionText_Type, nameof(UInt64)));
-        }
+        public void WriteUInt64(ulong value) { }
 
         public void WriteValue(IDataReader value)
         {
-            read_writer = value;
+            RW = value;
         }
     }
 }
