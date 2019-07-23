@@ -58,28 +58,28 @@ namespace Swifter.Test
 
             testers.Add(new SwifterTester());
 
-            //tests.Add(new CommonDataTest(100000));
-            //tests.Add(new BooleanTest(100000, 100));
-            //tests.Add(new Int32Test(100000, 50));
-            //tests.Add(new Int64Test(10000, 20));
-            //tests.Add(new FloatTest(10000, 20));
-            //tests.Add(new DoubleTest(100000, 30));
-            //tests.Add(new DecimalTest(100000, 20));
-            //tests.Add(new CommonDataDictionaryTest(80000));
+            tests.Add(new CommonDataTest(100000));
+            tests.Add(new BooleanTest(100000, 100));
+            tests.Add(new Int32Test(100000, 50));
+            tests.Add(new Int64Test(10000, 20));
+            tests.Add(new FloatTest(10000, 20));
+            tests.Add(new DoubleTest(100000, 30));
+            tests.Add(new DecimalTest(100000, 20));
+            tests.Add(new CommonDataDictionaryTest(80000));
             tests.Add(new DataTableTest());
-            //tests.Add(new CalalogTest(15));
-            //tests.Add(new CalalogDictionaryTest(10));
-            //tests.Add(new CSharp7Test());
-            //tests.Add(new TwoDimensionaArrayTest());
-            //tests.Add(new ThreeDimensionalArray());
-            //tests.Add(new LongStringTest());
-            //tests.Add(new ShortStringTest());
-            //tests.Add(new Utf32StringTest());
-            //tests.Add(new DateTimeTest());
-            //tests.Add(new BasicTypesTest(100000));
-            //tests.Add(new PolymorphismTest());
-            //tests.Add(new StructTest());
-            //tests.Add(new UnsafeTest());
+            tests.Add(new CalalogTest(15));
+            tests.Add(new CalalogDictionaryTest(10));
+            tests.Add(new CSharp7Test());
+            tests.Add(new TwoDimensionaArrayTest());
+            tests.Add(new ThreeDimensionalArray());
+            tests.Add(new LongStringTest());
+            tests.Add(new ShortStringTest());
+            tests.Add(new Utf32StringTest());
+            tests.Add(new DateTimeTest());
+            tests.Add(new BasicTypesTest(100000));
+            tests.Add(new PolymorphismTest());
+            tests.Add(new StructTest());
+            tests.Add(new UnsafeTest());
 
 
             results.Columns.Add(TimeName);

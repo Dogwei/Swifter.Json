@@ -18,11 +18,11 @@ namespace Swifter.Test
     {
         public static void Main()
         {
-            //FastObjectRW.DefaultOptions &= ~FastObjectRWOptions.IndexId64;
-            //FastObjectRW.DefaultOptions &= ~FastObjectRWOptions.IgnoreCase;
+            FastObjectRW.DefaultOptions &= ~FastObjectRWOptions.IndexId64;
+            FastObjectRW.DefaultOptions &= ~FastObjectRWOptions.IgnoreCase;
 
-            //DataTableRW.DefaultOptions = DataTableRWOptions.SetFirstRowsTypeToColumnTypes | 
-            //    DataTableRWOptions.WriteToArrayFromBeginningSecondRows;
+            DataTableRW.DefaultOptions = DataTableRWOptions.SetFirstRowsTypeToColumnTypes |
+                DataTableRWOptions.WriteToArrayFromBeginningSecondRows;
 
             Application.Run(new MyForm());
         }
