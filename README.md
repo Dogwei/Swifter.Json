@@ -32,13 +32,13 @@
 
 ### 支持的类型：
 ```C#
-
  bool, byte, sbyte, short, ushort, int, uint, long, ulong, float, double, char.
  
- string, Array, Multidimensional-Arrays, Nullable<T>, Enum, DBNull, decimal, DataTime, DataTimeOffset, TimeSpan, Guid, Uri, Version, Type.
+ string, Array, Multidimensional-Arrays, Nullable<T>, Enum, DBNull, decimal,
+ DataTime, DataTimeOffset, TimeSpan, Guid, Uri, Version, Type.
  
- IList, IList<T>, ICollection, ICollection<T>, IEnumerable, IEnumerable<T>, IDictionary, IDictionary<TKey, TValue>, DataSet, DataTable, DataRow, IDataReader.
- 
+ IList, IList<T>, ICollection, ICollection<T>, IEnumerable, IEnumerable<T>,
+ IDictionary, IDictionary<TKey, TValue>, DataSet, DataTable, DataRow, IDataReader.
 ```
 #### 其他类型将被当作模型类型处理。自定义类型处理程序请查看 [Wiki](https://github.com/Dogwei/Swifter.Json/wiki)
 ### 效率评测图
