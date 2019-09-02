@@ -1,5 +1,6 @@
-﻿using Swifter.Tools;
-using Swifter.Writers;
+﻿using Swifter.RW;
+using Swifter.Tools;
+
 using System;
 using System.IO;
 
@@ -14,9 +15,9 @@ namespace Swifter.Formatters
         /// 将字节数据源反序列化为指定类型的值。
         /// </summary>
         /// <typeparam name="T">指定类型</typeparam>
-        /// <param name="bytes">文档字符串</param>
+        /// <param name="bytes">字节数据源</param>
         /// <returns>指定类型的值</returns>
-        T Deserialize<T>(byte[] bytes);
+        T Deserialize<T>(ArraySegment<byte> bytes);
 
         /// <summary>
         /// 将字节数据源反序列化为指定类型的值。
@@ -37,10 +38,10 @@ namespace Swifter.Formatters
         /// <summary>
         /// 将字节数据源反序列化为指定类型的值。
         /// </summary>
-        /// <param name="text">文档字符串</param>
-        /// <param name="type">指定类型</param>
+        /// <param name="bytes">文档字符串</param>
+        /// <param name="type">字节数据源</param>
         /// <returns>指定类型的值</returns>
-        object Deserialize(byte[] text, Type type);
+        object Deserialize(ArraySegment<byte> bytes, Type type);
 
         /// <summary>
         /// 将字节数据源反序列化为指定类型的值。
@@ -61,9 +62,9 @@ namespace Swifter.Formatters
         /// <summary>
         /// 将字节数据源反序列化到指定的数据写入器中。
         /// </summary>
-        /// <param name="text">字节数据源</param>
+        /// <param name="bytes">字节数据源</param>
         /// <param name="dataWriter">数据写入器</param>
-        void DeserializeTo(string text, IDataWriter dataWriter);
+        void DeserializeTo(ArraySegment<byte> bytes, IDataWriter dataWriter);
 
         /// <summary>
         /// 将字节数据源反序列化到指定的数据写入器中。

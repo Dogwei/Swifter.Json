@@ -1,4 +1,4 @@
-﻿using Swifter.Readers;
+﻿
 using Swifter.RW;
 
 namespace Swifter.Formatters

@@ -1,6 +1,6 @@
-﻿using Swifter.Readers;
+﻿
 using Swifter.Tools;
-using Swifter.Writers;
+
 using System;
 
 namespace Swifter.RW
@@ -10,7 +10,7 @@ namespace Swifter.RW
         /// <summary>
         /// 表示是否需要进行派生类检查。
         /// </summary>
-        static readonly bool CheckDerivedInstance = !TypeInfo<T>.IsFinal;
+        static readonly bool CheckDerivedInstance = !(typeof(T).IsSealed || typeof(T).IsValueType);
         static readonly IntPtr TypeHandle = TypeHelper.GetTypeHandle(typeof(T));
 
         public T ReadValue(IValueReader valueReader)

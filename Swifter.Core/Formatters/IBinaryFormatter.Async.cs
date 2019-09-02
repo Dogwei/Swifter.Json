@@ -1,6 +1,7 @@
 ﻿#if NET45 || NET451 || NET47 || NET471 || NETSTANDARD || NETCOREAPP
 
-using Swifter.Writers;
+
+using Swifter.RW;
 using System;
 using System.IO;
 using System.Threading.Tasks;

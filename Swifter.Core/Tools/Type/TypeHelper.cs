@@ -118,7 +118,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static T Clone<T>(T obj)
         {
-            if (TypeInfo<T>.IsValueType)
+            if (typeof(T).IsValueType)
             {
                 return obj;
             }
@@ -271,7 +271,7 @@ namespace Swifter.Tools
                     return Unsafe.As<T, long>(ref value) == 0;
             }
 
-            ref var first = ref Unsafe.AsByte(ref value);
+            ref var first = ref Unsafe.As<T, byte>(ref value);
 
             while (size >= 8)
             {

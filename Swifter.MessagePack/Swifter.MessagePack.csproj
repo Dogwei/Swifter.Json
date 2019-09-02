@@ -12,15 +12,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!--<PackageReference Include="Swifter.Core" Version="1.2.8" />-->
-    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Include="..\LICENSE">
       <Pack>True</Pack>
       <PackagePath></PackagePath>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
   </ItemGroup>
 
 

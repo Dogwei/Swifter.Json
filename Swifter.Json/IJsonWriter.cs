@@ -1,5 +1,6 @@
-﻿using Swifter.Tools;
-using Swifter.Writers;
+﻿using Swifter.RW;
+using Swifter.Tools;
+
 using System;
 
 namespace Swifter.Json
@@ -10,17 +11,12 @@ namespace Swifter.Json
     public interface IJsonWriter : IValueWriter
     {
         /// <summary>
-        /// 获取 HGCache 缓存。
-        /// </summary>
-        HGlobalCache<char> HGCache { get; }
-
-        /// <summary>
         /// 设置已写入的 JSON 内容长度到 HGCache 的内容数量中。
         /// </summary>
         void Flush();
 
         /// <summary>
-        /// 重置 HGCache 的内容数量和 JSON 内容长度。
+        /// 重置 JSON 写入位置。
         /// </summary>
         void Clear();
 

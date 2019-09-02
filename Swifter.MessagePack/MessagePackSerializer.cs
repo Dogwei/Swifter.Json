@@ -1,8 +1,8 @@
 ﻿using Swifter.Formatters;
-using Swifter.Readers;
+
 using Swifter.RW;
 using Swifter.Tools;
-using Swifter.Writers;
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,44 +10,65 @@ using System.Runtime.CompilerServices;
 
 using static Swifter.MessagePack.EncodingHelper;
 using static Swifter.MessagePack.MessagePackCode;
+using static Swifter.MessagePack.MessagePackModes;
+using static Swifter.MessagePack.MessagePackFormatterOptions;
 
-using HGlobal = Swifter.Tools.HGlobalCache<byte>;
 
 namespace Swifter.MessagePack
 {
-    sealed unsafe class MessagePackSerializer :
+    sealed unsafe class MessagePackSerializer<TMode> :
         IFormatterWriter,
         IValueWriter<byte[]>,
         IValueWriter<Guid>,
         IValueWriter<DateTimeOffset>,
         IDataWriter<string>,
         IDataWriter<int>,
+        IValueFilter<string>,
+        IValueFilter<int>,
         IMapValueWriter
     {
-        public readonly MessagePackForamtter foramtter;
-        public readonly HGlobal hGlobal;
-        public readonly Stream stream;
-        public readonly MessagePackFormatterOptions options;
+        public readonly MessagePackForamtter MessagePackForamtter;
+        public readonly HGlobalCache<byte> HGCache;
+        public readonly Stream Stream;
+        public readonly MessagePackFormatterOptions Options;
         public readonly int maxDepth;
+
+        public TMode mode;
 
         public int offset; // 当前写入位置。
         public int depth; // 当前结构深度。
 
+        public ref ReferenceCache<int> References => ref Unsafe.As<TMode, Reference>(ref mode).References;
+
         public MessagePackSerializer(
             MessagePackFormatterOptions options,
             int maxDepth,
-            HGlobal hGlobal,
-            MessagePackForamtter foramtter = null,
-            Stream stream = null)
+            HGlobalCache<byte> hGlobal,
+            MessagePackForamtter foramtter,
+            Stream stream) : this(options, maxDepth, hGlobal)
         {
-            this.options = options;
-            this.maxDepth = maxDepth;
-            this.hGlobal = hGlobal;
-            this.foramtter = foramtter;
-            this.stream = stream;
+            MessagePackForamtter = foramtter;
+            Stream = stream;
         }
 
-        public long TargetedId => foramtter?.id ?? 0;
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public MessagePackSerializer(
+            MessagePackFormatterOptions options,
+            int maxDepth,
+            HGlobalCache<byte> hGCache
+            )
+        {
+            this.Options = options;
+            this.maxDepth = maxDepth;
+            this.HGCache = hGCache;
+
+            if (typeof(TMode) == typeof(Reference))
+            {
+                References = new ReferenceCache<int>();
+            }
+        }
+
+        public long TargetedId => MessagePackForamtter?.id ?? 0;
 
         public IEnumerable<string> Keys => null;
 
@@ -70,7 +91,7 @@ namespace Swifter.MessagePack
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Append(byte value)
         {
-            hGlobal.GetPointer()[offset] = value;
+            HGCache.GetPointer()[offset] = value;
 
             ++offset;
         }
@@ -114,7 +135,7 @@ namespace Swifter.MessagePack
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Expand(int expandMinSize)
         {
-            if (hGlobal.Capacity - offset < expandMinSize)
+            if (HGCache.Capacity - offset < expandMinSize)
             {
                 InternalExpand(expandMinSize);
             }
@@ -136,7 +157,7 @@ namespace Swifter.MessagePack
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void ThrowOutOfDepthException()
         {
-            if ((options & MessagePackFormatterOptions.OutOfDepthException) != 0)
+            if ((Options & MessagePackFormatterOptions.OutOfDepthException) != 0)
             {
                 throw new OutOfDepthException();
             }
@@ -145,9 +166,11 @@ namespace Swifter.MessagePack
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void InternalExpand(int expandMinSize)
         {
-            if (hGlobal.Capacity == HGlobal.MaxSize && stream != null && offset != 0)
+            if (HGCache.Capacity == HGlobalCache<byte>.MaxSize && Stream != null && offset != 0)
             {
-                VersionDifferences.WriteBytes(stream, hGlobal.GetPointer(), offset);
+                HGCache.Count = offset;
+
+                HGCache.WriteTo(Stream);
 
                 offset = 0;
 
@@ -155,7 +178,7 @@ namespace Swifter.MessagePack
             }
             else
             {
-                hGlobal.Expand(expandMinSize);
+                HGCache.Expand(expandMinSize);
             }
         }
 
@@ -226,14 +249,14 @@ namespace Swifter.MessagePack
 
             if (value is Guid guid)
             {
-                WriteValue(guid);
+                WriteGuid(guid);
 
                 return;
             }
 
             if (value is DateTimeOffset dto)
             {
-                WriteValue(dto);
+                WriteDateTimeOffset(dto);
 
                 return;
             }
@@ -246,7 +269,7 @@ namespace Swifter.MessagePack
             }
 
 
-            if ((options & MessagePackFormatterOptions.UnknownTypeAsString) != 0)
+            if ((Options & MessagePackFormatterOptions.UnknownTypeAsString) != 0)
             {
                 WriteString(value.ToString());
 
@@ -263,17 +286,99 @@ namespace Swifter.MessagePack
             Append(Nil);
         }
 
+        public void WriteReference(int address)
+        {
+            if (address < 0)
+            {
+                throw new NullReferenceException(nameof(address));
+            }
+
+            if (address <= byte.MaxValue)
+            {
+                WriteExtension(MessagePackExtensionCode.Reference, (byte)address);
+            }
+            else if (address <= ushort.MaxValue)
+            {
+                WriteExtension(MessagePackExtensionCode.Reference, (ushort)address);
+            }
+            else
+            {
+                WriteExtension(MessagePackExtensionCode.Reference, address);
+            }
+        }
+
+        public bool TryWriteReference(IDataReader dataReader)
+        {
+            var token = dataReader.ReferenceToken;
+
+            if (References.TryGetValue(token, out var address))
+            {
+                if ((Options & LoopReferencingException) != 0)
+                {
+                    throw new MessagePackLoopReferencingException();
+                }
+                else if ((Options & (LoopReferencingNull | MultiReferencingNull)) != 0)
+                {
+                    WriteNull();
+                }
+                else if((Options & MultiReferencingReference) != 0)
+                {
+                    WriteReference(address);
+                }
+
+                return true;
+            }
+            else
+            {
+                References.DirectAdd(token, offset);
+
+                return false;
+            }
+        }
+
+        public void ReferenceAfter(IDataReader dataReader)
+        {
+            if ((Options & (LoopReferencingException | LoopReferencingNull)) != 0)
+            {
+                References.Remove(dataReader.ReferenceToken);
+            }
+        }
+
         public void WriteArray(IDataReader<int> dataReader)
         {
+            if (typeof(TMode) == typeof(Reference) && TryWriteReference(dataReader))
+            {
+                return;
+            }
+
             if (CheckDepth())
             {
                 WriteArrayHead(dataReader.Count);
 
                 ++depth;
 
-                dataReader.OnReadAll(this);
+                if (typeof(TMode) == typeof(Simple))
+                {
+                    dataReader.OnReadAll(this);
+                }
+                else
+                {
+                    if ((Options & ArrayOnFilter) != 0 && (Options & (IgnoreNull | IgnoreZero | IgnoreEmptyString)) != 0)
+                    {
+                        dataReader.OnReadAll(this, this);
+                    }
+                    else
+                    {
+                        dataReader.OnReadAll(this);
+                    }
+                }
 
                 --depth;
+            }
+
+            if (typeof(TMode) == typeof(Reference))
+            {
+                ReferenceAfter(dataReader);
             }
         }
 
@@ -313,14 +418,14 @@ namespace Swifter.MessagePack
         {
             Expand(5);
 
-            var bytesLength = GetUtf8Bytes(&value, 1, hGlobal.GetPointer() + offset + 1);
+            var bytesLength = GetUtf8Bytes(&value, 1, HGCache.GetPointer() + offset + 1);
 
             Append((byte)(FixStr | bytesLength));
 
             offset += bytesLength;
         }
 
-        public void WriteExtension<T>(byte extensionCode, T value) where T : struct
+        public void WriteExtension<T>(sbyte extensionCode, T value) where T : struct
         {
             var size = Unsafe.SizeOf<T>();
 
@@ -328,27 +433,27 @@ namespace Swifter.MessagePack
             {
                 case 1:
                     Append(FixExt1);
-                    Append(extensionCode);
+                    Append((byte)extensionCode);
                     Append(Unsafe.As<T, byte>(ref value));
                     return;
                 case 2:
                     Append(FixExt2);
-                    Append(extensionCode);
+                    Append((byte)extensionCode);
                     Append2(Unsafe.As<T, ushort>(ref value));
                     return;
                 case 4:
                     Append(FixExt4);
-                    Append(extensionCode);
+                    Append((byte)extensionCode);
                     Append4(Unsafe.As<T, uint>(ref value));
                     return;
                 case 8:
                     Append(FixExt8);
-                    Append(extensionCode);
+                    Append((byte)extensionCode);
                     Append8(Unsafe.As<T, ulong>(ref value));
                     return;
                 case 16:
                     Append(FixExt16);
-                    Append(extensionCode);
+                    Append((byte)extensionCode);
                     Append16(ref Unsafe.As<T, ulong>(ref value));
                     return;
             }
@@ -373,9 +478,9 @@ namespace Swifter.MessagePack
                     Append4((uint)size);
                 }
 
-                Append(extensionCode);
+                Append((byte)extensionCode);
 
-                ref var bytes = ref Unsafe.AsByte(ref value);
+                ref var bytes = ref Unsafe.As<T, byte>(ref value);
 
                 while (size >= 8)
                 {
@@ -401,7 +506,7 @@ namespace Swifter.MessagePack
                 if (size >= 1)
                 {
                     // --size;
-                    
+
                     Append(bytes);
                 }
             }
@@ -415,7 +520,7 @@ namespace Swifter.MessagePack
 
             var seconds = ticks / DateTimeHelper.TicksOfOneSecond;
 
-            if (((options & MessagePackFormatterOptions.UseTimestamp32) != 0 ||
+            if (((Options & MessagePackFormatterOptions.UseTimestamp32) != 0 ||
                 seconds * DateTimeHelper.TicksOfOneSecond == ticks) &&
                 seconds <= UInt32MaxValue)
             {
@@ -466,7 +571,7 @@ namespace Swifter.MessagePack
                 return;
             }
 
-            if ((options & MessagePackFormatterOptions.UnknownTypeAsString) != 0)
+            if ((Options & MessagePackFormatterOptions.UnknownTypeAsString) != 0)
             {
                 var chars = stackalloc char[NumberHelper.DecimalStringMaxLength];
 
@@ -482,7 +587,7 @@ namespace Swifter.MessagePack
 
         public void WriteUnknownTypeAsBinary<T>(T value)
         {
-            WriteBinary(ref Unsafe.AsByte(ref value), Unsafe.SizeOf<T>());
+            WriteBinary(ref Unsafe.As<T, byte>(ref value), Unsafe.SizeOf<T>());
         }
 
         public void WriteDouble(double value)
@@ -578,15 +683,39 @@ namespace Swifter.MessagePack
 
         public void WriteObject(IDataReader<string> dataReader)
         {
+            if (typeof(TMode) == typeof(Reference) && TryWriteReference(dataReader))
+            {
+                return;
+            }
+
             if (CheckDepth())
             {
                 WriteMapHead(dataReader.Count);
 
-                --depth;
+                ++depth;
 
-                dataReader.OnReadAll(this);
+                if (typeof(TMode) == typeof(Simple))
+                {
+                    dataReader.OnReadAll(this);
+                }
+                else
+                {
+                    if ((Options & (IgnoreNull | IgnoreZero | IgnoreEmptyString)) != 0)
+                    {
+                        dataReader.OnReadAll(this, this);
+                    }
+                    else
+                    {
+                        dataReader.OnReadAll(this);
+                    }
+                }
 
                 --depth;
+            }
+
+            if (typeof(TMode) == typeof(Reference))
+            {
+                ReferenceAfter(dataReader);
             }
         }
 
@@ -656,14 +785,14 @@ namespace Swifter.MessagePack
 
             Expand(GetUtf8MaxBytesLength(length));
 
-            var bytesLength = GetUtf8Bytes(chars, length, hGlobal.GetPointer() + offset + predictedOffset);
+            var bytesLength = GetUtf8Bytes(chars, length, HGCache.GetPointer() + offset + predictedOffset);
             var actualOffset = GetStringHeadOffset(bytesLength);
 
             if (actualOffset != predictedOffset)
             {
                 Unsafe.CopyBlockUnaligned(
-                    hGlobal.GetPointer() + offset + actualOffset, // destination
-                    hGlobal.GetPointer() + offset + predictedOffset, // source
+                    HGCache.GetPointer() + offset + actualOffset, // destination
+                    HGCache.GetPointer() + offset + predictedOffset, // source
                     (uint)bytesLength); // byteCount
             }
 
@@ -686,7 +815,7 @@ namespace Swifter.MessagePack
                 }
             }
         }
-        
+
         public void WriteASCIIString(char* chars, int length)
         {
             Expand(length + 5);
@@ -695,7 +824,7 @@ namespace Swifter.MessagePack
 
             WriteStringHead(length);
 
-            var destination = hGlobal.GetPointer() + offset;
+            var destination = HGCache.GetPointer() + offset;
 
             for (int i = 0; i < length; i++)
             {
@@ -840,16 +969,36 @@ namespace Swifter.MessagePack
             }
 
             Unsafe.CopyBlock(
-                ref hGlobal.GetPointer()[offset],
+                ref HGCache.GetPointer()[offset],
                 ref firstByte,
                 (uint)length);
 
             offset += length;
         }
 
-        public void WriteValue(Guid value)
+        void IValueWriter<Guid>.WriteValue(Guid value) => WriteGuid(value);
+
+        void IValueWriter<DateTimeOffset>.WriteValue(DateTimeOffset value) => WriteDateTimeOffset(value);
+
+        public void WriteDateTimeOffset(DateTimeOffset value)
         {
-            if ((options & MessagePackFormatterOptions.UnknownTypeAsString) != 0)
+            if ((Options & UnknownTypeAsString) != 0)
+            {
+                var chars = stackalloc char[DateTimeHelper.ISOStringMaxLength];
+
+                var charsLength = DateTimeHelper.ToISOString(value, chars);
+
+                WriteASCIIString(chars, charsLength);
+
+                return;
+            }
+
+            WriteUnknownTypeAsBinary(value);
+        }
+
+        public void WriteGuid(Guid value)
+        {
+            if ((Options & UnknownTypeAsString) != 0)
             {
                 var chars = stackalloc char[NumberHelper.GuidStringLength];
 
@@ -859,22 +1008,6 @@ namespace Swifter.MessagePack
 
                 return;
 
-            }
-
-            WriteUnknownTypeAsBinary(value);
-        }
-
-        public void WriteValue(DateTimeOffset value)
-        {
-            if ((options & MessagePackFormatterOptions.UnknownTypeAsString) != 0)
-            {
-                var chars = stackalloc char[DateTimeHelper.ISOStringMaxLength];
-
-                var charsLength = DateTimeHelper.ToISOString(value, chars);
-
-                WriteASCIIString(chars, charsLength);
-
-                return;
             }
 
             WriteUnknownTypeAsBinary(value);
@@ -908,18 +1041,150 @@ namespace Swifter.MessagePack
 
         public void WriteMap<TKey>(IDataReader<TKey> mapReader)
         {
+            if (typeof(TMode) == typeof(Reference) && TryWriteReference(mapReader))
+            {
+                return;
+            }
+
             if (CheckDepth())
             {
                 WriteMapHead(mapReader.Count);
 
-                --depth;
+                ++depth;
 
-                mapReader.OnReadAll(new MessagePackMapWriter<TKey>(this));
+                var writer = new MapWriter<TKey>(this);
+
+                if (typeof(TMode) == typeof(Simple))
+                {
+                    mapReader.OnReadAll(writer);
+                }
+                else 
+                {
+                    if ((Options & (IgnoreNull | IgnoreZero | IgnoreEmptyString)) != 0)
+                    {
+                        mapReader.OnReadAll(writer, writer);
+                    }
+                    else
+                    {
+                        mapReader.OnReadAll(writer);
+                    }
+                }
 
                 --depth;
+            }
+
+            if (typeof(TMode) == typeof(Reference))
+            {
+                ReferenceAfter(mapReader);
             }
         }
 
         public void MakeTargetedId() { }
+
+        public bool Filter(ValueCopyer valueCopyer)
+        {
+            var basicType = valueCopyer.TypeCode;
+
+            if (typeof(TMode) == typeof(Reference) &&
+                basicType == TypeCode.Object &&
+                (Options & (MultiReferencingNull | LoopReferencingNull)) != 0 &&
+                valueCopyer.Value is IDataReader dataReader &&
+                References.TryGetValue(dataReader.ReferenceToken, out _))
+            {
+                valueCopyer.DirectWrite(null);
+
+                basicType = TypeCode.Empty;
+            }
+
+            if ((Options & IgnoreNull) != 0 && basicType == TypeCode.Empty)
+            {
+                return false;
+            }
+
+            if ((Options & IgnoreZero) != 0)
+            {
+                switch (basicType)
+                {
+                    case TypeCode.SByte:
+                        return valueCopyer.ReadSByte() != 0;
+                    case TypeCode.Int16:
+                        return valueCopyer.ReadInt16() != 0;
+                    case TypeCode.Int32:
+                        return valueCopyer.ReadInt32() != 0;
+                    case TypeCode.Int64:
+                        return valueCopyer.ReadInt64() != 0;
+                    case TypeCode.Byte:
+                        return valueCopyer.ReadByte() != 0;
+                    case TypeCode.UInt16:
+                        return valueCopyer.ReadUInt16() != 0;
+                    case TypeCode.UInt32:
+                        return valueCopyer.ReadUInt32() != 0;
+                    case TypeCode.UInt64:
+                        return valueCopyer.ReadUInt64() != 0;
+                    case TypeCode.Single:
+                        return valueCopyer.ReadSingle() != 0;
+                    case TypeCode.Double:
+                        return valueCopyer.ReadDouble() != 0;
+                    case TypeCode.Decimal:
+                        return valueCopyer.ReadDecimal() != 0;
+                }
+            }
+
+            if ((Options & IgnoreEmptyString) != 0
+                && basicType == TypeCode.String
+                && valueCopyer.ReadString() == string.Empty)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        bool IValueFilter<int>.Filter(ValueFilterInfo<int> valueInfo) => Filter(valueInfo.ValueCopyer);
+
+        bool IValueFilter<string>.Filter(ValueFilterInfo<string> valueInfo) => Filter(valueInfo.ValueCopyer);
+
+        sealed class MapWriter<TKey> : IDataWriter<TKey>, IValueFilter<TKey>
+        {
+            private readonly MessagePackSerializer<TMode> serializer;
+
+            public MapWriter(MessagePackSerializer<TMode> serializer)
+            {
+                this.serializer = serializer;
+            }
+
+            public IValueWriter this[TKey key]
+            {
+                get
+                {
+                    ValueInterface<TKey>.WriteValue(serializer, key);
+
+                    return serializer;
+                }
+            }
+
+            public IEnumerable<TKey> Keys => null;
+
+            public int Count => 0;
+
+            public bool Filter(ValueFilterInfo<TKey> valueInfo) => serializer.Filter(valueInfo.ValueCopyer);
+
+            public void Initialize()
+            {
+            }
+
+            public void Initialize(int capacity)
+            {
+            }
+
+            public void OnWriteAll(IDataReader<TKey> dataReader)
+            {
+            }
+
+            public void OnWriteValue(TKey key, IValueReader valueReader)
+            {
+                this[key].DirectWrite(valueReader.DirectRead());
+            }
+        }
     }
 }

@@ -1,8 +1,8 @@
 ﻿using Swifter.Formatters;
-using Swifter.Readers;
+
 using Swifter.RW;
 using Swifter.Tools;
-using Swifter.Writers;
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -320,6 +320,11 @@ namespace Swifter.Json
 
         public JsonDeserializer(char* chars, int length)
         {
+            if (chars == null || length <= 0)
+            {
+                throw new ArgumentNullException(nameof(chars));
+            }
+
             begin = chars;
             end = chars + length;
 
@@ -336,7 +341,7 @@ namespace Swifter.Json
 
         public ref JsonDeserializeModes.Reference ReferenceMode => ref Unsafe.As<TMode, JsonDeserializeModes.Reference>(ref mode);
 
-        public long TargetedId => jsonFormatter?.id ?? 0;
+        public long TargetedId => jsonFormatter?.targeted_id ?? 0;
 
         public bool IsObject => current < end && *current == FixObject;
 
@@ -680,17 +685,11 @@ namespace Swifter.Json
 
         public char ReadChar()
         {
-            if (length >= 3)
+            if (length >= 3 && current[0] == current[2] && (current[0] == FixString || current[0] == FixChars) && current[1] != FixEscape)
             {
-                if (current[0] == FixString && current[2] == FixString && current[1] != FixEscape)
-                {
-                    return current[1];
-                }
+                current += 3;
 
-                if (current[0] == FixChars && current[2] == FixChars && current[1] != FixEscape)
-                {
-                    return current[1];
-                }
+                return current[-2];
             }
 
             return char.Parse(ReadString());

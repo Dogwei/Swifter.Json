@@ -2,6 +2,8 @@
 {
     static class MessagePackExtensionCode
     {
-        public const byte Timestamp = unchecked((byte)-1);
+        public const sbyte Timestamp = -1;
+
+        public const sbyte Reference = -10;
     }
 }

@@ -1,15 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;<!--netcoreapp3.0;-->netcoreapp2.1;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;netcoreapp3.0;netcoreapp2.1;netstandard2.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.2.9.1</Version>
+    <Version>1.2.9.4</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Core.xml</DocumentationFile>
     <Description>Swifter Core components.</Description>
     <LangVersion>preview</LangVersion>
     <Copyright />
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIconUrl>https://raw.githubusercontent.com/Dogwei/Swifter.Json/master/ICON.PNG</PackageIconUrl>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -22,11 +23,18 @@
   </ItemGroup>
   
   <ItemGroup>
-    <PackageReference Include="Swifter.Unsafe" Version="1.0.2" />
+    <PackageReference Include="Swifter.Unsafe" Version="1.0.7" />
   </ItemGroup>
   
   <ItemGroup>
     <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <None Include="..\icon.ico">
       <Pack>True</Pack>
       <PackagePath></PackagePath>
     </None>

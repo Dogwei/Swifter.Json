@@ -1,6 +1,6 @@
-﻿using Swifter.Readers;
+﻿
 using Swifter.Tools;
-using Swifter.Writers;
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -79,11 +79,12 @@ namespace Swifter.RW
         /// </summary>
         public static
             FastObjectRWOptions DefaultOptions { get; set; } =
-            FastObjectRWOptions.NotFoundException |
+            // FastObjectRWOptions.NotFoundException |
             FastObjectRWOptions.CannotGetException |
             FastObjectRWOptions.CannotSetException |
             FastObjectRWOptions.BasicTypeDirectCallMethod |
             FastObjectRWOptions.Property |
+            FastObjectRWOptions.Field |
             FastObjectRWOptions.IndexId64 |
             FastObjectRWOptions.IgnoreCase |
             FastObjectRWOptions.InheritedMembers;
@@ -93,7 +94,7 @@ namespace Swifter.RW
     /// FastObjectRW 基于 Emit 实现的几乎完美效率的对象读写器。
     /// </summary>
     /// <typeparam name="T">数据源对象的类型</typeparam>
-    public abstract partial class FastObjectRW<T> : IDataRW<string>, IDirectContent, IInitialize<T>, IId64DataRW<char>, IId64DataRW<byte>
+    public abstract partial class FastObjectRW<T> : IDataRW<string>, IDirectContent, IInitialize<T>, IId64DataRW<char>, IId64DataRW<Utf8Byte>
     {
         /// <summary>
         /// 读取或设置该类型的 FastObjectRWOptions 枚举配置项。
@@ -212,7 +213,7 @@ namespace Swifter.RW
             set => content = (T)value;
         }
         
-        object IDataReader.ReferenceToken => TypeInfo<T>.IsValueType ? null : (object)Content;
+        object IDataReader.ReferenceToken => typeof(T).IsValueType ? null : (object)Content;
 
         IValueRW IDataRW<string>.this[string key] => this[key];
 
@@ -260,7 +261,7 @@ namespace Swifter.RW
         /// <param name="length">字段名称长度</param>
         /// <returns>返回 Id64 值</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public abstract long GetId64(ref byte firstSymbol, int length);
+        public abstract long GetId64(ref Utf8Byte firstSymbol, int length);
 
         /// <summary>
         /// 获取 UTF8 字段名称的 Id64 值。
@@ -268,7 +269,7 @@ namespace Swifter.RW
         /// <param name="symbols">字段名称</param>
         /// <returns>返回 Id64 值</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public long GetId64(IEnumerable<byte> symbols)
+        public long GetId64(IEnumerable<Utf8Byte> symbols)
         {
             var bytes =  symbols.ToArray();
 

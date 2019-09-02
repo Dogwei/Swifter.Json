@@ -1,5 +1,4 @@
 ﻿using Swifter.RW;
-using System;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -320,23 +319,29 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static char GetUtf8Char(byte* bytes, ref int index)
         {
-            var chr = (char)bytes[index];
+            var chr = (int)bytes[index];
 
             ++index;
 
-            if (chr <= 0x7f) return chr;
+            if (chr <= 0x7f) return (char)chr;
 
-            chr = (char)(((chr & 0x3f) << 6) | (bytes[index] & 0x3f));
-
-            ++index;
-
-            if (chr <= 0x7ff) return chr;
-
-            chr = (char)(((chr & 0x7ff) << 6) | (bytes[index] & 0x3f));
+            chr = (((chr & 0x3f) << 6) | (bytes[index] & 0x3f));
 
             ++index;
 
-            return chr;
+            if (chr <= 0x7ff) return (char)chr;
+
+            chr = (((chr & 0x7ff) << 6) | (bytes[index] & 0x3f));
+
+            ++index;
+
+            if (chr <= 0xffff) return (char)chr;
+
+            chr = (((chr & 0x7fff) << 6) | (bytes[index] & 0x3f));
+
+            ++index;
+
+            return (char)chr;
         }
 
         /// <summary>
@@ -501,183 +506,6 @@ namespace Swifter.Tools
         public static char UpperCharAt(string st, int index)
         {
             return ToUpper(st[index]);
-        }
-
-        /// <summary>
-        /// 将字符串中的格式项 ({Index})替换为数组中相应的字符串。可以用 '\' 字符让字符串直接复制下一个字符。
-        /// </summary> 
-        /// <param name="text">字符串</param>
-        /// <param name="args">数组</param>
-        /// <returns>返回一个新的字符串。</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string Format(string text, params string[] args)
-        {
-            if (text == null)
-            {
-                return null;
-            }
-
-            fixed (char* pText = text)
-            {
-                int resultLength;
-                int begin = 0;
-                int end = resultLength = text.Length;
-
-            GetLengthLoop:
-                int index = IndexOf(pText, begin, end, '\\', '{');
-
-                if (index == -1)
-                {
-                    if (begin == 0)
-                    {
-                        return text;
-                    }
-
-                    goto Format;
-                }
-
-                if (pText[index] == '\\')
-                {
-                    --resultLength;
-
-                    begin = index + 2;
-                }
-                else
-                {
-                    ++index;
-
-                    begin = index;
-
-                    if (index < end && pText[index] >= '0' && pText[index] <= '9')
-                    {
-                        int number = pText[index] - '0';
-
-                        for (++index; index < end; ++index)
-                        {
-                            if (pText[index] >= '0' && pText[index] <= '9')
-                            {
-                                number = number * 10 + pText[index] - '0';
-                            }
-                            else if (pText[index] == '}')
-                            {
-                                if (args[number] != null)
-                                {
-                                    resultLength += args[number].Length;
-
-                                    resultLength -= index - begin + 2;
-                                }
-
-                                begin = index + 1;
-
-                                break;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                goto GetLengthLoop;
-
-            Format:
-                begin = 0;
-
-                var result = MakeString(resultLength);
-
-                int resultIndex = 0;
-
-                fixed (char* pResult = result)
-                {
-                FormatLoop:
-                    index = IndexOf(pText, begin, end, '\\', '{');
-
-                    if (index == -1)
-                    {
-                        index = end;
-                    }
-
-                    for (; begin < index; ++begin)
-                    {
-                        pResult[resultIndex] = pText[begin];
-
-                        ++resultIndex;
-                    }
-
-                    if (resultIndex == resultLength)
-                    {
-                        return result;
-                    }
-
-                    if (pText[index] == '\\')
-                    {
-                        ++index;
-
-                        if (index == end)
-                        {
-                            return result;
-                        }
-
-                        pResult[resultIndex] = pText[index];
-
-                        ++resultIndex;
-
-                        begin = index + 1;
-                    }
-                    else
-                    {
-                        ++index;
-
-                        if (index < end && pText[index] >= '0' && pText[index] <= '9')
-                        {
-                            int number = pText[index] - '0';
-
-                            for (++index; index < end; ++index)
-                            {
-                                if (pText[index] >= '0' && pText[index] <= '9')
-                                {
-                                    number = number * 10 + pText[index] - '0';
-                                }
-                                else if (pText[index] == '}')
-                                {
-                                    if (args[number] != null)
-                                    {
-                                        int argsLength = args[number].Length;
-
-                                        fixed (char* pArg = args[number])
-                                        {
-                                            for (int argsIndex = 0; argsIndex < argsLength; argsIndex++)
-                                            {
-                                                pResult[resultIndex] = pArg[argsIndex];
-
-                                                ++resultIndex;
-                                            }
-                                        }
-                                    }
-
-                                    begin = index + 1;
-
-                                    goto FormatLoop;
-                                }
-                                else
-                                {
-                                    break;
-                                }
-                            }
-                        }
-
-                        for (; begin < index; ++begin)
-                        {
-                            pResult[resultIndex] = pText[begin];
-
-                            ++resultIndex;
-                        }
-                    }
-
-                    goto FormatLoop;
-                }
-            }
         }
 
         /// <summary>
@@ -993,34 +821,6 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 去除字符串两端的的空白字符
-        /// </summary>
-        /// <param name="pText">字符串</param>
-        /// <param name="begin">开始索引</param>
-        /// <param name="end">结束索引，裁剪的位置不包含此值。</param>
-        /// <returns>返回一个新的字符串。</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string Trim(char* pText, int begin, int end)
-        {
-            while (begin < end && IsWhiteSpace(pText[begin]))
-            {
-                ++begin;
-            }
-
-            do
-            {
-                --end;
-            } while (end >= begin && IsWhiteSpace(pText[end]));
-
-            if (end >= begin)
-            {
-                return new string(pText, begin, end - begin + 1);
-            }
-
-            return "";
-        }
-
-        /// <summary>
         /// 判断一个字符是否为空白字符
         /// </summary>
         /// <param name="c">字符</param>
@@ -1029,120 +829,6 @@ namespace Swifter.Tools
         public static bool IsWhiteSpace(char c)
         {
             return c == 0x20 || (c >= 0x9 && c <= 0xd) || c == 0x85 || c == 0xa0;
-        }
-
-        /// <summary>
-        /// 在字符串中找到指定字符的索引，没找到则返回 -1
-        /// </summary>
-        /// <param name="pText">字符串</param>
-        /// <param name="c">字符</param>
-        /// <param name="begin">开始查找的位置。</param>
-        /// <param name="end">结束查找的位置，不包含此值。</param>
-        /// <returns>返回一个 int 值。</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int IndexOf(char* pText, int begin, int end, char c)
-        {
-            while (begin < end)
-            {
-                if (pText[begin] == c)
-                {
-                    return begin;
-                }
-
-                ++begin;
-            }
-
-            return -1;
-        }
-
-        /// <summary>
-        /// 在字符串中找到第一个字符 1 或字符 2 的索引，两个字符都没找到则返回 -1
-        /// </summary>
-        /// <param name="pText">字符串</param>
-        /// <param name="char1">字符 1</param>
-        /// <param name="char2">字符 2</param>
-        /// <param name="begin">开始查找的位置。</param>
-        /// <param name="end">结束查找的位置，不包含此值。</param>
-        /// <returns>返回一个 int 值。</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int IndexOf(char* pText, int begin, int end, char char1, char char2)
-        {
-            while (begin < end)
-            {
-                if (pText[begin] == char1 || pText[begin] == char2)
-                {
-                    return begin;
-                }
-
-                ++begin;
-            }
-
-            return -1;
-        }
-
-        /// <summary>
-        /// 在字符串 1 中找到字符串 2 的索引，没找到则返回 -1
-        /// </summary>
-        /// <param name="pText">字符串 1</param>
-        /// <param name="chars">字符串 2</param>
-        /// <param name="begin">开始查找的位置</param>
-        /// <param name="end">结束查找的位置，不包含此值。</param>
-        /// <returns>返回一个 int 值。</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int IndexOf(char* pText, int begin, int end, string chars)
-        {
-            if (chars.Length == 0)
-            {
-                return -1;
-            }
-
-        Loop:
-            while (begin < end)
-            {
-                if (pText[begin] == chars[0])
-                {
-                    for (int i = 1, j = begin + 1; i < chars.Length && j < end; ++i, ++j)
-                    {
-                        if (chars[i] != pText[j])
-                        {
-                            goto Loop;
-                        }
-                    }
-
-                    return begin;
-                }
-
-                ++begin;
-            }
-
-            return -1;
-        }
-
-        /// <summary>
-        /// 在字符串中找到字符集合中第一个出现的索引，没找到则返回 -1
-        /// </summary>
-        /// <param name="pText">字符串</param>
-        /// <param name="chars">字符集合</param>
-        /// <param name="begin">开始查找的位置。</param>
-        /// <param name="end">结束查找的位置，不包含此值。</param>
-        /// <returns>返回一个 int 值。</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int IndexOf(char* pText, int begin, int end, char[] chars)
-        {
-            while (begin < end)
-            {
-                for (int i = 0; i < chars.Length; ++i)
-                {
-                    if (pText[begin] == chars[i])
-                    {
-                        return begin;
-                    }
-                }
-
-                ++begin;
-            }
-
-            return -1;
         }
 
         /// <summary>
@@ -1246,14 +932,20 @@ namespace Swifter.Tools
 
             return -1;
         }
-        
+
         /// <summary>
         /// 获取字符串的元数据引用。
         /// </summary>
         /// <param name="str">字符串</param>
         /// <returns>返回第一个字符的引用</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref char GetRawStringData(string str) => ref Unsafe.AddByteOffset(ref Unsafe.AsRef<char>(str), RuntimeHelpers.OffsetToStringData);
+        public static ref char GetRawStringData(string str)
+        {
+            fixed (char* pStr = str)
+            {
+                return ref *pStr;
+            }
+        }
 
         /// <summary>
         /// 创建一个字符串。

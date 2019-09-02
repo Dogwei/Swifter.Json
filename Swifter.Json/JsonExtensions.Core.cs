@@ -1,5 +1,4 @@
-﻿
-#if NETCOREAPP && !NETCOREAPP2_0
+﻿#if NETCOREAPP && !NETCOREAPP2_0
 
 using System;
 using System.Runtime.CompilerServices;

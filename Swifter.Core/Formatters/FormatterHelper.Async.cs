@@ -1,8 +1,10 @@
 ﻿#if NET45 || NET451 || NET47 || NET471 || NETSTANDARD || NETCOREAPP
 
 using Swifter.RW;
+using Swifter.Tools;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace Swifter.Formatters

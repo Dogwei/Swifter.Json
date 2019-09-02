@@ -9,7 +9,7 @@ namespace Swifter.Tools
     /// 提供指定值类型的全局内存缓存。
     /// </summary>
     /// <typeparam name="T">指定值类型</typeparam>
-    public sealed partial class HGlobalCache<T> where T : struct
+    public sealed unsafe partial class HGlobalCache<T> where T : struct
     {
         static readonly T[] empty = new T[0];
 
@@ -17,6 +17,7 @@ namespace Swifter.Tools
         /// 可以设置的最大缓存大小。
         /// </summary>
         public const int AbsolutelyMaxSize = 400000000;
+
         /// <summary>
         /// 可以设置的最小缓存大小。
         /// </summary>
@@ -68,12 +69,12 @@ namespace Swifter.Tools
         /// <summary>
         /// 全局字符串内存地址。
         /// </summary>
-        public IntPtr Address { get; private set; }
+        public IntPtr Address => (IntPtr)Pointer;
 
         /// <summary>
         /// 全局字符串内存地址。
         /// </summary>
-        public unsafe void* Pointer => (void*)Address;
+        public void* Pointer { get; private set; }
 
         /// <summary>
         /// 获取指定位置的 T 元素。
@@ -95,7 +96,7 @@ namespace Swifter.Tools
         /// <summary>
         /// 首个 T 元素引用。
         /// </summary>
-        public unsafe ref T First => ref Unsafe.AsRef<T>(Address);
+        public unsafe ref T First => ref Unsafe.AsRef<T>(Pointer);
 
         /// <summary>
         /// 总 Byte 数量。
@@ -145,7 +146,7 @@ namespace Swifter.Tools
 
             gc = GCHandle.Alloc(array, GCHandleType.Pinned);
 
-            Address = Unsafe.AsIntPtr(ref array[0]);
+            Pointer = Unsafe.AsPointer(ref array[0]);
         }
     }
 }

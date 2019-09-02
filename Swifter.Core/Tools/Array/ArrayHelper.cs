@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.Tools
@@ -191,60 +190,6 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 判断当前平台是否支持一维数组信息结构。
-        /// </summary>
-        public static bool IsSupportedOneRankValueArrayInfo => OneRankValueArrayInfo<byte>.Available && OneRankValueArrayInfo<char>.Available;
-
-        /// <summary>
-        /// 将一块内存转换为临时数组对象（非托管）。
-        /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="address">内存地址</param>
-        /// <param name="length">内存元素数量</param>
-        /// <param name="starts">返回一个起始位置的内容备份，此实例长度加临时数组长度刚好等于元素数量</param>
-        /// <returns>返回一个临时数组</returns>
-        public static T[] AsTempOneRankValueArray<T>(void* address, int length, out T[] starts) where T : struct
-        {
-            if (!(IsSupportedOneRankValueArrayInfo && OneRankValueArrayInfo<T>.Available))
-            {
-                throw new PlatformNotSupportedException("This operation is not supported by the current platform.");
-            }
-
-            var startsLength = (OneRankValueArrayInfo<T>.ElementOffset + Unsafe.SizeOf<T>() - 1) / Unsafe.SizeOf<T>();
-
-            if (length < startsLength)
-            {
-                throw new ArgumentException("Not enough length to store array information.", nameof(length));
-            }
-
-            starts = new T[startsLength];
-
-            Unsafe.CopyBlock(
-                ref Unsafe.As<T, byte>(ref starts[0]),
-                ref Unsafe.AsRef<byte>(address),
-                (uint)(startsLength * Unsafe.SizeOf<T>()));
-
-            ref var pArray = ref Unsafe.AddByteOffset(
-                ref Unsafe.AsRef<OneRankValueArrayInfo<T>>(address),
-                (startsLength * Unsafe.SizeOf<T>()) - OneRankValueArrayInfo<T>.ElementOffset);
-
-            pArray.TypeHandle = OneRankValueArrayInfo<T>.ObjectTypeHandle;
-            pArray.Length = (IntPtr)(length - startsLength);
-
-            return Unsafe.As<T[]>(Unsafe.AsObject(ref pArray));
-        }
-
-        /// <summary>
-        /// 将一块内存转换为临时数组对象（非托管）。
-        /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="address">内存地址</param>
-        /// <param name="length">内存元素数量</param>
-        /// <param name="starts">返回一个起始位置的内容备份，此实例长度加临时数组长度刚好等于元素数量</param>
-        /// <returns>返回一个临时数组</returns>
-        public static unsafe T[] AsTempOneRankValueArray<T>(IntPtr address, int length, out T[] starts) where T : struct => AsTempOneRankValueArray((void*)address, length, out starts);
-
-        /// <summary>
         /// 合并一个数组和一个元素。
         /// </summary>
         /// <typeparam name="T">元素类型</typeparam>
@@ -330,10 +275,9 @@ namespace Swifter.Tools
                 case 14: return ref Unsafe.As<TElement[,,,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11], indices[12], indices[13]];
                 case 15: return ref Unsafe.As<TElement[,,,,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11], indices[12], indices[13], indices[14]];
                 case 16: return ref Unsafe.As<TElement[,,,,,,,,,,,,,,,]>(array)[indices[0], indices[1], indices[2], indices[3], indices[4], indices[5], indices[6], indices[7], indices[8], indices[9], indices[10], indices[11], indices[12], indices[13], indices[14], indices[15]];
+                default:
+                    throw new NotSupportedException("Dimension exceeds maximum limit.");
             }
-
-
-            throw new NotSupportedException("Dimension exceeds maximum limit.");
         }
 
         /// <summary>
@@ -363,10 +307,9 @@ namespace Swifter.Tools
                 case 14: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11], lengths[12], lengths[13]]);
                 case 15: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11], lengths[12], lengths[13], lengths[14]]);
                 case 16: return Unsafe.As<TArray>(new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4], lengths[5], lengths[6], lengths[7], lengths[8], lengths[9], lengths[10], lengths[11], lengths[12], lengths[13], lengths[14], lengths[15]]);
+                default:
+                    throw new NotSupportedException("Dimension exceeds maximum limit.");
             }
-
-
-            throw new NotSupportedException("Dimension exceeds maximum limit.");
         }
 
         /// <summary>
@@ -414,7 +357,7 @@ namespace Swifter.Tools
         {
             switch (lengths.Length)
             {
-                case 1: Copy1D();return;
+                case 1: Copy1D(); return;
                 case 2: Copy2D(); return;
                 case 3: Copy3D(); return;
                 case 4: Copy4D(); return;
@@ -492,6 +435,18 @@ namespace Swifter.Tools
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// 往标识符列表中添加一个标识符。
+        /// </summary>
+        /// <typeparam name="TKey">标识符类型</typeparam>
+        /// <param name="identities">标识符列表</param>
+        /// <param name="identity">标识符</param>
+        /// <param name="value">一个 bool 值，默认为 true</param>
+        public static void Add<TKey>(this Dictionary<TKey, bool> identities, TKey identity, bool value = true)
+        {
+            identities.Add(identity, value);
         }
     }
 }

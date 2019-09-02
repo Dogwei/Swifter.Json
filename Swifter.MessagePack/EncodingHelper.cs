@@ -5,7 +5,7 @@ namespace Swifter.MessagePack
     public static unsafe class EncodingHelper
     {
         public const char ASCIIMaxChar = (char)0x7f;
-        public const int Utf8MaxBytesCount = 4;
+        public const int Utf8MaxBytesCount = 3;
 
         public static int GetUtf8Bytes(char* chars, int length, byte* bytes)
         {
@@ -167,7 +167,7 @@ namespace Swifter.MessagePack
 
         public static int GetUtf8MaxBytesLength(int charsLength)
         {
-            return charsLength * Utf8MaxBytesCount;
+            return charsLength + 1 * Utf8MaxBytesCount;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]

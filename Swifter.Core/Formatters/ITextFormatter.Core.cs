@@ -1,6 +1,7 @@
 ﻿#if NETCOREAPP && !NETCOREAPP2_0
 
-using Swifter.Writers;
+
+using Swifter.RW;
 using System;
 
 namespace Swifter.Formatters

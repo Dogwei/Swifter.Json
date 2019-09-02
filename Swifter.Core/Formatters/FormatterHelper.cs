@@ -2,13 +2,14 @@
 using Swifter.Tools;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Swifter.Formatters
 {
     /// <summary>
     /// 提供字符类文档的格式的扩展方法。
     /// </summary>
-    public static partial class FormatterHelper
+    public static unsafe partial class FormatterHelper
     {
         /// <summary>
         /// 将文档字符串反序列化到指定的对象中。

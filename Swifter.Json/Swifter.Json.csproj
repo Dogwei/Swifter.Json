@@ -1,20 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;<!--netcoreapp3.0;-->netcoreapp2.1;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net20;net30;net35;net40;net45;net451;net47;net471;netcoreapp2.0;netcoreapp3.0;netcoreapp2.1;netstandard2.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.2.9.1</Version>
+    <Version>1.2.9.4</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Json.xml</DocumentationFile>
     <Description>A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.</Description>
     <LangVersion>preview</LangVersion>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIconUrl>https://raw.githubusercontent.com/Dogwei/Swifter.Json/master/ICON.PNG</PackageIconUrl>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Swifter.Core" Version="1.2.9.1" />
-    <!--<ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />-->
-  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\LICENSE">
@@ -23,6 +19,27 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Swifter.Core" Version="1.2.9.4" />
+  </ItemGroup>
 
+  <ItemGroup>
+    <None Update="JsonFormatter.Overload.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>JsonFormatter.Overload.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
 
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="JsonFormatter.Overload.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>JsonFormatter.Overload.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  
 </Project>

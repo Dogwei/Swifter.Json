@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Swifter.Reflection;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -722,6 +723,15 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 对栈顶的两个值进行 求余运算，返回一个值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static void Rem(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Rem);
+        }
+
+        /// <summary>
         /// 对栈顶的两个值进行 按位异或，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
@@ -828,6 +838,88 @@ namespace Swifter.Tools
         public static void Return(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Ret);
+        }
+
+        /// <summary>
+        /// 定义自动完成的属性。
+        /// </summary>
+        /// <param name="typeBuilder">类型生成器</param>
+        /// <param name="name">属性的名称</param>
+        /// <param name="type">属性的类型</param>
+        /// <returns>返回一个属性生成器</returns>
+        public static PropertyBuilder DefineAutoProperty(this TypeBuilder typeBuilder, string name, Type type)
+        {
+            var propertyBuilder = typeBuilder.DefineProperty(name, PropertyAttributes.HasDefault, type, Type.EmptyTypes);
+            var fieldBuilder = typeBuilder.DefineField($"_{name}_{Guid.NewGuid().ToString("N")}", type, FieldAttributes.Private | FieldAttributes.SpecialName);
+
+            var getMethodBuilder = typeBuilder.DefineMethod($"{"get"}_{name}_{Guid.NewGuid().ToString("N")}", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, type, Type.EmptyTypes);
+
+            var getILGen = getMethodBuilder.GetILGenerator();
+
+            getILGen.LoadArgument(0);
+            getILGen.LoadField(fieldBuilder);
+            getILGen.Return();
+
+            var setMethodBuilder = typeBuilder.DefineMethod($"{"set"}_{name}_{Guid.NewGuid().ToString("N")}", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, typeof(void), new Type[] { type});
+
+            var setILGen = setMethodBuilder.GetILGenerator();
+
+            setILGen.LoadArgument(0);
+            setILGen.LoadArgument(1);
+            setILGen.StoreField(fieldBuilder);
+            setILGen.Return();
+
+            propertyBuilder.SetGetMethod(getMethodBuilder);
+            propertyBuilder.SetSetMethod(setMethodBuilder);
+
+            return propertyBuilder;
+        }
+
+        /// <summary>
+        /// 将特性转换为特性生成器。
+        /// </summary>
+        /// <typeparam name="TAttribute">特性类型</typeparam>
+        /// <param name="attribute">特性实例</param>
+        /// <returns>返回一个将特性转换为特性生成器</returns>
+        public static CustomAttributeBuilder ToCustomAttributeBuilder<TAttribute>(this TAttribute attribute) where TAttribute : Attribute, new()
+        {
+            var emptyValues = new object[0];
+
+            var constructor = typeof(TAttribute).GetConstructor(
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static, 
+                Type.DefaultBinder, 
+                Type.EmptyTypes,
+                null);
+
+            var constructorArgs = emptyValues;
+
+            var namedFields = new List<FieldInfo>();
+            var fieldValues = new List<object>();
+            var namedProperties = new List<PropertyInfo>();
+            var propertyValues = new List<object>();
+
+            foreach (var item in typeof(TAttribute).GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (item.CanRead && item.CanWrite && item.GetValue(attribute, emptyValues) is object value)
+                {
+                    namedProperties.Add(item);
+                    propertyValues.Add(value);
+                }
+            }
+
+            foreach (var item in typeof(TAttribute).GetFields(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (!item.IsInitOnly && item.GetValue(attribute) is object value)
+                {
+                    namedFields.Add(item);
+                    fieldValues.Add(value);
+                }
+            }
+
+            return new CustomAttributeBuilder(
+                constructor, constructorArgs, 
+                namedProperties.ToArray(), propertyValues.ToArray(), 
+                namedFields.ToArray(), fieldValues.ToArray());
         }
 
         /// <summary>

@@ -1,8 +1,8 @@
 ﻿using Swifter.Formatters;
-using Swifter.Readers;
+
 using Swifter.RW;
 using Swifter.Tools;
-using Swifter.Writers;
+
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -200,7 +200,7 @@ namespace Swifter.MessagePack
 
 
         Extension:
-            var code = Read();
+            var code = (sbyte)Read();
 
             switch (code)
             {
@@ -337,7 +337,7 @@ namespace Swifter.MessagePack
 
             if (size >= 1)
             {
-                var code = Read();
+                var code = (sbyte)Read();
 
                 if (code == MessagePackExtensionCode.Timestamp)
                 {
@@ -533,7 +533,7 @@ namespace Swifter.MessagePack
 
             if (size >= 0)
             {
-                var code = Read();
+                var code = (sbyte)Read();
 
                 switch (code)
                 {
@@ -637,7 +637,7 @@ namespace Swifter.MessagePack
 
             if (size >= 0)
             {
-                return new MessagePackExtension(size, Read(), this);
+                return new MessagePackExtension(size, (sbyte)Read(), this);
             }
 
             return null;
@@ -814,7 +814,7 @@ namespace Swifter.MessagePack
             {
                 valueWriter.Initialize(size);
 
-                if (valueWriter is IId64DataRW<byte> fastWriter)
+                if (valueWriter is IId64DataRW<Utf8Byte> fastWriter)
                 {
                     for (int i = 0; i < size; i++)
                     {
@@ -822,7 +822,7 @@ namespace Swifter.MessagePack
 
                         if (bytesLength >= 0)
                         {
-                            var id64 = fastWriter.GetId64(ref current[0], bytesLength);
+                            var id64 = fastWriter.GetId64(ref Unsafe.As<byte, Utf8Byte>(ref current[0]), bytesLength);
 
                             current += bytesLength;
 
@@ -1136,7 +1136,7 @@ namespace Swifter.MessagePack
 
             if (size >= 0)
             {
-                var code = Read();
+                var code = (sbyte)Read();
 
                 switch (code)
                 {
@@ -1314,12 +1314,13 @@ namespace Swifter.MessagePack
         }
     }
 
+    [Serializable]
     public sealed class MessagePackExtension : MessagePackObject
     {
         public readonly MessagePackBinary Binary;
-        public readonly byte Code;
+        public readonly sbyte Code;
 
-        internal MessagePackExtension(int length, byte code, MessagePackDeserializer deserializer)
+        internal MessagePackExtension(int length, sbyte code, MessagePackDeserializer deserializer)
         {
             Code = code;
 

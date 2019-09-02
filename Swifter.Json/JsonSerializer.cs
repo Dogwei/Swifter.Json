@@ -1,16 +1,14 @@
 ﻿using Swifter.Formatters;
-using Swifter.Readers;
+
 using Swifter.RW;
 using Swifter.Tools;
-using Swifter.Writers;
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 
 using static Swifter.Json.JsonCode;
-
-using HGCache = Swifter.Tools.HGlobalCache<char>;
 
 namespace Swifter.Json
 {
@@ -25,18 +23,19 @@ namespace Swifter.Json
         IValueFilter<int>
         where TMode : struct
     {
-        public readonly JsonFormatterOptions options;
-        public readonly HGCache hGCache;
-        public readonly int maxDepth;
+        const JsonFormatterOptions ReturnHG = ((JsonFormatterOptions)0x4000) | JsonFormatterOptions.Default;
 
-        public TextWriter textWriter;
-        public JsonFormatter jsonFormatter;
+        public readonly JsonFormatterOptions Options;
+        public readonly HGlobalCache<char> HGCache;
+        public readonly int MaxDepth;
+
+        public TextWriter TextWriter;
+        public JsonFormatter JsonFormatter;
 
         public TMode mode;
 
         public int depth;
         public int offset;
-
 
         public ref string LineBreakChars => ref Unsafe.As<TMode, JsonSerializeModes.ComplexMode>(ref mode).LineBreakChars;
 
@@ -50,46 +49,53 @@ namespace Swifter.Json
 
         public ref RWPathInfo Reference => ref Unsafe.As<TMode, JsonSerializeModes.ReferenceMode>(ref mode).References.Reference;
 
-        public HGCache HGCache
-        {
-            get
-            {
-                Flush();
-
-                return hGCache;
-            }
-        }
-
         public void Flush()
         {
             // 1: ,
-            hGCache.Count = offset - 1;
+            HGCache.Count = offset - 1;
         }
 
         public void Clear()
         {
-            hGCache.Count = 0;
-
             offset = 0;
         }
 
-        public JsonSerializer(JsonFormatterOptions options, HGCache hGCache, int maxDepth)
+        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth)
+        {
+            HGCache = hGCache;
+            MaxDepth = maxDepth;
+        }
+
+        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, JsonFormatterOptions options)
             : this(hGCache, maxDepth)
         {
-            this.options = options;
+            Options = options;
         }
 
-        public JsonSerializer(HGCache hGCache, int maxDepth)
+        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter)
+            : this(hGCache, maxDepth)
         {
-            this.hGCache = hGCache;
-            this.maxDepth = maxDepth;
+            TextWriter = textWriter;
         }
 
-        public JsonSerializer()
+        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter, JsonFormatterOptions options)
+            : this(hGCache, maxDepth)
         {
-            hGCache = new HGCache();
+            TextWriter = textWriter;
+            Options = options;
+        }
 
-            maxDepth = int.MaxValue;
+        public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache, int maxDepth, JsonFormatterOptions options)
+            : this(hGCache, maxDepth)
+        {
+            JsonFormatter = jsonFormatter;
+            Options = options;
+        }
+
+        public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter, JsonFormatterOptions options)
+            : this(jsonFormatter, hGCache,  maxDepth, options)
+        {
+            TextWriter = textWriter;
         }
 
         public IValueWriter this[string key]
@@ -101,11 +107,11 @@ namespace Swifter.Json
                     Reference = RWPathInfo.Create(key, Reference.Parent);
                 }
 
-                WriteKeyBefore();
+                AppendKeyBefore();
 
                 InternalWriteString(key);
 
-                WriteKeyAfter();
+                AppendKeyAfter();
 
                 return this;
             }
@@ -124,7 +130,7 @@ namespace Swifter.Json
             }
         }
 
-        public long TargetedId => jsonFormatter?.id ?? 0;
+        public long TargetedId => JsonFormatter?.targeted_id ?? 0;
 
         public IEnumerable<string> Keys => null;
 
@@ -247,9 +253,9 @@ namespace Swifter.Json
         {
             if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
             {
-                if ((options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 &&
-                    (options & JsonFormatterOptions.IgnoreNull) != 0 &&
-                    (options & JsonFormatterOptions.ArrayOnFilter) != 0 && !Reference.IsRoot)
+                if ((Options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 &&
+                    (Options & JsonFormatterOptions.IgnoreNull) != 0 &&
+                    (Options & JsonFormatterOptions.ArrayOnFilter) != 0 && !Reference.IsRoot)
                 {
                 }
                 else if (!CheckObjectReference(dataReader))
@@ -264,7 +270,7 @@ namespace Swifter.Json
 
             Append(FixArray);
 
-            WriteStructBefore();
+            AppendStructBefore();
 
             var isInArray = false;
 
@@ -295,7 +301,7 @@ namespace Swifter.Json
                         Reference = RWPathInfo.Create(string.Empty, Reference);
                     }
 
-                    if (options >= JsonFormatterOptions.IgnoreNull && (options & JsonFormatterOptions.ArrayOnFilter) != 0)
+                    if (Options >= JsonFormatterOptions.IgnoreNull && (Options & JsonFormatterOptions.ArrayOnFilter) != 0)
                     {
                         dataReader.OnReadAll(this, this);
                     }
@@ -320,7 +326,7 @@ namespace Swifter.Json
                 --offset;
             }
 
-            WriteStructAfter();
+            AppendStructAfter();
 
             Append(ArrayEnding);
 
@@ -329,7 +335,7 @@ namespace Swifter.Json
                 IsInArray = isInArray;
             }
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteBoolean(bool value)
@@ -356,12 +362,31 @@ namespace Swifter.Json
                 Append('e');
             }
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteByte(byte value) => WriteUInt64(value);
 
-        public void WriteChar(char value) => WriteString(value.ToString());
+        public void WriteChar(char value)
+        {
+            Expand(6);
+
+            Append(FixString);
+
+            if (value <= MaxEscapeChar && EscapeMap[value] != default)
+            {
+                Append(FixEscape);
+                Append(EscapeMap[value]);
+            }
+            else
+            {
+                Append(value);
+            }
+
+            Append(FixString);
+
+            AppendValueAfter();
+        }
 
         public void WriteDateTime(DateTime value)
         {
@@ -371,11 +396,11 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            offset += DateTimeHelper.ToISOString(value, hGCache.GetPointer() + offset);
+            offset += DateTimeHelper.ToISOString(value, HGCache.GetPointer() + offset);
 
             Append(FixString);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteDecimal(decimal value)
@@ -384,9 +409,9 @@ namespace Swifter.Json
 
             Expand(33);
 
-            offset += NumberHelper.ToString(value, hGCache.GetPointer() + offset);
+            offset += NumberHelper.ToString(value, HGCache.GetPointer() + offset);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteDouble(double value)
@@ -397,14 +422,14 @@ namespace Swifter.Json
             {
                 Expand(24);
 
-                offset += NumberHelper.Decimal.ToString(value, hGCache.GetPointer() + offset);
+                offset += NumberHelper.Decimal.ToString(value, HGCache.GetPointer() + offset);
             }
             else
             {
                 InternalWriteDoubleString(value);
             }
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteInt16(short value) => WriteInt64(value);
@@ -417,22 +442,22 @@ namespace Swifter.Json
 
             InternalWriteInt64(value);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void InternalWriteInt64(long value)
         {
             Expand(21);
 
-            offset += NumberHelper.Decimal.ToString(value, hGCache.GetPointer() + offset);
+            offset += NumberHelper.Decimal.ToString(value, HGCache.GetPointer() + offset);
         }
 
         public void WriteObject(IDataReader<string> dataReader)
         {
             if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
             {
-                if ((options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 &&
-                    (options & JsonFormatterOptions.IgnoreNull) != 0 && !Reference.IsRoot)
+                if ((Options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 &&
+                    (Options & JsonFormatterOptions.IgnoreNull) != 0 && !Reference.IsRoot)
                 {
                 }
                 else if (!CheckObjectReference(dataReader))
@@ -447,7 +472,7 @@ namespace Swifter.Json
 
             Append(FixObject);
 
-            WriteStructBefore();
+            AppendStructBefore();
 
             var isInArray = false;
 
@@ -478,7 +503,7 @@ namespace Swifter.Json
                         Reference = RWPathInfo.Create(string.Empty, Reference);
                     }
 
-                    if (options >= JsonFormatterOptions.IgnoreNull)
+                    if (Options >= JsonFormatterOptions.IgnoreNull)
                     {
                         dataReader.OnReadAll(this, this);
                     }
@@ -503,7 +528,7 @@ namespace Swifter.Json
                 --offset;
             }
 
-            WriteStructAfter();
+            AppendStructAfter();
 
             Append(ObjectEnding);
 
@@ -512,7 +537,7 @@ namespace Swifter.Json
                 IsInArray = isInArray;
             }
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteSByte(sbyte value) => WriteInt64(value);
@@ -531,7 +556,7 @@ namespace Swifter.Json
 
                 InternalWriteString(value);
 
-                WriteValueAfter();
+                AppendValueAfter();
             }
         }
 
@@ -545,14 +570,14 @@ namespace Swifter.Json
 
             InternalWriteUInt64(value);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void InternalWriteUInt64(ulong value)
         {
             Expand(21);
 
-            offset += NumberHelper.Decimal.ToString(value, hGCache.GetPointer() + offset);
+            offset += NumberHelper.Decimal.ToString(value, HGCache.GetPointer() + offset);
         }
 
         void IValueWriter<Guid>.WriteValue(Guid value) => WriteGuid(value);
@@ -567,11 +592,11 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            offset += NumberHelper.ToString(value, hGCache.GetPointer() + offset);
+            offset += NumberHelper.ToString(value, HGCache.GetPointer() + offset);
 
             Append(FixString);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteDateTimeOffset(DateTimeOffset value)
@@ -582,17 +607,17 @@ namespace Swifter.Json
 
             Append('"');
 
-            offset += DateTimeHelper.ToISOString(value, hGCache.GetPointer() + offset);
+            offset += DateTimeHelper.ToISOString(value, HGCache.GetPointer() + offset);
 
             Append('"');
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Expand(int expandMinSize)
         {
-            if (hGCache.Capacity - offset < expandMinSize)
+            if (HGCache.Capacity - offset < expandMinSize)
             {
                 InternalExpand(expandMinSize);
             }
@@ -601,11 +626,11 @@ namespace Swifter.Json
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void InternalExpand(int expandMinSize)
         {
-            if (hGCache.Capacity == HGCache.MaxSize && textWriter != null && offset != 0)
+            if (HGCache.Capacity == HGlobalCache<char>.MaxSize && TextWriter != null && offset != 0)
             {
-                hGCache.Count = offset;
+                HGCache.Count = offset;
 
-                hGCache.WriteTo(textWriter);
+                HGCache.WriteTo(TextWriter);
 
                 offset = 0;
 
@@ -613,14 +638,14 @@ namespace Swifter.Json
             }
             else
             {
-                hGCache.Expand(expandMinSize);
+                HGCache.Expand(expandMinSize);
             }
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Append(char c)
         {
-            hGCache.GetPointer()[offset] = c;
+            HGCache.GetPointer()[offset] = c;
 
             ++offset;
         }
@@ -632,7 +657,7 @@ namespace Swifter.Json
 
             Expand(length + 2);
 
-            var pointer = hGCache.GetPointer() + offset;
+            var pointer = HGCache.GetPointer() + offset;
 
             for (int i = 0; i < length; ++i)
             {
@@ -647,7 +672,7 @@ namespace Swifter.Json
         {
             if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
             {
-                if ((options & JsonFormatterOptions.Indented) != 0)
+                if ((Options & JsonFormatterOptions.Indented) != 0)
                 {
                     if (IsInArray)
                     {
@@ -663,17 +688,17 @@ namespace Swifter.Json
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteValueAfter()
+        public void AppendValueAfter()
         {
             Append(ValueEnding);
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteKeyBefore()
+        public void AppendKeyBefore()
         {
             if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
             {
-                if ((options & JsonFormatterOptions.Indented) != 0)
+                if ((Options & JsonFormatterOptions.Indented) != 0)
                 {
                     if (!IsInArray)
                     {
@@ -689,19 +714,19 @@ namespace Swifter.Json
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteKeyAfter()
+        public void AppendKeyAfter()
         {
             Append(KeyEnding);
 
-            WriteMiddleChars();
+            AppendMiddleChars();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteMiddleChars()
+        public void AppendMiddleChars()
         {
             if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
             {
-                if ((options & JsonFormatterOptions.Indented) != 0)
+                if ((Options & JsonFormatterOptions.Indented) != 0)
                 {
                     Append(MiddleChars);
                 }
@@ -709,16 +734,16 @@ namespace Swifter.Json
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteStructBefore()
+        public void AppendStructBefore()
         {
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteStructAfter()
+        public void AppendStructAfter()
         {
             if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
             {
-                if ((options & JsonFormatterOptions.Indented) != 0)
+                if ((Options & JsonFormatterOptions.Indented) != 0)
                 {
                     Append(LineBreakChars);
 
@@ -737,7 +762,7 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            var pointer = hGCache.GetPointer() + offset;
+            var pointer = HGCache.GetPointer() + offset;
 
             for (int i = 0; i < value.Length; i++)
             {
@@ -747,11 +772,14 @@ namespace Swifter.Json
                 {
                     pointer[i] = FixEscape;
 
-                    Expand(value.Length - i + 5);
+                    if (HGCache.Capacity - offset < value.Length + 5)
+                    {
+                        InternalExpand(5);
+                    }
 
                     ++offset;
 
-                    pointer = hGCache.GetPointer() + offset;
+                    pointer = HGCache.GetPointer() + offset;
 
                     item = EscapeMap[item];
                 }
@@ -784,7 +812,7 @@ namespace Swifter.Json
             Append('l');
             Append('l');
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public bool Filter(ValueCopyer valueCopyer)
@@ -793,11 +821,11 @@ namespace Swifter.Json
 
             if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
             {
-                if (basicType == TypeCode.Object && (options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 && valueCopyer.Value is IDataReader dataReader)
+                if (basicType == TypeCode.Object && (Options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 && valueCopyer.Value is IDataReader dataReader)
                 {
                     var reference = GetReference(dataReader);
 
-                    if (reference != null && ((options & JsonFormatterOptions.MultiReferencingNull) != 0 || IsLoopReferencing(reference)))
+                    if (reference != null && ((Options & JsonFormatterOptions.MultiReferencingNull) != 0 || IsLoopReferencing(reference)))
                     {
                         valueCopyer.DirectWrite(null);
 
@@ -806,12 +834,12 @@ namespace Swifter.Json
                 }
             }
 
-            if ((options & JsonFormatterOptions.IgnoreNull) != 0 && basicType == TypeCode.Empty)
+            if ((Options & JsonFormatterOptions.IgnoreNull) != 0 && basicType == TypeCode.Empty)
             {
                 return false;
             }
 
-            if ((options & JsonFormatterOptions.IgnoreZero) != 0)
+            if ((Options & JsonFormatterOptions.IgnoreZero) != 0)
             {
                 switch (basicType)
                 {
@@ -840,7 +868,7 @@ namespace Swifter.Json
                 }
             }
 
-            if ((options & JsonFormatterOptions.IgnoreEmptyString) != 0
+            if ((Options & JsonFormatterOptions.IgnoreEmptyString) != 0
                 && basicType == TypeCode.String
                 && valueCopyer.ReadString() == string.Empty)
             {
@@ -855,7 +883,7 @@ namespace Swifter.Json
         {
             ++depth;
 
-            if (depth <= maxDepth)
+            if (depth <= MaxDepth)
             {
                 return true;
             }
@@ -868,7 +896,7 @@ namespace Swifter.Json
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void ThrowOutOfDepthException()
         {
-            if ((options & JsonFormatterOptions.OutOfDepthException) != 0)
+            if ((Options & JsonFormatterOptions.OutOfDepthException) != 0)
             {
                 throw new JsonOutOfDepthException();
             }
@@ -925,13 +953,13 @@ namespace Swifter.Json
 
                 if (reference != null)
                 {
-                    if ((options & JsonFormatterOptions.MultiReferencingReference) != 0)
+                    if ((Options & JsonFormatterOptions.MultiReferencingReference) != 0)
                     {
                         WriteReference(reference);
 
                         return false;
                     }
-                    else if ((options & JsonFormatterOptions.MultiReferencingNull) != 0)
+                    else if ((Options & JsonFormatterOptions.MultiReferencingNull) != 0)
                     {
                         WriteNull();
 
@@ -939,7 +967,7 @@ namespace Swifter.Json
                     }
                     else if (IsLoopReferencing(reference))
                     {
-                        if ((options & JsonFormatterOptions.LoopReferencingException) != 0)
+                        if ((Options & JsonFormatterOptions.LoopReferencingException) != 0)
                         {
                             throw new JsonLoopReferencingException(reference, Reference);
                         }
@@ -965,14 +993,14 @@ namespace Swifter.Json
 
             Append(FixObject);
 
-            WriteMiddleChars();
+            AppendMiddleChars();
 
             Expand(8);
 
             // "$ref"
             Append(RefKeyString);
 
-            WriteKeyAfter();
+            AppendKeyAfter();
 
             Expand(2);
 
@@ -984,11 +1012,11 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            WriteMiddleChars();
+            AppendMiddleChars();
 
             Append(ObjectEnding);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -1065,7 +1093,7 @@ namespace Swifter.Json
 
             Append(FixObject);
 
-            WriteStructBefore();
+            AppendStructBefore();
 
             AddDepth();
         }
@@ -1076,16 +1104,16 @@ namespace Swifter.Json
 
             Expand(2);
 
-            if (offset > 0 && hGCache.GetPointer()[--offset] != ValueEnding)
+            if (offset > 0 && HGCache.GetPointer()[--offset] != ValueEnding)
             {
                 ++offset;
             }
 
-            WriteStructAfter();
+            AppendStructAfter();
 
             Append(ObjectEnding);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WriteBeginArray()
@@ -1096,7 +1124,7 @@ namespace Swifter.Json
 
             Append(FixArray);
 
-            WriteStructBefore();
+            AppendStructBefore();
 
             AddDepth();
         }
@@ -1107,31 +1135,34 @@ namespace Swifter.Json
 
             Expand(2);
 
-            if (offset > 0 && hGCache.GetPointer()[--offset] != ValueEnding)
+            if (offset > 0 && HGCache.GetPointer()[--offset] != ValueEnding)
             {
                 ++offset;
             }
 
-            WriteStructAfter();
+            AppendStructAfter();
 
             Append(ArrayEnding);
 
-            WriteValueAfter();
+            AppendValueAfter();
         }
 
         public void WritePropertyName(string name)
         {
-            WriteKeyBefore();
+            AppendKeyBefore();
 
             InternalWriteString(name);
 
-            WriteKeyAfter();
+            AppendKeyAfter();
         }
 
         public override string ToString()
         {
+            Flush();
+
             return HGCache.ToStringEx();
         }
+
         public void MakeTargetedId()
         {
         }

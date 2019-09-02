@@ -1,6 +1,6 @@
-﻿using Swifter.Readers;
+﻿
 using Swifter.Tools;
-using Swifter.Writers;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -135,6 +135,40 @@ namespace Swifter.RW
         public static MethodInfo GetValueInterfaceInstanceMethod =>
             typeof(FastObjectRW<T>).GetMethod(nameof(FastObjectRW<T>.GetValueInterfaceInstance), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
 
+
+        public static BaseField ChooseField(BaseField field1, BaseField field2)
+        {
+            if (field1.Attribute != null)
+            {
+                return field1;
+            }
+
+            if (field2.Attribute != null)
+            {
+                return field2;
+            }
+
+            if (field1.Original is MemberInfo member1 && field2.Original is MemberInfo member2)
+            {
+                if (member1.DeclaringType == member2.DeclaringType)
+                {
+                    throw new ArgumentException($"Member name conflict of '{member1}' with '{member2}' from {typeof(T)}.");
+                }
+                else if(member1.DeclaringType.IsSubclassOf(member2.DeclaringType))
+                {
+                    return field1;
+                }
+                else
+                {
+                    return field2;
+                }
+            }
+            else
+            {
+                return field1;
+            }
+        }
+
         private static void GetFields(Type type, Dictionary<string, BaseField> dicFields)
         {
             if ((Options & FastObjectRWOptions.InheritedMembers) != 0)
@@ -164,7 +198,7 @@ namespace Swifter.RW
 
                             if (attributedField.CanRead || attributedField.CanWrite)
                             {
-                                dicFields[attributedField.Name] = attributedField;
+                                SaveField(attributedField);
 
                                 if (attributedField.CanRead && !item.IsPublic)
                                 {
@@ -179,9 +213,7 @@ namespace Swifter.RW
                     }
                     else if ((Options & FastObjectRWOptions.Field) != 0 && item.IsPublic)
                     {
-                        var field = new FastField(item, null);
-
-                        dicFields[field.Name] = field;
+                        SaveField(new FastField(item, null));
                     }
                 }
             }
@@ -211,7 +243,7 @@ namespace Swifter.RW
 
                             if (attributedField.CanRead || attributedField.CanWrite)
                             {
-                                dicFields[attributedField.Name] = attributedField;
+                                SaveField(attributedField);
 
                                 if (attributedField.CanRead && !item.GetGetMethod(true).IsPublic)
                                 {
@@ -230,9 +262,22 @@ namespace Swifter.RW
 
                         if (field.CanRead || field.CanWrite)
                         {
-                            dicFields[field.Name] = field;
+                            SaveField(field);
                         }
                     }
+                }
+            }
+
+
+            void SaveField(BaseField field)
+            {
+                if (dicFields.TryGetValue(field.Name, out var exist))
+                {
+                    dicFields[field.Name] = ChooseField(field, exist);
+                }
+                else
+                {
+                    dicFields[field.Name] = field;
                 }
             }
         }
@@ -265,6 +310,18 @@ namespace Swifter.RW
             }
 
             return true;
+        }
+
+        public static StringComparer GetStringComparer()
+        {
+            if ((Options & FastObjectRWOptions.IgnoreCase)!= 0)
+            {
+                return StringComparer.OrdinalIgnoreCase;
+            }
+            else
+            {
+                return StringComparer.Ordinal;
+            }
         }
 
         static StaticFastObjectRW()
@@ -307,7 +364,7 @@ namespace Swifter.RW
 
                 Options = FastObjectRW.SetToInitialized(type);
 
-                var fieldsMap = new Dictionary<string, BaseField>();
+                var fieldsMap = new Dictionary<string, BaseField>(GetStringComparer());
 
                 GetFields(type, fieldsMap);
 
@@ -377,14 +434,14 @@ namespace Swifter.RW
             {
                 foreach (var item in symbols)
                 {
-                    r ^= StringHelper.ToUpper(item) * Mult;
+                    r = (StringHelper.ToUpper(item) * Mult) ^ (r << 1);
                 }
             }
             else
             {
                 foreach (var item in symbols)
                 {
-                    r ^= item * Mult;
+                    r = (item * Mult) ^ (r << 1);
                 }
             }
 
@@ -975,7 +1032,7 @@ namespace Swifter.RW
                 MethodAttributes.Public | MethodAttributes.Virtual,
                 CallingConventions.HasThis,
                 typeof(long),
-                new Type[] { typeof(byte).MakeByRefType(), typeof(int) });
+                new Type[] { typeof(Utf8Byte).MakeByRefType(), typeof(int) });
 
             ImplGetUtf8Id64(methodBuilder.GetILGenerator());
         }
@@ -1570,15 +1627,6 @@ namespace Swifter.RW
             ilGen.LoadArgument(2);
             ilGen.BranchIfGreaterOrEqual(label_return);
 
-            ilGen.LoadLocal(local_result);
-            //ilGen.LoadArgument(1);
-            //ilGen.LoadLocalAddress(local_index);
-            //ilGen.Call(GetUtf8CharMethod);
-
-            //if ((Options & FastObjectRWOptions.IgnoreCase) != 0)
-            //{
-            //    ilGen.Call(CharToUpperMethod);
-            //}
 
             var label_xor = ilGen.DefineLabel();
 
@@ -1650,11 +1698,69 @@ namespace Swifter.RW
             ilGen.Add();
             ilGen.StoreLocal(local_index);
 
-            // label xor.
-            ilGen.MarkLabel(label_xor);
+            // if (byt <= 0xffff) goto xor;
+            ilGen.Duplicate();
+            ilGen.LoadConstant(0xffff);
+            ilGen.BranchIfLessOrEqual(label_xor);
+
+            // byt = (byt & 0x7fff) << 6;
+            ilGen.LoadConstant(0x7fff);
+            ilGen.And();
+            ilGen.LoadConstant(6);
+            ilGen.ShiftLeft();
+
+            // var byt4 = bytes[index] & 0x3f;
+            ilGen.LoadArgument(1);
+            ilGen.LoadLocal(local_index);
+            ilGen.Add();
+            ilGen.LoadValue(typeof(byte));
+            ilGen.LoadConstant(0x3f);
+            ilGen.And();
+
+            // byt = byt | byt4;
+            ilGen.Or();
+
+            // ++index;
+            ilGen.LoadLocal(local_index);
+            ilGen.LoadConstant(1);
+            ilGen.Add();
+            ilGen.StoreLocal(local_index);
+
+            // byt -= 0x10000;
+            ilGen.LoadConstant(0x10000);
+            ilGen.Subtract();
+
+            ilGen.Duplicate();
+            ilGen.LoadConstant(0x400);
+            ilGen.Division();
+            ilGen.LoadConstant(0xd800);
+            ilGen.Add();
             ilGen.ConvertInt64();
             ilGen.LoadConstant(Mult);
             ilGen.Multiply();
+            ilGen.LoadLocal(local_result);
+            ilGen.LoadConstant(1);
+            ilGen.ShiftLeft();
+            ilGen.Xor();
+            ilGen.StoreLocal(local_result);
+
+            ilGen.LoadConstant(0x400);
+            ilGen.Rem();
+            ilGen.LoadConstant(0xdc00);
+            ilGen.Add();
+
+            // label xor.
+            ilGen.MarkLabel(label_xor);
+            if ((Options & FastObjectRWOptions.IgnoreCase) != 0)
+            {
+                ilGen.Call(CharToUpperMethod);
+            }
+            ilGen.ConvertInt64();
+            ilGen.LoadConstant(Mult);
+            ilGen.Multiply();
+            ilGen.LoadLocal(local_result);
+            ilGen.LoadConstant(1);
+            ilGen.ShiftLeft();
             ilGen.Xor();
             ilGen.StoreLocal(local_result);
 
@@ -1779,7 +1885,6 @@ namespace Swifter.RW
             ilGen.BranchIfGreaterOrEqual(label_return);
 
             // result = result ^ (chars[index] * Mult);
-            ilGen.LoadLocal(local_result);
             ilGen.LoadArgument(1);
             ilGen.LoadLocal(local_index);
             ilGen.SizeOf(typeof(char));
@@ -1793,6 +1898,9 @@ namespace Swifter.RW
             ilGen.ConvertInt64();
             ilGen.LoadConstant(Mult);
             ilGen.Multiply();
+            ilGen.LoadLocal(local_result);
+            ilGen.LoadConstant(1);
+            ilGen.ShiftLeft();
             ilGen.Xor();
             ilGen.StoreLocal(local_result);
 
@@ -1949,7 +2057,7 @@ namespace Swifter.RW
             var label_write = ilGen.DefineLabel();
             var label_final = ilGen.DefineLabel();
 
-            if (!TypeInfo<T>.IsValueType)
+            if (!typeof(T).IsValueType)
             {
                 ilGen.LoadArgument(2);
                 ilGen.BranchTrue(label_final);
@@ -1960,9 +2068,9 @@ namespace Swifter.RW
             }
 
             ilGen.MarkLabel(label_final);
-            if (!TypeInfo<T>.IsFinal)
+            if (!(typeof(T).IsSealed || typeof(T).IsValueType))
             {
-                ilGen.LoadConstant(TypeInfo<T>.Int64TypeHandle);
+                ilGen.LoadConstant((long)TypeHelper.GetTypeHandle(typeof(T)));
                 ilGen.LoadArgument(2);
                 ilGen.Call(GetTypeHandle_Object);
                 ilGen.ConvertInt64();

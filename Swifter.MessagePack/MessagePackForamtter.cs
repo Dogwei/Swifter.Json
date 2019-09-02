@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 
 namespace Swifter.MessagePack
 {
-    public sealed unsafe partial class MessagePackForamtter : /*IBinaryFormatter,*/ ITargetedBind
+    public sealed unsafe partial class MessagePackForamtter : IBinaryFormatter, ITargetedBind
     {
         public static MessagePackFormatterOptions DefaultOptions =
             MessagePackFormatterOptions.UnknownTypeAsString |
@@ -103,7 +103,7 @@ namespace Swifter.MessagePack
 
             try
             {
-                var serializer = new MessagePackSerializer(
+                var serializer = new MessagePackSerializer<MessagePackModes.Simple>(
                     DefaultOptions,
                     DefaultMaxDepth,
                     hGlobal
@@ -111,9 +111,9 @@ namespace Swifter.MessagePack
 
                 ValueInterface<T>.WriteValue(serializer, value);
 
-                serializer.hGlobal.Count = serializer.offset;
+                serializer.HGCache.Count = serializer.offset;
 
-                return serializer.hGlobal.ToBytes();
+                return serializer.HGCache.ToBytes();
             }
             finally
             {
@@ -147,6 +147,51 @@ namespace Swifter.MessagePack
             {
                 CacheHelper.Return(hGlobal);
             }
+        }
+
+        public T Deserialize<T>(HGlobalCache<byte> hGCache)
+        {
+            throw new NotImplementedException();
+        }
+
+        public object Deserialize(HGlobalCache<byte> hGCache, Type type)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DeserializeTo(string text, IDataWriter dataWriter)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DeserializeTo(Stream stream, IDataWriter dataWriter)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DeserializeTo(HGlobalCache<byte> hGCache, IDataWriter dataWriter)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Serialize<T>(T value, HGlobalCache<byte> hGCache)
+        {
+            throw new NotImplementedException();
+        }
+
+        public T Deserialize<T>(ArraySegment<byte> bytes)
+        {
+            throw new NotImplementedException();
+        }
+
+        public object Deserialize(ArraySegment<byte> bytes, Type type)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void DeserializeTo(ArraySegment<byte> bytes, IDataWriter dataWriter)
+        {
+            throw new NotImplementedException();
         }
     }
 }
