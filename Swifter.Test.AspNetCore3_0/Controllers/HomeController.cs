@@ -18,7 +18,7 @@ namespace Swifter.Test.AspNetCore3_0.Controllers
         [HttpPost]
         public IActionResult Data([FromBody]DataParameters data)
         {
-            return Ok(new { Id = data.Id, Name = data.Name });
+            return Json(new { Id = data.Id, Name = data.Name });
         }
 
         public IActionResult Privacy()

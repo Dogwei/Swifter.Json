@@ -167,9 +167,9 @@ namespace Swifter.Json
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        void Serialize<T, TMode>(T value, HGlobalCache<char> hGCache, JsonFormatterOptions options)
+        void Serialize<T, TMode>(T value, HGlobalCache<char> hGCache, JsonFormatterOptions options) where TMode : struct
         {
-            var jsonSerializer = new JsonSerializer<JsonSerializeModes.ReferenceMode>(this, hGCache, MaxDepth, options);
+            var jsonSerializer = new JsonSerializer<TMode>(this, hGCache, MaxDepth, options);
 
             if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
             {
@@ -194,9 +194,9 @@ namespace Swifter.Json
 
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        void Serialize<T, TMode>(T value, HGlobalCache<char> hGCache, TextWriter textWriter, JsonFormatterOptions options)
+        void Serialize<T, TMode>(T value, HGlobalCache<char> hGCache, TextWriter textWriter, JsonFormatterOptions options) where TMode : struct
         {
-            var jsonSerializer = new JsonSerializer<JsonSerializeModes.ReferenceMode>(this, hGCache, MaxDepth, textWriter, options);
+            var jsonSerializer = new JsonSerializer<TMode>(this, hGCache, MaxDepth, textWriter, options);
 
             if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
             {

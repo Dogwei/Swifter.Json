@@ -4,142 +4,145 @@ using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
-    sealed class AuxiliaryValueRW : IValueRW, IValueWriter<IDataReader>, IMapValueRW
+    sealed class AuxiliaryValueRW : IValueRW, IValueRW<Guid>, IValueRW<DateTimeOffset>, IValueRW<TimeSpan>, IValueWriter<IDataReader>, IMapValueRW
     {
-        object RW;
+        object rw;
+        Type type;
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public IDataWriter GetDataWriter()
         {
-            if (RW is IAsDataWriter asWriter)
+            if (rw is IAsDataWriter asWriter)
             {
                 return asWriter.Content;
             }
 
-            return RW as IDataWriter;
+            return rw as IDataWriter;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public IDataReader GetDataReader()
         {
-            if (RW is IAsDataReader asReader)
+            if (rw is IAsDataReader asReader)
             {
                 return asReader.Content;
             }
 
-            return RW as IDataReader;
+            return rw as IDataReader;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public IDataRW GetDataRW()
         {
-            if (RW is IAsDataRW asRW)
+            if (rw is IAsDataRW asRW)
             {
                 return asRW.Content;
             }
 
-            return RW as IDataRW;
+            return rw as IDataRW;
         }
 
-        public object DirectRead() => default;
-
-        public void DirectWrite(object value) { }
-
-        public void ReadArray(IDataWriter<int> valueWriter)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public new Type GetType()
         {
-            RW = valueWriter;
+            if (type != null)
+            {
+                return type;
+            }
+
+            return RWHelper.GetContentType(rw);
         }
 
-        public bool ReadBoolean() => default;
+        public object DirectRead() { type = typeof(object); return default; }
 
-        public byte ReadByte() => default;
+        public void DirectWrite(object value) { type = typeof(object); }
 
-        public char ReadChar() => default;
+        public void ReadArray(IDataWriter<int> valueWriter) { rw = valueWriter; }
 
-        public DateTime ReadDateTime() => default;
+        public bool ReadBoolean() { type = typeof(bool); return default; }
 
-        public decimal ReadDecimal() => default;
+        public byte ReadByte() { type = typeof(byte); return default; }
 
-        public double ReadDouble() => default;
+        public char ReadChar() { type = typeof(char); return default; }
 
-        public short ReadInt16() => default;
+        public DateTime ReadDateTime() { type = typeof(DateTime); return default; }
 
-        public int ReadInt32() => default;
+        public decimal ReadDecimal() { type = typeof(decimal); return default; }
 
-        public long ReadInt64() => default;
+        public double ReadDouble() { type = typeof(double); return default; }
 
-        public void ReadMap<TKey>(IDataWriter<TKey> mapWriter)
-        {
-            RW = mapWriter;
-        }
+        public short ReadInt16() { type = typeof(short); return default; }
+
+        public int ReadInt32() { type = typeof(int); return default; }
+
+        public long ReadInt64() { type = typeof(long); return default; }
+
+        public void ReadMap<TKey>(IDataWriter<TKey> mapWriter) { rw = mapWriter; }
 
         public T? ReadNullable<T>() where T : struct => default;
 
-        public void ReadObject(IDataWriter<string> valueWriter)
-        {
-            RW = valueWriter;
-        }
+        public void ReadObject(IDataWriter<string> valueWriter) { rw = valueWriter; }
 
-        public sbyte ReadSByte() => default;
+        public sbyte ReadSByte() { type = typeof(sbyte); return default; }
 
-        public float ReadSingle() => default;
+        public float ReadSingle() { type = typeof(float); return default; }
 
-        public string ReadString() => default;
+        public string ReadString() { type = typeof(string); return default; }
 
-        public ushort ReadUInt16() => default;
+        public ushort ReadUInt16() { type = typeof(ushort); return default; }
 
-        public uint ReadUInt32() => default;
+        public uint ReadUInt32() { type = typeof(uint); return default; }
 
-        public ulong ReadUInt64() => default;
+        public ulong ReadUInt64() { type = typeof(ulong); return default; }
 
-        public void WriteArray(IDataReader<int> dataReader)
-        {
-            RW = dataReader;
-        }
+        public void WriteArray(IDataReader<int> dataReader) { rw = dataReader; }
 
-        public void WriteBoolean(bool value) { }
+        public void WriteBoolean(bool value) { type = typeof(bool); }
 
-        public void WriteByte(byte value) { }
+        public void WriteByte(byte value) { type = typeof(byte); }
 
-        public void WriteChar(char value) { }
+        public void WriteChar(char value) { type = typeof(char); }
 
-        public void WriteDateTime(DateTime value) { }
+        public void WriteDateTime(DateTime value) { type = typeof(DateTime); }
 
-        public void WriteDecimal(decimal value) { }
+        public void WriteDecimal(decimal value) { type = typeof(decimal); }
 
-        public void WriteDouble(double value) { }
+        public void WriteDouble(double value) { type = typeof(double); }
 
-        public void WriteInt16(short value) { }
+        public void WriteInt16(short value) { type = typeof(short); }
 
-        public void WriteInt32(int value) { }
+        public void WriteInt32(int value) { type = typeof(int); }
 
-        public void WriteInt64(long value) { }
+        public void WriteInt64(long value) { type = typeof(long); }
 
-        public void WriteMap<TKey>(IDataReader<TKey> mapReader)
-        {
-            RW = mapReader;
-        }
+        public void WriteMap<TKey>(IDataReader<TKey> mapReader) { rw = mapReader; }
 
-        public void WriteObject(IDataReader<string> dataReader)
-        {
-            RW = dataReader;
-        }
+        public void WriteObject(IDataReader<string> dataReader) { rw = dataReader; }
 
-        public void WriteSByte(sbyte value) { }
+        public void WriteSByte(sbyte value) { type = typeof(sbyte); }
 
-        public void WriteSingle(float value) { }
+        public void WriteSingle(float value) { type = typeof(float); }
 
-        public void WriteString(string value) { }
+        public void WriteString(string value) { type = typeof(string); }
 
-        public void WriteUInt16(ushort value) { }
+        public void WriteUInt16(ushort value) { type = typeof(ushort); }
 
-        public void WriteUInt32(uint value) { }
+        public void WriteUInt32(uint value) { type = typeof(uint); }
 
-        public void WriteUInt64(ulong value) { }
+        public void WriteUInt64(ulong value) { type = typeof(ulong); }
 
-        public void WriteValue(IDataReader value)
-        {
-            RW = value;
-        }
+        public void WriteValue(IDataReader value) { rw = value; }
+
+        Guid IValueReader<Guid>.ReadValue() { type = typeof(Guid);return default; }
+
+        void IValueWriter<Guid>.WriteValue(Guid value) { type = typeof(Guid); }
+
+        DateTimeOffset IValueReader<DateTimeOffset>.ReadValue() { type = typeof(DateTimeOffset); return default; }
+
+        void IValueWriter<DateTimeOffset>.WriteValue(DateTimeOffset value) { type = typeof(DateTimeOffset); }
+
+        TimeSpan IValueReader<TimeSpan>.ReadValue() { type = typeof(TimeSpan); return default; }
+
+        void IValueWriter<TimeSpan>.WriteValue(TimeSpan value) { type = typeof(TimeSpan); }
     }
 }

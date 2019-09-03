@@ -61,7 +61,10 @@ namespace Swifter.Reflection
             return new XObjectRW(XTypeInfo.Create<T>(flags | XTypeInfo.RW));
         }
 
-        internal readonly XTypeInfo xTypeInfo;
+        /// <summary>
+        /// 获取对象读写器所使用的 XTypeInfo 实例。
+        /// </summary>
+        public readonly XTypeInfo xTypeInfo;
 
         internal object obj;
         

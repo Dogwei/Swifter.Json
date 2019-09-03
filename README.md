@@ -96,3 +96,8 @@
 #### 2: 解决重构时产生的一些 BUG。
 #### 3: 修改默认配置:开启字段序列化，当反序列化的字段不存在时不发生异常。
 #### 4: 新增图标，并修复因将图标打包至 DLL 导致 DLL 过大的问题。
+
+### 1.2.9.5 更新：
+#### 1: 修复 Mono 反序列化出错的问题。
+#### 2: 修复 Swifter.Extensions.AspNetCore 上报 encoding 不能为 null 的问题。
+#### 3: Swifter.Extensions.AspNetCore 增加 .Framework 4.5 MVC 和 .NetCore 3.0 MVC 的支持。

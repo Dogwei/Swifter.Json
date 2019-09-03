@@ -267,6 +267,76 @@ namespace Swifter.RW
             return auxiliary.GetDataRW() ?? (throwException ? throw new NotSupportedException($"Failed to create data reader-writer of field : '{key}' in {dataReader}.") : default(IDataRW));
         }
 
+
+        /// <summary>
+        /// 获取数据读写器中指定键的值的类型。
+        /// </summary>
+        /// <typeparam name="TKey">键类型</typeparam>
+        /// <param name="dataRW">数据读写器</param>
+        /// <param name="key">指定键</param>
+        /// <returns>返回一个类型</returns>
+        public static Type GetItemType<TKey>(IDataRW<TKey> dataRW, TKey key)
+        {
+            var auxiliary = new AuxiliaryValueRW();
+
+            if (typeof(TKey) == typeof(long) && ((dataRW as IAsDataReader)?.Content ?? dataRW) is IId64DataRW id64DataRW)
+            {
+                id64DataRW.OnReadValue(Unsafe.As<TKey, long>(ref key), auxiliary);
+            }
+            else
+            {
+                dataRW.OnReadValue(key, auxiliary);
+            }
+
+            return auxiliary.GetType();
+        }
+
+        /// <summary>
+        /// 获取数据读取器中指定键的值的类型。
+        /// </summary>
+        /// <typeparam name="TKey">键类型</typeparam>
+        /// <param name="dataReader">数据读取器</param>
+        /// <param name="key">指定键</param>
+        /// <returns>返回一个类型</returns>
+        public static Type GetItemType<TKey>(IDataReader<TKey> dataReader, TKey key)
+        {
+            var auxiliary = new AuxiliaryValueRW();
+
+            if (typeof(TKey) == typeof(long) && ((dataReader as IAsDataReader)?.Content ?? dataReader) is IId64DataRW id64DataRW)
+            {
+                id64DataRW.OnReadValue(Unsafe.As<TKey, long>(ref key), auxiliary);
+            }
+            else
+            {
+                dataReader.OnReadValue(key, auxiliary);
+            }
+
+            return auxiliary.GetType();
+        }
+
+        /// <summary>
+        /// 获取数据写入器中指定键的值的类型。
+        /// </summary>
+        /// <typeparam name="TKey">键类型</typeparam>
+        /// <param name="dataWriter">数据写入器</param>
+        /// <param name="key">指定键</param>
+        /// <returns>返回一个类型</returns>
+        public static Type GetItemType<TKey>(IDataWriter<TKey> dataWriter, TKey key)
+        {
+            var auxiliary = new AuxiliaryValueRW();
+
+            if (typeof(TKey) == typeof(long) && ((dataWriter as IAsDataWriter)?.Content ?? dataWriter) is IId64DataRW id64DataRW)
+            {
+                id64DataRW.OnWriteValue(Unsafe.As<TKey, long>(ref key), auxiliary);
+            }
+            else
+            {
+                dataWriter.OnWriteValue(key, auxiliary);
+            }
+
+            return auxiliary.GetType();
+        }
+
         /// <summary>
         /// Copy 数据内容。
         /// </summary>
@@ -351,6 +421,40 @@ namespace Swifter.RW
         public static void Copy(IDataReader dataReader, IDataWriter dataWriter)
         {
             Copy(dataReader.As<object>(), dataWriter.As<object>());
+        }
+
+        /// <summary>
+        /// 获取数据读取或写入器的数据源类型。
+        /// </summary>
+        /// <param name="dataRW">数据读取器</param>
+        /// <returns>返回该数据源</returns>
+        public static Type GetContentType(object dataRW)
+        {
+            foreach (var @interface in dataRW.GetType().GetInterfaces())
+            {
+                if (@interface.IsGenericType && @interface.GetGenericTypeDefinition() == typeof(IInitialize<>))
+                {
+                    return @interface.GetGenericArguments()[0];
+                }
+            }
+
+            if (dataRW is IDirectContent directContent)
+            {
+                if (directContent.DirectContent == null)
+                {
+                    if (dataRW is IDataWriter dataWriter)
+                    {
+                        dataWriter.Initialize();
+                    }
+                }
+
+                if (directContent.DirectContent != null)
+                {
+                    return directContent.DirectContent.GetType();
+                }
+            }
+
+            throw new NotSupportedException($"Unable {"get"} content type by '{dataRW.GetType().FullName}' (read)writer.");
         }
 
         /// <summary>

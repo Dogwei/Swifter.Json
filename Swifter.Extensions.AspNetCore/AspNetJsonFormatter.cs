@@ -1,28 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc.Formatters;
+﻿#if NETCOREAPP || NETSTANDARD
+
+using Microsoft.AspNetCore.Mvc.Formatters;
 using Swifter.Json;
-using Swifter.RW;
-using System.Text;
+using System;
 using System.Threading.Tasks;
 using static SwifterExtensions;
 
-sealed class AspNetJsonFormatter : IInputFormatter, IOutputFormatter
+sealed class AspNetCoreJsonFormatter : IInputFormatter, IOutputFormatter
 {
-    static AspNetJsonFormatter()
-    {
-        FastObjectRW.DefaultOptions =
-            FastObjectRWOptions.IgnoreCase |
-            FastObjectRWOptions.Property |
-            FastObjectRWOptions.Field |
-            FastObjectRWOptions.IndexId64 |
-            FastObjectRWOptions.BasicTypeDirectCallMethod |
-            FastObjectRWOptions.InheritedMembers |
-            FastObjectRWOptions.SkipDefaultValue;
-    }
-
-
     readonly JsonFormatter jsonFormatter;
 
-    public AspNetJsonFormatter(JsonFormatter jsonFormatter)
+    public AspNetCoreJsonFormatter(JsonFormatter jsonFormatter)
     {
         this.jsonFormatter = jsonFormatter;
     }
@@ -37,7 +25,7 @@ sealed class AspNetJsonFormatter : IInputFormatter, IOutputFormatter
         {
             var mediaType = new MediaType(contentType);
 
-            return mediaType.SubType == "json";
+            return mediaType.SubType.Equals("json", StringComparison.InvariantCultureIgnoreCase);
         }
 
         return false;
@@ -49,11 +37,20 @@ sealed class AspNetJsonFormatter : IInputFormatter, IOutputFormatter
 
         var contentType = request.ContentType;
 
-        var encoding = MediaType.GetEncoding(contentType) ?? Encoding.UTF8;
+        var encoding = MediaType.GetEncoding(contentType) ?? jsonFormatter.Encoding;
 
-        var reader = context.ReaderFactory(request.Body, encoding);
+        object result;
 
-        var result = await jsonFormatter.DeserializeAsync(reader, context.ModelType);
+        if (encoding == jsonFormatter.Encoding||encoding.Equals(jsonFormatter.Encoding))
+        {
+            result = await jsonFormatter.DeserializeAsync(request.Body, context.ModelType);
+        }
+        else
+        {
+            var tr = context.ReaderFactory(request.Body, encoding);
+
+            result = await jsonFormatter.DeserializeAsync(tr, context.ModelType);
+        }
 
         if (result == null && !context.TreatEmptyInputAsDefaultValue)
         {
@@ -69,27 +66,45 @@ sealed class AspNetJsonFormatter : IInputFormatter, IOutputFormatter
     {
         var response = context.HttpContext.Response;
 
-        var contentType = GetNonEmptyString(context.ContentType.Value, response.ContentType, JSONUTF8ContentType);
+        var contentType = GetNonEmptyString(context.ContentType.Value, response.ContentType, JSONContentType);
 
         var mediaType = new MediaType(contentType);
 
-        return mediaType.SubType == "json";
+        return mediaType.SubType.Equals("json", StringComparison.InvariantCultureIgnoreCase);
     }
 
     public async Task WriteAsync(OutputFormatterWriteContext context)
     {
         var response = context.HttpContext.Response;
 
-        var contentType = GetNonEmptyString(context.ContentType.Value, response.ContentType, JSONUTF8ContentType);
+        var contentType = GetNonEmptyString(context.ContentType.Value, response.ContentType, JSONContentType);
+
+        var encoding = MediaType.GetEncoding(contentType) ?? jsonFormatter.Encoding;
+
+        if (JSONContentType.Equals(contentType, StringComparison.InvariantCultureIgnoreCase))
+        {
+            contentType = $"{JSONContentType};charset={encoding.HeaderName}";
+        }
 
         response.ContentType = contentType;
 
-        var encoding = MediaType.GetEncoding(contentType);
+        if (encoding == jsonFormatter.Encoding || encoding.Equals(jsonFormatter.Encoding))
+        {
+            var s = response.Body;
 
-        var writer = context.WriterFactory(response.Body, encoding);
+            await jsonFormatter.SerializeAsync(context.Object, s);
 
-        await jsonFormatter.SerializeAsync(context.Object, writer);
+            await s.FlushAsync();
+        }
+        else
+        {
+            var tw = context.WriterFactory(response.Body, encoding);
 
-        await writer.FlushAsync();
+            await jsonFormatter.SerializeAsync(context.Object, tw);
+
+            await tw.FlushAsync();
+        }
     }
 }
+
+#endif

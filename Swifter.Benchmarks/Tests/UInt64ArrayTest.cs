@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Swifter.RW;
-using System;
 
 namespace Swifter.Benchmarks.Tests
 {
@@ -44,50 +43,6 @@ namespace Swifter.Benchmarks.Tests
 
         public void VerifyJson(string json)
         {
-        }
-    }
-
-    sealed class TwoDimensionaArrayTest : ITest<int[,]>
-    {
-        readonly int[,] data;
-        readonly string json;
-
-        public TwoDimensionaArrayTest()
-        {
-            var random = new RandomDataReader() { MinArraySize = 10, MaxArraySize = 1000 };
-
-            data = ValueInterface<int[,]>.ReadValue(random);
-
-            json = JsonConvert.SerializeObject(data);
-        }
-
-        public bool NeedReset => false;
-
-        public bool Deser => true;
-
-        public bool Ser => true;
-
-        public object Name => $"int[{data.GetLength(0)},{data.GetLength(1)}]";
-
-        public int[,] GetData() => data;
-
-        public string GetJson() => json;
-
-        public void Reset(int[,] data)
-        {
-        }
-
-        public void VerifyData(int[,] data)
-        {
-            VerifyJson(JsonConvert.SerializeObject(data));
-        }
-
-        public void VerifyJson(string json)
-        {
-            if (this.json  != json)
-            {
-                throw new Exception();
-            }
         }
     }
 }

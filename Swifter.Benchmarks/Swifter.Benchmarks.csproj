@@ -20,4 +20,5 @@
   <ItemGroup>
     <ProjectReference Include="..\Swifter.Json\Swifter.Json.csproj" />
   </ItemGroup>
+
 </Project>

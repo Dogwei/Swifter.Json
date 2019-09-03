@@ -385,20 +385,19 @@ namespace Swifter.Benchmarks
             AddFormatter(new SystemTextJsonUtf8Formatter());
             AddFormatter(new SwifterFormatter());
 
-            AddTest(new CommonModeText());
-            AddTest(new ShortStringTest());
-            AddTest(new LongStringTest());
-            AddTest(new BooleanArrayTest());
-            AddTest(new Int32ArrayTest());
-            AddTest(new Int64ArrayTest());
-            AddTest(new UInt32ArrayTest());
-            AddTest(new UInt64ArrayTest());
-            AddTest(new SingleArrayTest());
-            AddTest(new DoubleArrayTest());
-            AddTest(new ByteArrayTest());
-            AddTest(new CharArrayTest());
+            //AddTest(new CommonModeText());
+            //AddTest(new ShortStringTest());
+            //AddTest(new LongStringTest());
+            //AddTest(new BooleanArrayTest());
+            //AddTest(new Int32ArrayTest());
+            //AddTest(new Int64ArrayTest());
+            //AddTest(new UInt32ArrayTest());
+            //AddTest(new UInt64ArrayTest());
+            //AddTest(new SingleArrayTest());
+            //AddTest(new DoubleArrayTest());
+            //AddTest(new ByteArrayTest());
+            //AddTest(new CharArrayTest());
             AddTest(new DictionaryTest());
-            AddTest(new TwoDimensionaArrayTest());
 
             InitializeComponent();
 
