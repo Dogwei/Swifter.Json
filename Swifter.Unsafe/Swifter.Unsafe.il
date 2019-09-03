@@ -261,6 +261,7 @@
         
         .maxstack 1
         ldarg.0
+        conv.i
         ret
   } // end of method Unsafe::GetObjectTypeHandle
 
