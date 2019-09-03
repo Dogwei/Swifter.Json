@@ -14,30 +14,35 @@ namespace Swifter.RW
 
             if (typeof(IDictionary).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(DictionaryInterface<>).MakeGenericType(typeof(T)));
+                return CreateInstance(typeof(DictionaryInterface<>).MakeGenericType(typeof(T)));
             }
 
             if (typeof(IList).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(ListInterface<>).MakeGenericType(typeof(T)));
+                return CreateInstance(typeof(ListInterface<>).MakeGenericType(typeof(T)));
             }
 
             if (typeof(ICollection).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(CollectionInterface<>).MakeGenericType(typeof(T)));
+                return CreateInstance(typeof(CollectionInterface<>).MakeGenericType(typeof(T)));
             }
 
             if (typeof(IEnumerable).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(EnumerableInterface<>).MakeGenericType(typeof(T)));
+                return CreateInstance(typeof(EnumerableInterface<>).MakeGenericType(typeof(T)));
             }
 
             if (typeof(IEnumerator).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(EnumeratorInterface<>).MakeGenericType(typeof(T)));
+                return CreateInstance(typeof(EnumeratorInterface<>).MakeGenericType(typeof(T)));
             }
 
             return null;
+
+            static IValueInterface<T> CreateInstance(Type type)
+            {
+                return (IValueInterface<T>)Activator.CreateInstance(type);
+            }
         }
     }
 }

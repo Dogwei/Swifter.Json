@@ -1,7 +1,6 @@
-﻿using Swifter.RW;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
 
 namespace Swifter.RW
 {
@@ -14,67 +13,71 @@ namespace Swifter.RW
                 return null;
             }
 
-            if (TryMap(typeof(T), out var interfaceType))
+            var das = GetDas().ToList();
+
+            foreach (var (definition, arguments) in das)
             {
-                return (IValueInterface<T>)Activator.CreateInstance(interfaceType);
+                if (definition == typeof(IDictionary<,>))
+                {
+                    return CreateInstance(typeof(DictionaryInterface<,,>).MakeGenericType(typeof(T), arguments[0], arguments[1]));
+                }
             }
 
-            foreach (var item in typeof(T).GetInterfaces())
+            foreach (var (definition, arguments) in das)
             {
-                if (TryMap(item, out interfaceType))
+                if (definition == typeof(IList<>))
                 {
-                    return (IValueInterface<T>)Activator.CreateInstance(interfaceType);
+                    return CreateInstance(typeof(ListInterface<,>).MakeGenericType(typeof(T), arguments[0]));
+                }
+            }
+
+            foreach (var (definition, arguments) in das)
+            {
+                if (definition == typeof(ICollection<>))
+                {
+                    return CreateInstance(typeof(CollectionInterface<,>).MakeGenericType(typeof(T), arguments[0]));
+                }
+            }
+
+            foreach (var (definition, arguments) in das)
+            {
+                if (definition == typeof(IEnumerable<>))
+                {
+                    return CreateInstance(typeof(EnumerableInterface<,>).MakeGenericType(typeof(T), arguments[0]));
+                }
+            }
+
+            foreach (var (definition, arguments) in das)
+            {
+                if (definition == typeof(IEnumerator<>))
+                {
+                    return CreateInstance(typeof(EnumeratorInterface<,>).MakeGenericType(typeof(T), arguments[0]));
                 }
             }
 
             return null;
 
-            static bool TryMap(Type type, out Type interfaceType)
+            static IEnumerable<(Type definition, Type[] arguments)> GetDas()
             {
-                if (type.IsGenericType)
+                if (typeof(T).IsInterface && typeof(T).IsGenericType)
                 {
-                    var typeDefinition = type.GetGenericTypeDefinition();
-                    var genericArguments = type.GetGenericArguments();
+                    yield return As(typeof(T));
+                }
 
-                    if (typeDefinition == typeof(IDictionary<,>))
+                foreach (var item in typeof(T).GetInterfaces())
+                {
+                    if (item.IsGenericType)
                     {
-                        interfaceType = typeof(DictionaryInterface<,,>).MakeGenericType(typeof(T), genericArguments[0], genericArguments[1]);
-
-                        return true;
-                    }
-
-                    if (typeDefinition == typeof(IList<>))
-                    {
-                        interfaceType = typeof(ListInterface<,>).MakeGenericType(typeof(T), genericArguments[0]);
-
-                        return true;
-                    }
-
-                    if (typeDefinition == typeof(ICollection<>))
-                    {
-                        interfaceType = typeof(CollectionInterface<,>).MakeGenericType(typeof(T), genericArguments[0]);
-
-                        return true;
-                    }
-
-                    if (typeDefinition == typeof(IEnumerable<>))
-                    {
-                        interfaceType = typeof(EnumerableInterface<,>).MakeGenericType(typeof(T), genericArguments[0]);
-
-                        return true;
-                    }
-
-                    if (typeDefinition == typeof(IEnumerator<>))
-                    {
-                        interfaceType = typeof(EnumeratorInterface<,>).MakeGenericType(typeof(T), genericArguments[0]);
-
-                        return true;
+                        yield return As(item);
                     }
                 }
 
-                interfaceType = default;
+                static (Type definition, Type[] arguments) As(Type type) => (type.GetGenericTypeDefinition(), type.GetGenericArguments());
+            }
 
-                return false;
+            static IValueInterface <T> CreateInstance(Type type)
+            {
+                return (IValueInterface<T>)Activator.CreateInstance(type);
             }
         }
     }

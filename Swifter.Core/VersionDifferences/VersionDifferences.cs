@@ -45,6 +45,11 @@ namespace Swifter
         {
             return Unsafe.GetObjectTypeHandle(obj);
         }
+            
+        /// <summary>
+        /// 获取一个值，表示 ObjectTypeHandle 和 TypeHandle 是否一致。
+        /// </summary>
+        public const bool ObjectTypeHandleEqualsTypeHandle = true;
 #else
         [MethodImpl(AggressiveInlining)]
         public static IntPtr GetTypeHandle(object obj)
@@ -60,13 +65,26 @@ namespace Swifter
                 return obj.GetType().TypeHandle.Value;
             }
         }
-#endif
+
         /// <summary>
-        /// 判断 ObjectTypeHandle 和 TypeHandle 是否一致。
+        /// 获取一个值，表示 ObjectTypeHandle 和 TypeHandle 是否一致。
         /// </summary>
-        public static readonly bool ObjectTypeHandleEqualsTypeHandle =
-            typeof(DBNull).TypeHandle.Value == Unsafe.GetObjectTypeHandle(DBNull.Value) &&
-            typeof(string).TypeHandle.Value == Unsafe.GetObjectTypeHandle(string.Empty);
+        public static readonly bool ObjectTypeHandleEqualsTypeHandle = GetObjectTypeHandleEqualsTypeHandle();
+
+        static bool GetObjectTypeHandleEqualsTypeHandle()
+        {
+            try
+            {
+                return
+                    typeof(DBNull).TypeHandle.Value == Unsafe.GetObjectTypeHandle(DBNull.Value) &&
+                    typeof(string).TypeHandle.Value == Unsafe.GetObjectTypeHandle(string.Empty);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+#endif
 
 #if NET20 || NET30 || NET35 || NET40
         /// <summary>
