@@ -54,7 +54,7 @@
         {
             var json = JsonFormatter.SerializeObject(new { Id = 1, Name = "Dogwei" });
             var dic = JsonFormatter.DeserializeObject<Dictionary<string, object>>(json);
-            var obj = JsonFormatter.DeserializeObject<Demo>(json);;
+            var obj = JsonFormatter.DeserializeObject<Demo>(json);
         }
     }
 ```
@@ -79,7 +79,7 @@
 
 #### 1：因为更新时疏忽了 Swifter.Core 的引用关系，所以跳过了 1.2.3 和 1.2.4 版本。
 #### 2：增加了对类似 1_000_1000 这样的数字值的支持。
-#### 2：允许字符串键和值不使用引号包裹！（这样的字符串不能使用前后空格，也不能使用转义符）
+#### 3：允许字符串键和值不使用引号包裹！（这样的字符串不能使用前后空格，也不能使用转义符）
 #### 4：终于魔鬼战胜了天使，Swifter.Json 终于牺牲的部分性能，成了完全验证的 Json 解析器（除了点 2 和点 3）。
 
 
