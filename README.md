@@ -6,6 +6,8 @@
 
 ### [如果您打算使用 Swifter.Json，请在 Nuget 包管理上安装](https://www.nuget.org/packages/Swifter.Json/)
 
+### [如果您需要单文件的 DLL，请在点击这里下载](https://github.com/Dogwei/Swifter.Json/tree/master/Swifter.Merged)
+
 #### 在 .Net 平台上的一个功能强大，简单易用，稳定又不失高性能的 JSON 序列化和反序列化工具。
 
 ## Swifter.Json 强大之处
