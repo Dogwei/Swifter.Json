@@ -34,7 +34,7 @@
 
 
   <ItemGroup>
-    <PackageReference Include="Swifter.Json" Version="1.2.9.5" />
+    <PackageReference Include="Swifter.Json" Version="$(Version)" />
   </ItemGroup>
 
   <ItemGroup>

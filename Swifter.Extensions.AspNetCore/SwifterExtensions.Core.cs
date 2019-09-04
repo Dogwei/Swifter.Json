@@ -22,27 +22,25 @@ public static partial class SwifterExtensions
         {
             for (int i = formatters.Count - 1; i >= 0; --i)
             {
-                if (formatters[i]?.GetType().FullName.IndexOf("Json", StringComparison.CurrentCultureIgnoreCase) + 1 != 0)
+                if (formatters[i]?.GetType().FullName.IndexOf("Json", StringComparison.InvariantCultureIgnoreCase) >= 0)
                 {
                     formatters.RemoveAt(i);
                 }
             }
         }
 
-        var types = TypeHelper.GetTypes("Microsoft.AspNetCore.Mvc.JsonResult");
-
         var jsonFormatter = new JsonFormatter(jsonFormatterOptions);
 
         configuration?.Invoke(jsonFormatter);
 
-        services.AddSingleton<IActionResultExecutor<JsonResult>>(new AspNetCoreJsonExecutor(jsonFormatter));
+        AspNetJsonExecutor.Create(jsonFormatter).AddToSingleton(services);
 
         services.Configure<MvcOptions>(mvcOptions =>
         {
             RemoveJsonFormatter(mvcOptions.InputFormatters);
             RemoveJsonFormatter(mvcOptions.OutputFormatters);
 
-            var formatter = new AspNetCoreJsonFormatter(jsonFormatter);
+            var formatter = new AspNetJsonFormatter(jsonFormatter);
 
             mvcOptions.InputFormatters.Add(formatter);
             mvcOptions.OutputFormatters.Add(formatter);

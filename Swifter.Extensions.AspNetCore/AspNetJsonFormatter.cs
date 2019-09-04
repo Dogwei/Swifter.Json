@@ -6,11 +6,11 @@ using System;
 using System.Threading.Tasks;
 using static SwifterExtensions;
 
-sealed class AspNetCoreJsonFormatter : IInputFormatter, IOutputFormatter
+sealed class AspNetJsonFormatter : IInputFormatter, IOutputFormatter
 {
     readonly JsonFormatter jsonFormatter;
 
-    public AspNetCoreJsonFormatter(JsonFormatter jsonFormatter)
+    public AspNetJsonFormatter(JsonFormatter jsonFormatter)
     {
         this.jsonFormatter = jsonFormatter;
     }
