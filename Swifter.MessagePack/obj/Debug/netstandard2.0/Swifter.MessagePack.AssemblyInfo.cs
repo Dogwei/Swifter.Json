@@ -13,11 +13,13 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("Dogwei")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("1.2.8.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.2.8")]
+[assembly: System.Reflection.AssemblyDescriptionAttribute("A powerful, easy-to-use and fastest msgpack serializer and deserializer on .Net p" +
+    "latforms.")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.3.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.3.2")]
 [assembly: System.Reflection.AssemblyProductAttribute("Swifter.MessagePack")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Swifter.MessagePack")]
-[assembly: System.Reflection.AssemblyVersionAttribute("1.2.8.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.3.2.0")]
 
 // 由 MSBuild WriteCodeFragment 类生成。
 

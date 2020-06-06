@@ -14,7 +14,7 @@ namespace Swifter.RW
         /// <summary>
         /// 原始数据读取器。
         /// </summary>
-        IDataReader Content { get; }
+        IDataReader Original { get; }
 
         /// <summary>
         /// 执行输入类型。
@@ -34,7 +34,7 @@ namespace Swifter.RW
     /// </summary>
     /// <typeparam name="TIn">输入类型</typeparam>
     /// <typeparam name="TOut">输出类型</typeparam>
-    public sealed class AsDataReader<TIn, TOut> : IDataReader<TOut>, IAsDataReader, IDirectContent
+    public sealed class AsDataReader<TIn, TOut> : IDataReader<TOut>, IAsDataReader
     {
         /// <summary>
         /// 原始数据读取器。
@@ -60,42 +60,30 @@ namespace Swifter.RW
         /// <summary>
         /// 获取转换后的键集合。
         /// </summary>
-        public IEnumerable<TOut> Keys => ArrayHelper.CreateAsIterator<TIn, TOut>(dataReader.Keys);
+        public IEnumerable<TOut> Keys => ArrayHelper.CreateConvertIterator<TIn, TOut>(dataReader.Keys);
 
         /// <summary>
         /// 获取数据源键的数量。
         /// </summary>
         public int Count => dataReader.Count;
 
-        IDataReader IAsDataReader.Content => dataReader;
+        /// <summary>
+        /// 获取原始数据读取器。
+        /// </summary>
+        public IDataReader Original => dataReader;
 
         /// <summary>
-        /// 获取原始数据读取器的数据源 Id。
+        /// 获取原数据读取器的数据源类型。
         /// </summary>
-        public object ReferenceToken => dataReader.ReferenceToken;
+        public Type ContentType => dataReader.ContentType;
 
-        object IDirectContent.DirectContent
+        /// <summary>
+        /// 获取或设置原数据读取器的数据源。
+        /// </summary>
+        public object Content
         {
-            get
-            {
-                if (dataReader is IDirectContent directContent)
-                {
-                    return directContent.DirectContent;
-                }
-
-                throw new NotSupportedException($"This data {"reader"} does not support direct {"get"} content.");
-            }
-            set
-            {
-                if (dataReader is IDirectContent directContent)
-                {
-                    directContent.DirectContent = value;
-
-                    return;
-                }
-
-                throw new NotSupportedException($"This data {"reader"} does not support direct {"set"} content.");
-            }
+            get => dataReader.Content;
+            set => dataReader.Content = value;
         }
 
         /// <summary>
@@ -112,14 +100,6 @@ namespace Swifter.RW
         /// <param name="valueWriter">值写入器</param>
         public void OnReadValue(TOut key, IValueWriter valueWriter) =>
             dataReader.OnReadValue(XConvert<TIn>.Convert(key), valueWriter);
-
-        /// <summary>
-        /// 将数据中的所有转换后的键与值进行筛选，并将满足筛选的键与值写入到数据写入器中。
-        /// </summary>
-        /// <param name="dataWriter">数据写入器</param>
-        /// <param name="valueFilter">键值筛选器</param>
-        public void OnReadAll(IDataWriter<TOut> dataWriter, IValueFilter<TOut> valueFilter) =>
-            dataReader.OnReadAll(new AsReadAllWriter<TIn, TOut>(dataWriter), new AsReadAllFilter<TIn, TOut>(valueFilter));
 
         /// <summary>
         /// 执行输入类型方法。

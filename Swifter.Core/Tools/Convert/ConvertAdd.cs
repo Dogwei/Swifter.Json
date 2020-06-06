@@ -4,9 +4,15 @@ namespace Swifter.Tools
 {
     internal static class ConvertAdd
     {
-        public static string ToString(Guid value) => NumberHelper.ToString(value);
+        public static string ToString(Guid value)
+        {
+            return value.ToString();
+        }
 
-        public static Guid ToGuid(string value) => NumberHelper.TryParse(value, out Guid guid) ? guid : new Guid(value);
+        public static Guid ToGuid(string value)
+        {
+            return new Guid(value);
+        }
 
         public static Guid ToGuid(object value)
         {
@@ -20,7 +26,7 @@ namespace Swifter.Tools
                 return ToGuid(str);
             }
 
-            return (Guid)Convert.ChangeType(value, typeof(Guid));
+            throw new InvalidCastException(nameof(value));
         }
     }
 }

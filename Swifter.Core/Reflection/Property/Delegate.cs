@@ -1,8 +1,8 @@
 ﻿namespace Swifter.Reflection
 {
-    delegate ref TValue XClassRefValueHandler<TValue>(object obj);
-    delegate TValue XClassGetValueHandler<TValue>(object obj);
-    delegate void XClassSetValueHandler<TValue>(object obj, TValue value);
+    delegate ref TValue XClassRefValueHandler<TClass, TValue>(TClass obj);
+    delegate TValue XClassGetValueHandler<TClass, TValue>(TClass obj);
+    delegate void XClassSetValueHandler<TClass, TValue>(TClass obj, TValue value);
 
     delegate ref TValue XStructRefValueHandler<TStruct, TValue>(ref TStruct obj);
     delegate TValue XStructGetValueHandler<TStruct, TValue>(ref TStruct obj);

@@ -1,6 +1,4 @@
-﻿
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Swifter.RW
@@ -8,12 +6,22 @@ namespace Swifter.RW
     /// <summary>
     /// 表示对象路径信息。
     /// </summary>
-    public abstract class RWPathInfo
+    public abstract class RWPathInfo : IEquatable<RWPathInfo>
     {
         /// <summary>
         /// 表示根路径对象。
         /// </summary>
-        public static readonly RWPathInfo Root = new RWPathInfo<string>(null, null);
+        public static readonly RWPathInfo Root = new Impl<string>(null, null);
+
+        /// <summary>
+        /// 根路径名称。
+        /// </summary>
+        public static string RootToken = "#";
+
+        /// <summary>
+        /// 路径分隔符。
+        /// </summary>
+        public static string PathSeparator = "/";
 
         /// <summary>
         /// 创建一个对象路径信息。
@@ -22,17 +30,39 @@ namespace Swifter.RW
         /// <param name="key">键</param>
         /// <param name="parent">父级路径</param>
         /// <returns>返回一个新的路径信息</returns>
-        public static RWPathInfo Create<TKey>(TKey key, RWPathInfo parent = null) => new RWPathInfo<TKey>(key, parent ?? Root);
+        public static RWPathInfo Create<TKey>(TKey key, RWPathInfo parent = null) => new Impl<TKey>(key, parent ?? Root);
+
+        /// <summary>
+        /// 设置路径键。
+        /// </summary>
+        /// <typeparam name="TKey">键类型</typeparam>
+        /// <param name="path">要设置的路径</param>
+        /// <param name="key">键</param>
+        public static void SetPath<TKey>(in RWPathInfo path, TKey key)
+        {
+            if (path is null)
+            {
+                throw new ArgumentNullException(nameof(path));
+            }
+
+            if (path is Impl<TKey> impl)
+            {
+                impl.Key = key;
+            }
+            else
+            {
+                Underlying.AsRef(path) = Create(key, path.Parent);
+            }
+        }
 
         /// <summary>
         /// 父级路径。
         /// </summary>
         public readonly RWPathInfo Parent;
 
-
-        internal RWPathInfo(RWPathInfo parent)
+        RWPathInfo(RWPathInfo parent)
         {
-            if (parent == null && Root != null)
+            if (parent is null && Root != null)
             {
                 throw new ArgumentNullException(nameof(parent));
             }
@@ -52,119 +82,244 @@ namespace Swifter.RW
         public abstract object GetKey();
 
         /// <summary>
-        /// 获取一个数据读取器该路径的值。
+        /// 获取一个数据读取器该路径的值读取器。
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        /// <returns>返回一个值</returns>
-        public abstract object GetValue(IDataReader dataReader);
+        /// <returns>返回一个值读取器</returns>
+        public abstract IValueReader GetValueReader(IDataReader dataReader);
 
         /// <summary>
-        /// 设置一个数据写入器该路径的值。
+        /// 设置一个数据写入器该路径的值写入器。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        /// <param name="value">值</param>
-        public abstract void SetValue(IDataWriter dataWriter, object value);
+        /// <returns>返回一个值写入器</returns>
+        public abstract IValueWriter GetValueWriter(IDataWriter dataWriter);
+        
+        /// <summary>
+        /// 让数据读取器读取该路径的值到写入器中。
+        /// </summary>
+        /// <param name="dataReader">数据读取器</param>
+        /// <param name="valueWriter">值写入器</param>
+        /// <returns>返回是否到达</returns>
+        public abstract bool OnReadValue(IDataReader dataReader, IValueWriter valueWriter);
+
+        /// <summary>
+        /// 让数据写入器写入读取器中的值到该路径的值中。
+        /// </summary>
+        /// <param name="dataWriter">数据写入器</param>
+        /// <param name="valueReader">值读取器</param>
+        /// <returns>返回是否到达</returns>
+        public abstract bool OnWriteValue(IDataWriter dataWriter, IValueReader valueReader);
 
         /// <summary>
         /// 获取数据读取器的值的数据读取器。
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
         /// <returns>返回数据读取器</returns>
-        public abstract IDataReader GetDataReader(IDataReader dataReader);
-    }
+        protected abstract IDataReader GetDataReader(IDataReader dataReader);
 
-    sealed class RWPathInfo<TKey> : RWPathInfo, IEquatable<RWPathInfo<TKey>>
-    {
-        public static readonly IEqualityComparer<TKey> EqualityComparer = EqualityComparer<TKey>.Default;
+        /// <summary>
+        /// 获取数据写入器的值的数据写入器。
+        /// </summary>
+        /// <param name="dataWriter">数据写入器</param>
+        /// <returns>返回数据读取器</returns>
+        protected abstract IDataWriter GetDataWriter(IDataWriter dataWriter);
 
-        public readonly TKey Key;
+        /// <summary>
+        /// 创建副本。
+        /// </summary>
+        /// <returns>返回克隆实例</returns>
+        public abstract RWPathInfo Clone();
 
-        public RWPathInfo(TKey key, RWPathInfo parent) : base(parent)
+        /// <summary>
+        /// 比较当前路径是否与指定的路径相同。
+        /// </summary>
+        /// <param name="other">指定的路径</param>
+        /// <returns>返回一个 bool 值</returns>
+        public abstract bool Equals(RWPathInfo other);
+
+        sealed class Impl<TKey> : RWPathInfo, IEquatable<Impl<TKey>>
         {
-            Key = key;
-        }
+            public static readonly IEqualityComparer<TKey> EqualityComparer = EqualityComparer<TKey>.Default;
 
-        public bool Equals(RWPathInfo<TKey> other) => other != null && EqualityComparer.Equals(Key, other.Key) && Equals(Parent, other.Parent);
+            public TKey Key;
 
-        public override bool Equals(object obj) => Equals(obj as RWPathInfo<TKey>);
-
-        public override IDataReader GetDataReader(IDataReader dataReader)
-        {
-            if (IsRoot)
+            public Impl(TKey key, RWPathInfo parent) : base(parent)
             {
-                return dataReader;
+                Key = key;
             }
 
-            dataReader = Parent.GetDataReader(dataReader);
-
-            return RWHelper.CreateItemReader(dataReader.As<TKey>(), Key);
-        }
-
-        public override int GetHashCode() => IsRoot ? base.GetHashCode() : Parent.GetHashCode() ^ EqualityComparer.GetHashCode(Key);
-
-        public override object GetKey() => Key;
-
-        public override object GetValue(IDataReader dataReader)
-        {
-            if (IsRoot)
+            public override RWPathInfo Clone()
             {
-                return RWHelper.GetContent<object>(dataReader);
-            }
-
-            dataReader = Parent.GetDataReader(dataReader);
-
-            if (typeof(TKey) == typeof(long) && dataReader is IId64DataRW id64DataRW && !(dataReader is IDataReader<long>))
-            {
-                var valueCopyer = new ValueCopyer();
-
-                id64DataRW.OnReadValue(Unsafe.As<TKey, long>(ref Unsafe.AsRef(Key)), valueCopyer);
-
-                return valueCopyer.DirectRead();
-            }
-
-            return dataReader.As<TKey>()[Key].DirectRead();
-        }
-
-        public override void SetValue(IDataWriter dataWriter, object value)
-        {
-            if (IsRoot)
-            {
-                RWHelper.SetContent(dataWriter, value);
-
-                return;
-            }
-
-            if (!Parent.IsRoot)
-            {
-                if (!(dataWriter is IDataReader dataReader))
+                if (IsRoot)
                 {
-                    dataReader = RWHelper.CreateReader(RWHelper.GetContent<object>(dataWriter));
+                    return this;
+                }
+
+                return new Impl<TKey>(Key, Parent.Clone());
+            }
+
+            public bool Equals(Impl<TKey> other) => other != null && EqualityComparer.Equals(Key, other.Key) && Equals(Parent, other.Parent);
+
+            public override bool Equals(object obj) => Equals(obj as Impl<TKey>);
+
+            public override bool Equals(RWPathInfo other) => Equals(other as Impl<TKey>);
+
+            protected override IDataReader GetDataReader(IDataReader dataReader)
+            {
+                if (IsRoot)
+                {
+                    return dataReader;
                 }
 
                 dataReader = Parent.GetDataReader(dataReader);
 
-                dataWriter = dataReader as IDataWriter;
-
-                if (dataWriter == null)
-                {
-                    dataWriter = RWHelper.CreateRW(RWHelper.GetContent<object>(dataReader));
-                }
+                return RWHelper.CreateItemReader(dataReader.As<TKey>(), Key, false);
             }
 
-            if (typeof(TKey) == typeof(long) && dataWriter is IId64DataRW id64DataRW && !(dataWriter is IDataWriter<long>))
+            protected override IDataWriter GetDataWriter(IDataWriter dataWriter)
             {
-                var valueCopyer = new ValueCopyer();
+                if (IsRoot)
+                {
+                    return dataWriter;
+                }
 
-                valueCopyer.DirectWrite(value);
+                var dataReader = (dataWriter as IDataReader) ?? RWHelper.CreateReader(dataWriter.Content, false);
 
-                id64DataRW.OnWriteValue(Unsafe.As<TKey, long>(ref Unsafe.AsRef(Key)), valueCopyer);
+                if (dataReader is null)
+                {
+                    return null;
+                }
 
-                return;
+                dataReader = Parent.GetDataReader(dataReader);
+
+                if (dataReader is null)
+                {
+                    return null;
+                }
+
+                return (dataReader as IDataWriter) ?? RWHelper.CreateWriter(dataReader.Content, false);
             }
 
-            dataWriter.As<TKey>()[Key].DirectWrite(value);
+            public override int GetHashCode() => IsRoot ? base.GetHashCode() : Parent.GetHashCode() ^ EqualityComparer.GetHashCode(Key);
+
+            public override object GetKey() => Key;
+
+            public override IValueReader GetValueReader(IDataReader dataReader)
+            {
+                if (IsRoot)
+                {
+                    return new ContentValueRW(dataReader);
+                }
+
+                dataReader = Parent.GetDataReader(dataReader);
+
+                if (dataReader is null)
+                {
+                    return null;
+                }
+
+                return dataReader.As<TKey>()[Key];
+            }
+
+            public override IValueWriter GetValueWriter(IDataWriter dataWriter)
+            {
+                if (IsRoot)
+                {
+                    return new ContentValueRW(dataWriter);
+                }
+
+                dataWriter = Parent.GetDataWriter(dataWriter);
+
+                if (dataWriter is null)
+                {
+                    return null;
+                }
+
+                return dataWriter.As<TKey>()[Key];
+            }
+
+            public override bool OnReadValue(IDataReader dataReader, IValueWriter valueWriter)
+            {
+                if (IsRoot)
+                {
+                    ValueInterface.WriteValue(valueWriter, dataReader.Content);
+
+                    return true;
+                }
+
+                dataReader = Parent.GetDataReader(dataReader);
+
+                if (dataReader is null)
+                {
+                    return false;
+                }
+
+                dataReader.As<TKey>().OnReadValue(Key, valueWriter);
+
+                return true;
+            }
+
+            public override bool OnWriteValue(IDataWriter dataWriter, IValueReader valueReader)
+            {
+                if (IsRoot)
+                {
+                    dataWriter.Content = ValueInterface.ReadValue(valueReader, dataWriter.ContentType);
+
+                    return true;
+                }
+
+                dataWriter = Parent.GetDataWriter(dataWriter);
+
+                if (dataWriter is null)
+                {
+                    return false;
+                }
+
+                dataWriter.As<TKey>().OnWriteValue(Key, valueReader);
+
+                return true;
+            }
+
+            public override string ToString() => IsRoot ? RootToken : Parent + PathSeparator + Key;
+
         }
 
-        public override string ToString() => IsRoot ? "#" : Parent + "/" + Key;
+        sealed class ContentValueRW : BaseDirectRW
+        {
+            public readonly object rw;
+
+            public ContentValueRW(IDataReader reader)
+            {
+                rw = reader;
+            }
+
+            public ContentValueRW(IDataWriter writer)
+            {
+                rw = writer;
+            }
+
+            public ContentValueRW(IDataRW rw)
+            {
+                this.rw = rw;
+            }
+
+            public override object DirectRead()
+            {
+                return (rw as IDataReader)?.Content ?? Underlying.As<IDataWriter>(rw).Content;
+            }
+
+            public override void DirectWrite(object value)
+            {
+                if (rw is IDataReader reader)
+                {
+                    reader.Content = value;
+                }
+                else
+                {
+                    Underlying.As<IDataWriter>(rw).Content = value;
+                }
+            }
+        }
     }
 }

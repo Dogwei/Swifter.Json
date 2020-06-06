@@ -34,7 +34,17 @@ namespace Swifter.RW
 
         public abstract bool CanWrite { get; }
 
-        public abstract bool IsPublic { get; }
+        public abstract bool SkipDefaultValue { get; }
+
+        public abstract bool CannotGetException { get; }
+
+        public abstract bool CannotSetException { get; }
+
+        public abstract bool IsPublicGet { get; }
+
+        public abstract bool IsPublicSet { get; }
+
+        public bool IsPublic => IsPublicGet && IsPublicSet;
 
         public abstract bool IsStatic { get; }
 

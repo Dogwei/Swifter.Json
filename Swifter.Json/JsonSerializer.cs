@@ -1,110 +1,156 @@
 ﻿using Swifter.Formatters;
-
 using Swifter.RW;
 using Swifter.Tools;
-
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 
+using static Swifter.Json.JsonFormatter;
 using static Swifter.Json.JsonCode;
+using static Swifter.Json.JsonFormatterOptions;
+using static Swifter.Json.JsonSerializeModes;
 
 namespace Swifter.Json
 {
     sealed unsafe class JsonSerializer<TMode> :
         IJsonWriter,
-        IFormatterWriter,
         IValueWriter<Guid>,
         IValueWriter<DateTimeOffset>,
         IDataWriter<string>,
         IDataWriter<int>,
         IValueFilter<string>,
-        IValueFilter<int>
+        IValueFilter<int>,
+        IValueWriter<bool[]>, IValueWriter<List<bool>>,
+        IValueWriter<byte[]>, IValueWriter<List<byte>>,
+        IValueWriter<sbyte[]>, IValueWriter<List<sbyte>>,
+        IValueWriter<short[]>, IValueWriter<List<short>>,
+        IValueWriter<ushort[]>, IValueWriter<List<ushort>>,
+        IValueWriter<char[]>, IValueWriter<List<char>>,
+        IValueWriter<int[]>, IValueWriter<List<int>>,
+        IValueWriter<uint[]>, IValueWriter<List<uint>>,
+        IValueWriter<long[]>, IValueWriter<List<long>>,
+        IValueWriter<ulong[]>, IValueWriter<List<ulong>>,
+        IValueWriter<float[]>, IValueWriter<List<float>>,
+        IValueWriter<double[]>, IValueWriter<List<double>>,
+        IValueWriter<DateTime[]>, IValueWriter<List<DateTime>>,
+        IValueWriter<DateTimeOffset[]>, IValueWriter<List<DateTimeOffset>>,
+        IValueWriter<decimal[]>, IValueWriter<List<decimal>>,
+        IValueWriter<Guid[]>, IValueWriter<List<Guid>>,
+        IValueWriter<string[]>, IValueWriter<List<string>>,
+        IFormatterWriter
         where TMode : struct
     {
-        const JsonFormatterOptions ReturnHG = ((JsonFormatterOptions)0x4000) | JsonFormatterOptions.Default;
-
-        public readonly JsonFormatterOptions Options;
-        public readonly HGlobalCache<char> HGCache;
-        public readonly int MaxDepth;
-
-        public TextWriter TextWriter;
-        public JsonFormatter JsonFormatter;
 
         public TMode mode;
 
+        public readonly JsonFormatter jsonFormatter;
+        public readonly HGlobalCache<char> hGCache;
+        public readonly TextWriter textWriter;
+        public readonly int maxDepth;
+
+        public readonly JsonFormatterOptions options;
+
         public int depth;
-        public int offset;
 
-        public ref string LineBreakChars => ref Unsafe.As<TMode, JsonSerializeModes.ComplexMode>(ref mode).LineBreakChars;
+        public char* current;
 
-        public ref string IndentedChars => ref Unsafe.As<TMode, JsonSerializeModes.ComplexMode>(ref mode).IndentedChars;
+        public int Offset
+        {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => (int)(current - hGCache.First);
+        }
 
-        public ref string MiddleChars => ref Unsafe.As<TMode, JsonSerializeModes.ComplexMode>(ref mode).MiddleChars;
+        public int Rest
+        {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => (int)(hGCache.Last - current);
+        }
 
-        public ref bool IsInArray => ref Unsafe.As<TMode, JsonSerializeModes.ComplexMode>(ref mode).IsInArray;
+        public ref string LineBreakChars => ref Underlying.As<TMode, ComplexMode>(ref mode).LineBreakChars;
 
-        public ref JsonReferenceWriter References => ref Unsafe.As<TMode, JsonSerializeModes.ReferenceMode>(ref mode).References;
+        public ref string IndentedChars => ref Underlying.As<TMode, ComplexMode>(ref mode).IndentedChars;
 
-        public ref RWPathInfo Reference => ref Unsafe.As<TMode, JsonSerializeModes.ReferenceMode>(ref mode).References.Reference;
+        public ref string MiddleChars => ref Underlying.As<TMode, ComplexMode>(ref mode).MiddleChars;
+
+        public ref bool IsInArray => ref Underlying.As<TMode, ComplexMode>(ref mode).IsInArray;
+
+        public ref JsonReferenceWriter References => ref Underlying.As<TMode, ReferenceMode>(ref mode).References;
+
+        public ref RWPathInfo Reference => ref Underlying.As<TMode, ReferenceMode>(ref mode).References.Reference;
 
         public void Flush()
         {
             // 1: ,
-            HGCache.Count = offset - 1;
+            hGCache.Count = Offset - 1;
         }
 
         public void Clear()
         {
-            offset = 0;
+            current = hGCache.First;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth)
         {
-            HGCache = hGCache;
-            MaxDepth = maxDepth;
+            this.hGCache = hGCache;
+            this.maxDepth = maxDepth;
+            options = Default;
+
+            current = hGCache.First;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, JsonFormatterOptions options)
-            : this(hGCache, maxDepth)
         {
-            Options = options;
+            this.hGCache = hGCache;
+            this.maxDepth = maxDepth;
+            this.options = options;
+
+            current = hGCache.First;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter)
             : this(hGCache, maxDepth)
         {
-            TextWriter = textWriter;
+            this.textWriter = textWriter;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter, JsonFormatterOptions options)
-            : this(hGCache, maxDepth)
+            : this(hGCache, maxDepth, options)
         {
-            TextWriter = textWriter;
-            Options = options;
+            this.textWriter = textWriter;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache, int maxDepth, JsonFormatterOptions options)
-            : this(hGCache, maxDepth)
+            : this(hGCache, maxDepth, options)
         {
-            JsonFormatter = jsonFormatter;
-            Options = options;
+            this.jsonFormatter = jsonFormatter;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter, JsonFormatterOptions options)
-            : this(jsonFormatter, hGCache,  maxDepth, options)
+            : this(jsonFormatter, hGCache, maxDepth, options)
         {
-            TextWriter = textWriter;
+            this.textWriter = textWriter;
         }
 
         public IValueWriter this[string key]
         {
             get
             {
-                if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
+                if (key is null)
                 {
-                    Reference = RWPathInfo.Create(key, Reference.Parent);
+                    // TODO: Json 对象的键不允许为 Null。
+                    throw new ArgumentNullException(nameof(key));
+                }
+
+                if (IsReferenceMode)
+                {
+                    RWPathInfo.SetPath(Reference, key);
                 }
 
                 AppendKeyBefore();
@@ -121,503 +167,73 @@ namespace Swifter.Json
         {
             get
             {
-                if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
+                if (IsReferenceMode)
                 {
-                    Reference = RWPathInfo.Create(key, Reference.Parent);
+                    RWPathInfo.SetPath(Reference, key);
                 }
 
                 return this;
             }
         }
 
-        public long TargetedId => JsonFormatter?.targeted_id ?? 0;
-
-        public IEnumerable<string> Keys => null;
-
-        public int Count => 0;
-
-        IEnumerable<int> IDataWriter<int>.Keys => null;
-
-        public void DirectWrite(object value)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Append(char c)
         {
-            if (value == null)
-            {
-                WriteNull();
-
-                return;
-            }
-
-            if (value is IConvertible convertion)
-            {
-                switch (convertion.GetTypeCode())
-                {
-                    case TypeCode.DBNull:
-                        WriteNull();
-                        return;
-                    case TypeCode.Boolean:
-                        WriteBoolean((bool)value);
-                        return;
-                    case TypeCode.Char:
-                        WriteChar((char)value);
-                        return;
-                    case TypeCode.SByte:
-                        WriteSByte((sbyte)value);
-                        return;
-                    case TypeCode.Byte:
-                        WriteByte((byte)value);
-                        return;
-                    case TypeCode.Int16:
-                        WriteInt16((short)value);
-                        return;
-                    case TypeCode.UInt16:
-                        WriteUInt16((ushort)value);
-                        return;
-                    case TypeCode.Int32:
-                        WriteInt32((int)value);
-                        return;
-                    case TypeCode.UInt32:
-                        WriteUInt32((uint)value);
-                        return;
-                    case TypeCode.Int64:
-                        WriteInt64((long)value);
-                        return;
-                    case TypeCode.UInt64:
-                        WriteUInt64((ulong)value);
-                        return;
-                    case TypeCode.Single:
-                        WriteSingle((float)value);
-                        return;
-                    case TypeCode.Double:
-                        WriteDouble((double)value);
-                        return;
-                    case TypeCode.Decimal:
-                        WriteDecimal((decimal)value);
-                        return;
-                    case TypeCode.DateTime:
-                        WriteDateTime((DateTime)value);
-                        return;
-                    case TypeCode.String:
-                        WriteString((string)value);
-                        return;
-                }
-            }
-
-            if (value is Guid g)
-            {
-                WriteGuid(g);
-
-                return;
-            }
-
-            if (value is DateTimeOffset dto)
-            {
-                WriteDateTimeOffset(dto);
-
-                return;
-            }
-
-            WriteString(value.ToString());
+            *current = c; ++current;
         }
 
-        public bool Filter(ValueFilterInfo<string> valueInfo) => Filter(valueInfo.ValueCopyer);
-
-        public bool Filter(ValueFilterInfo<int> valueInfo) => Filter(valueInfo.ValueCopyer);
-
-        public void Initialize()
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Append(string value)
         {
+            var length = value.Length;
+
+            Expand(length + 2);
+
+            Underlying.CopyBlock(
+                ref Underlying.As<char, byte>(ref *current), 
+                ref Underlying.As<char, byte>(ref StringHelper.GetRawStringData(value)), 
+                (uint)(length * 2));
+
+            current += length;
         }
 
-        public void Initialize(int capacity)
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool On(JsonFormatterOptions options)
+            => (this.options & options) != 0;
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool Are(JsonFormatterOptions options)
+            => (this.options & options) == options;
+
+        public static bool IsReferenceMode
         {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => typeof(TMode) == typeof(ReferenceMode);
         }
 
-        public void OnWriteAll(IDataReader<string> dataReader)
+        public static bool IsSimpleMode
         {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => typeof(TMode) == typeof(SimpleMode);
         }
 
-        public void OnWriteAll(IDataReader<int> dataReader)
+        public static bool IsComplexMode
         {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => typeof(TMode) == typeof(ComplexMode);
         }
 
-        public void OnWriteValue(string key, IValueReader valueReader)
+        public bool IsFilterMode
         {
-            this[key].DirectWrite(valueReader.DirectRead());
-        }
-
-        public void OnWriteValue(int key, IValueReader valueReader)
-        {
-            ValueInterface.WriteValue(this[key], valueReader.DirectRead());
-        }
-
-        public void WriteArray(IDataReader<int> dataReader)
-        {
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-            {
-                if ((Options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 &&
-                    (Options & JsonFormatterOptions.IgnoreNull) != 0 &&
-                    (Options & JsonFormatterOptions.ArrayOnFilter) != 0 && !Reference.IsRoot)
-                {
-                }
-                else if (!CheckObjectReference(dataReader))
-                {
-                    return;
-                }
-            }
-
-            WriteValueBefore();
-
-            Expand(2);
-
-            Append(FixArray);
-
-            AppendStructBefore();
-
-            var isInArray = false;
-
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
-            {
-                isInArray = IsInArray;
-
-                IsInArray = true;
-            }
-
-            int tOffset = offset;
-
-            if (AddDepth())
-            {
-                if (typeof(TMode) == typeof(JsonSerializeModes.SimpleMode))
-                {
-                    dataReader.OnReadAll(this);
-                }
-                else
-                {
-                    if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-                    {
-                        if (dataReader.Count != 0)
-                        {
-                            dataReader.OnReadAll(References);
-                        }
-
-                        Reference = RWPathInfo.Create(string.Empty, Reference);
-                    }
-
-                    if (Options >= JsonFormatterOptions.IgnoreNull && (Options & JsonFormatterOptions.ArrayOnFilter) != 0)
-                    {
-                        dataReader.OnReadAll(this, this);
-                    }
-                    else
-                    {
-                        dataReader.OnReadAll(this);
-                    }
-
-                    if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-                    {
-                        Reference = Reference.Parent;
-                    }
-                }
-            }
-
-            SubtractDepth();
-
-            Expand(2);
-
-            if (tOffset != offset)
-            {
-                --offset;
-            }
-
-            AppendStructAfter();
-
-            Append(ArrayEnding);
-
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
-            {
-                IsInArray = isInArray;
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteBoolean(bool value)
-        {
-            WriteValueBefore();
-
-            Expand(6);
-
-            if (value)
-            {
-                // true
-                Append('t');
-                Append('r');
-                Append('u');
-                Append('e');
-            }
-            else
-            {
-                // false
-                Append('f');
-                Append('a');
-                Append('l');
-                Append('s');
-                Append('e');
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteByte(byte value) => WriteUInt64(value);
-
-        public void WriteChar(char value)
-        {
-            Expand(6);
-
-            Append(FixString);
-
-            if (value <= MaxEscapeChar && EscapeMap[value] != default)
-            {
-                Append(FixEscape);
-                Append(EscapeMap[value]);
-            }
-            else
-            {
-                Append(value);
-            }
-
-            Append(FixString);
-
-            AppendValueAfter();
-        }
-
-        public void WriteDateTime(DateTime value)
-        {
-            WriteValueBefore();
-
-            Expand(32);
-
-            Append(FixString);
-
-            offset += DateTimeHelper.ToISOString(value, HGCache.GetPointer() + offset);
-
-            Append(FixString);
-
-            AppendValueAfter();
-        }
-
-        public void WriteDecimal(decimal value)
-        {
-            WriteValueBefore();
-
-            Expand(33);
-
-            offset += NumberHelper.ToString(value, HGCache.GetPointer() + offset);
-
-            AppendValueAfter();
-        }
-
-        public void WriteDouble(double value)
-        {
-            WriteValueBefore();
-
-            if (value >= double.MinValue && value <= double.MaxValue)
-            {
-                Expand(24);
-
-                offset += NumberHelper.Decimal.ToString(value, HGCache.GetPointer() + offset);
-            }
-            else
-            {
-                InternalWriteDoubleString(value);
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteInt16(short value) => WriteInt64(value);
-
-        public void WriteInt32(int value) => WriteInt64(value);
-
-        public void WriteInt64(long value)
-        {
-            WriteValueBefore();
-
-            InternalWriteInt64(value);
-
-            AppendValueAfter();
-        }
-
-        public void InternalWriteInt64(long value)
-        {
-            Expand(21);
-
-            offset += NumberHelper.Decimal.ToString(value, HGCache.GetPointer() + offset);
-        }
-
-        public void WriteObject(IDataReader<string> dataReader)
-        {
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-            {
-                if ((Options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 &&
-                    (Options & JsonFormatterOptions.IgnoreNull) != 0 && !Reference.IsRoot)
-                {
-                }
-                else if (!CheckObjectReference(dataReader))
-                {
-                    return;
-                }
-            }
-
-            WriteValueBefore();
-
-            Expand(2);
-
-            Append(FixObject);
-
-            AppendStructBefore();
-
-            var isInArray = false;
-
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
-            {
-                isInArray = IsInArray;
-
-                IsInArray = false;
-            }
-
-            int tOffset = offset;
-
-            if (AddDepth())
-            {
-                if (typeof(TMode) == typeof(JsonSerializeModes.SimpleMode))
-                {
-                    dataReader.OnReadAll(this);
-                }
-                else
-                {
-                    if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-                    {
-                        if (dataReader.Count != 0)
-                        {
-                            dataReader.OnReadAll(References);
-                        }
-
-                        Reference = RWPathInfo.Create(string.Empty, Reference);
-                    }
-
-                    if (Options >= JsonFormatterOptions.IgnoreNull)
-                    {
-                        dataReader.OnReadAll(this, this);
-                    }
-                    else
-                    {
-                        dataReader.OnReadAll(this);
-                    }
-
-                    if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-                    {
-                        Reference = Reference.Parent;
-                    }
-                }
-            }
-
-            SubtractDepth();
-
-            Expand(2);
-
-            if (tOffset != offset)
-            {
-                --offset;
-            }
-
-            AppendStructAfter();
-
-            Append(ObjectEnding);
-
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
-            {
-                IsInArray = isInArray;
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteSByte(sbyte value) => WriteInt64(value);
-
-        public void WriteSingle(float value) => WriteDouble(value);
-
-        public void WriteString(string value)
-        {
-            if (value == null)
-            {
-                WriteNull();
-            }
-            else
-            {
-                WriteValueBefore();
-
-                InternalWriteString(value);
-
-                AppendValueAfter();
-            }
-        }
-
-        public void WriteUInt16(ushort value) => WriteUInt64(value);
-
-        public void WriteUInt32(uint value) => WriteUInt64(value);
-
-        public void WriteUInt64(ulong value)
-        {
-            WriteValueBefore();
-
-            InternalWriteUInt64(value);
-
-            AppendValueAfter();
-        }
-
-        public void InternalWriteUInt64(ulong value)
-        {
-            Expand(21);
-
-            offset += NumberHelper.Decimal.ToString(value, HGCache.GetPointer() + offset);
-        }
-
-        void IValueWriter<Guid>.WriteValue(Guid value) => WriteGuid(value);
-
-        void IValueWriter<DateTimeOffset>.WriteValue(DateTimeOffset value) => WriteDateTimeOffset(value);
-
-        public void WriteGuid(Guid value)
-        {
-            WriteValueBefore();
-
-            Expand(40);
-
-            Append(FixString);
-
-            offset += NumberHelper.ToString(value, HGCache.GetPointer() + offset);
-
-            Append(FixString);
-
-            AppendValueAfter();
-        }
-
-        public void WriteDateTimeOffset(DateTimeOffset value)
-        {
-            WriteValueBefore();
-
-            Expand(32);
-
-            Append('"');
-
-            offset += DateTimeHelper.ToISOString(value, HGCache.GetPointer() + offset);
-
-            Append('"');
-
-            AppendValueAfter();
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => options >= OnFilter;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Expand(int expandMinSize)
         {
-            if (HGCache.Capacity - offset < expandMinSize)
+            if (current + expandMinSize > hGCache.Last)
             {
                 InternalExpand(expandMinSize);
             }
@@ -626,220 +242,105 @@ namespace Swifter.Json
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void InternalExpand(int expandMinSize)
         {
-            if (HGCache.Capacity == HGlobalCache<char>.MaxSize && TextWriter != null && offset != 0)
+            if (hGCache.Context.Length >= HGlobalCache<char>.MaxSize && textWriter != null && current != hGCache.First)
             {
-                HGCache.Count = offset;
+                hGCache.Count = Offset;
 
-                HGCache.WriteTo(TextWriter);
+                hGCache.WriteTo(textWriter);
 
-                offset = 0;
+                current = hGCache.First;
 
                 Expand(expandMinSize);
             }
             else
             {
-                HGCache.Expand(expandMinSize);
+                var offset = Offset;
+
+                hGCache.Expand(expandMinSize);
+
+                current = hGCache.First + offset;
             }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void Append(char c)
-        {
-            HGCache.GetPointer()[offset] = c;
-
-            ++offset;
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void Append(string value)
+        public void ThrowOutOfDepthException()
         {
-            var length = value.Length;
-
-            Expand(length + 2);
-
-            var pointer = HGCache.GetPointer() + offset;
-
-            for (int i = 0; i < length; ++i)
+            if (On(OutOfDepthException))
             {
-                pointer[i] = value[i];
-            }
-
-            offset += length;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private void WriteValueBefore()
-        {
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
-            {
-                if ((Options & JsonFormatterOptions.Indented) != 0)
-                {
-                    if (IsInArray)
-                    {
-                        Append(LineBreakChars);
-
-                        for (int i = depth; i > 0; --i)
-                        {
-                            Append(IndentedChars);
-                        }
-                    }
-                }
+                throw new JsonOutOfDepthException();
             }
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendValueAfter()
+        public bool Filter(ValueFilterInfo<string> valueInfo)
         {
-            Append(ValueEnding);
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendKeyBefore()
-        {
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
+            if (IsReferenceMode)
             {
-                if ((Options & JsonFormatterOptions.Indented) != 0)
-                {
-                    if (!IsInArray)
-                    {
-                        Append(LineBreakChars);
-
-                        for (int i = depth; i > 0; --i)
-                        {
-                            Append(IndentedChars);
-                        }
-                    }
-                }
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendKeyAfter()
-        {
-            Append(KeyEnding);
-
-            AppendMiddleChars();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendMiddleChars()
-        {
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
-            {
-                if ((Options & JsonFormatterOptions.Indented) != 0)
-                {
-                    Append(MiddleChars);
-                }
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendStructBefore()
-        {
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendStructAfter()
-        {
-            if (typeof(TMode) != typeof(JsonSerializeModes.SimpleMode))
-            {
-                if ((Options & JsonFormatterOptions.Indented) != 0)
-                {
-                    Append(LineBreakChars);
-
-                    for (int i = depth; i > 0; --i)
-                    {
-                        Append(IndentedChars);
-                    }
-                }
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void InternalWriteString(string value)
-        {
-            Expand(value.Length + 5);
-
-            Append(FixString);
-
-            var pointer = HGCache.GetPointer() + offset;
-
-            for (int i = 0; i < value.Length; i++)
-            {
-                var item = value[i];
-
-                if (item <= MaxEscapeChar && EscapeMap[item] != default)
-                {
-                    pointer[i] = FixEscape;
-
-                    if (HGCache.Capacity - offset < value.Length + 5)
-                    {
-                        InternalExpand(5);
-                    }
-
-                    ++offset;
-
-                    pointer = HGCache.GetPointer() + offset;
-
-                    item = EscapeMap[item];
-                }
-
-                pointer[i] = item;
+                RWPathInfo.SetPath(Reference, valueInfo.Key);
             }
 
-            offset += value.Length;
+            var result = Filter(valueInfo.ValueCopyer);
 
-            Append(FixString);
+            if (jsonFormatter != null && On(OnFilter))
+            {
+                return jsonFormatter.OnObjectFilter(this, valueInfo, result);
+            }
+
+            return result;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void InternalWriteDoubleString(double value)
+        public bool Filter(ValueFilterInfo<int> valueInfo)
         {
-            // NaN, PositiveInfinity, NegativeInfinity, Or Other...
-            InternalWriteString(value.ToString());
-        }
+            if (IsReferenceMode)
+            {
+                RWPathInfo.SetPath(Reference, valueInfo.Key);
+            }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteNull()
-        {
-            WriteValueBefore();
+            var result = Filter(valueInfo.ValueCopyer);
 
-            Expand(6);
+            if (jsonFormatter != null)
+            {
+                return jsonFormatter.OnArrayFilter(this, valueInfo, result);
+            }
 
-            // null
-            Append('n');
-            Append('u');
-            Append('l');
-            Append('l');
-
-            AppendValueAfter();
+            return result;
         }
 
         public bool Filter(ValueCopyer valueCopyer)
         {
             var basicType = valueCopyer.TypeCode;
 
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
+            if (IsReferenceMode)
             {
-                if (basicType == TypeCode.Object && (Options & (JsonFormatterOptions.MultiReferencingNull | JsonFormatterOptions.LoopReferencingNull)) != 0 && valueCopyer.Value is IDataReader dataReader)
+                if (
+                    (
+                        On(MultiReferencingNull | LoopReferencingNull) &&
+                        basicType == TypeCode.Object &&
+                        valueCopyer.InternalObject is IDataReader dataReader &&
+                        dataReader.ContentType?.IsValueType == false &&
+                        GetReference(dataReader.Content) is RWPathInfo reference &&
+                        (On(MultiReferencingNull) || IsLoopReferencing(reference))
+                    )
+                    ||
+                    (
+                        Are(MultiReferencingNull | MultiReferencingAlsoString) &&
+                        basicType == TypeCode.String &&
+                        valueCopyer.InternalObject is string str &&
+                        GetReference(str) != null
+                    )
+                   )
                 {
-                    var reference = GetReference(dataReader);
+                    valueCopyer.DirectWrite(null);
 
-                    if (reference != null && ((Options & JsonFormatterOptions.MultiReferencingNull) != 0 || IsLoopReferencing(reference)))
-                    {
-                        valueCopyer.DirectWrite(null);
-
-                        basicType = TypeCode.Empty;
-                    }
+                    basicType = TypeCode.Empty;
                 }
             }
 
-            if ((Options & JsonFormatterOptions.IgnoreNull) != 0 && basicType == TypeCode.Empty)
+            if (basicType == TypeCode.Empty && On(IgnoreNull))
             {
                 return false;
             }
 
-            if ((Options & JsonFormatterOptions.IgnoreZero) != 0)
+            if (On(IgnoreZero))
             {
                 switch (basicType)
                 {
@@ -868,9 +369,9 @@ namespace Swifter.Json
                 }
             }
 
-            if ((Options & JsonFormatterOptions.IgnoreEmptyString) != 0
-                && basicType == TypeCode.String
-                && valueCopyer.ReadString() == string.Empty)
+            if (On(IgnoreEmptyString) &&
+                basicType == TypeCode.String &&
+                valueCopyer.ReadString() == string.Empty)
             {
                 return false;
             }
@@ -879,43 +380,918 @@ namespace Swifter.Json
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool AddDepth()
+        public void WriteNull()
         {
-            ++depth;
+            WriteValueBefore();
 
-            if (depth <= MaxDepth)
-            {
-                return true;
-            }
+            Expand(6);
 
-            ThrowOutOfDepthException();
+            //Append(nullString);
 
-            return false;
+            // 考虑到 Null 值在 .Net 程序中非常常见，所以这里使用了比较极端的优化。
+            *(ulong*)current = BitConverter.IsLittleEndian
+                ? nullBits
+                : nullBitsBigEndian;
+
+            current += 4;
+
+            AppendValueAfter();
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void ThrowOutOfDepthException()
+        public void DirectWrite(object value)
         {
-            if ((Options & JsonFormatterOptions.OutOfDepthException) != 0)
+            if (IsReferenceMode && On(MultiReferencingAlsoString) && On(MultiReferencingReference | MultiReferencingNull) && CheckObjectReference(value))
             {
-                throw new JsonOutOfDepthException();
+                return;
+            }
+
+            Loop:
+
+            if (value is null)
+            {
+                WriteNull();
+
+                return;
+            }
+
+            switch (Type.GetTypeCode(value.GetType()))
+            {
+                case TypeCode.DBNull:
+                    WriteNull();
+                    return;
+                case TypeCode.Boolean:
+                    WriteBoolean((bool)value);
+                    return;
+                case TypeCode.Char:
+                    WriteChar((char)value);
+                    return;
+                case TypeCode.SByte:
+                    WriteSByte((sbyte)value);
+                    return;
+                case TypeCode.Byte:
+                    WriteByte((byte)value);
+                    return;
+                case TypeCode.Int16:
+                    WriteInt16((short)value);
+                    return;
+                case TypeCode.UInt16:
+                    WriteUInt16((ushort)value);
+                    return;
+                case TypeCode.Int32:
+                    WriteInt32((int)value);
+                    return;
+                case TypeCode.UInt32:
+                    WriteUInt32((uint)value);
+                    return;
+                case TypeCode.Int64:
+                    WriteInt64((long)value);
+                    return;
+                case TypeCode.UInt64:
+                    WriteUInt64((ulong)value);
+                    return;
+                case TypeCode.Single:
+                    WriteSingle((float)value);
+                    return;
+                case TypeCode.Double:
+                    WriteDouble((double)value);
+                    return;
+                case TypeCode.Decimal:
+                    WriteDecimal((decimal)value);
+                    return;
+                case TypeCode.DateTime:
+                    WriteDateTime((DateTime)value);
+                    return;
+                case TypeCode.String:
+                    WriteValueBefore();
+
+                    InternalWriteString((string)value);
+
+                    AppendValueAfter();
+                    return;
+            }
+
+            if (value is Guid g)
+            {
+                WriteGuid(g);
+
+                return;
+            }
+
+            if (value is DateTimeOffset dto)
+            {
+                WriteDateTimeOffset(dto);
+
+                return;
+            }
+
+            value = value.ToString();
+
+            goto Loop;
+        }
+
+        public void WriteArray(IDataReader<int> dataReader)
+        {
+            if (IsReferenceMode && dataReader.ContentType?.IsValueType == false && CheckObjectReference(dataReader.Content))
+            {
+                return;
+            }
+
+            WriteValueBefore();
+
+            Expand(2);
+
+            Append(FixArray);
+
+            AppendStructBefore();
+
+            var isInArray = false;
+
+            if (!IsSimpleMode)
+            {
+                isInArray = IsInArray;
+
+                IsInArray = true;
+            }
+
+            if (depth >= maxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+            else
+            {
+                var tCurrent = current;
+
+                ++depth;
+
+                if (IsSimpleMode)
+                {
+                    dataReader.OnReadAll(this);
+                }
+                else
+                {
+                    if (IsReferenceMode)
+                    {
+                        Reference = RWPathInfo.Create(default(int), Reference);
+
+                        if (On(MultiReferencingOptimizeLayout))
+                        {
+                            if (dataReader.Count > 0)
+                            {
+                                dataReader.OnReadAll(References);
+                            }
+                        }
+                    }
+
+                    if (IsFilterMode && On(ArrayOnFilter))
+                    {
+                        dataReader.OnReadAll(new DataFilterWriter<int>(this, this));
+                    }
+                    else
+                    {
+                        dataReader.OnReadAll(this);
+                    }
+
+                    if (IsReferenceMode)
+                    {
+                        Reference = Reference.Parent;
+                    }
+                }
+
+                --depth;
+
+                Expand(2);
+
+                if (tCurrent != current)
+                {
+                    --current;
+                }
+            }
+
+            AppendStructAfter();
+
+            Append(ArrayEnding);
+
+            if (!IsSimpleMode)
+            {
+                IsInArray = isInArray;
+            }
+
+            AppendValueAfter();
+        }
+
+        public void WriteArray<T>(T[] array)
+        {
+            if (IsReferenceMode && CheckObjectReference(array))
+            {
+                return;
+            }
+
+            InternalWriteArray(array, array.Length);
+        }
+
+        public void WriteList<T>(List<T> list)
+        {
+            if (IsReferenceMode && CheckObjectReference(list))
+            {
+                return;
+            }
+
+            InternalWriteArray(ArrayHelper.GetRawData(list), list.Count);
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWriteArray<T>(T[] array, int length)
+        {
+            WriteValueBefore();
+
+            Expand(2);
+
+            Append(FixArray);
+
+            AppendStructBefore();
+
+            var isInArray = false;
+
+            if (!IsSimpleMode)
+            {
+                isInArray = IsInArray;
+
+                IsInArray = true;
+            }
+
+            if (depth >= maxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+            else
+            {
+                var tCurrent = current;
+
+                ++depth;
+
+                if (!IsSimpleMode && IsFilterMode && On(ArrayOnFilter))
+                {
+                    var filterInfo = new ValueFilterInfo<int>();
+
+                    for (int i = 0; i < length; i++)
+                    {
+                        filterInfo.Key = i;
+                        filterInfo.Type = typeof(T);
+
+                        ValueInterface.WriteValue(filterInfo.ValueCopyer, array[i]);
+
+                        if (Filter(filterInfo))
+                        {
+                            filterInfo.ValueCopyer.WriteTo(this);
+                        }
+                    }
+                }
+                else if (ValueInterface<T>.IsNotModified)
+                {
+                    for (int i = 0; i < length; i++)
+                    {
+                        WriteValue(array[i]);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < length; i++)
+                    {
+                        ValueInterface.WriteValue(this, array[i]);
+                    }
+                }
+
+                --depth;
+
+                Expand(2);
+
+                if (tCurrent != current)
+                {
+                    --current;
+                }
+            }
+
+            AppendStructAfter();
+
+            Append(ArrayEnding);
+
+            if (!IsSimpleMode)
+            {
+                IsInArray = isInArray;
+            }
+
+            AppendValueAfter();
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteValue<T>(T value)
+        {
+            if (typeof(T) == typeof(int)) WriteInt32(Underlying.As<T, int>(ref value));
+            else if (typeof(T) == typeof(string)) WriteString(Underlying.As<T, string>(ref value));
+            else if (typeof(T) == typeof(double)) WriteDouble(Underlying.As<T, double>(ref value));
+            else if (typeof(T) == typeof(bool)) WriteBoolean(Underlying.As<T, bool>(ref value));
+            else if (typeof(T) == typeof(byte)) WriteByte(Underlying.As<T, byte>(ref value));
+            else if (typeof(T) == typeof(sbyte)) WriteSByte(Underlying.As<T, sbyte>(ref value));
+            else if (typeof(T) == typeof(short)) WriteInt16(Underlying.As<T, short>(ref value));
+            else if (typeof(T) == typeof(ushort)) WriteUInt16(Underlying.As<T, ushort>(ref value));
+            else if (typeof(T) == typeof(uint)) WriteUInt32(Underlying.As<T, uint>(ref value));
+            else if (typeof(T) == typeof(long)) WriteInt64(Underlying.As<T, long>(ref value));
+            else if (typeof(T) == typeof(ulong)) WriteUInt64(Underlying.As<T, ulong>(ref value));
+            else if (typeof(T) == typeof(float)) WriteSingle(Underlying.As<T, float>(ref value));
+            else if (typeof(T) == typeof(char)) WriteChar(Underlying.As<T, char>(ref value));
+            else if (typeof(T) == typeof(decimal)) WriteDecimal(Underlying.As<T, decimal>(ref value));
+            else if (typeof(T) == typeof(DateTime)) WriteDateTime(Underlying.As<T, DateTime>(ref value));
+            else if (typeof(T) == typeof(Guid)) WriteGuid(Underlying.As<T, Guid>(ref value));
+            else if (typeof(T) == typeof(DateTimeOffset)) WriteDateTimeOffset(Underlying.As<T, DateTimeOffset>(ref value));
+            else ValueInterface.WriteValue(this, value);
+        }
+
+        public void WriteBoolean(bool value)
+        {
+            WriteValueBefore();
+
+            Expand(6);
+
+            if (value)
+            {
+                Append('t');
+                Append('r');
+                Append('u');
+                Append('e');
+            }
+            else
+            {
+                Append('f');
+                Append('a');
+                Append('l');
+                Append('s');
+                Append('e');
+            }
+
+            AppendValueAfter();
+        }
+
+        public void WriteByte(byte value) => WriteUInt64(value);
+
+        public void WriteChar(char value)
+        {
+            Expand(6);
+
+            Append(FixString);
+
+
+            switch (value)
+            {
+                case FixString:
+                    Append(FixEscape);
+                    Append(FixString);
+                    break;
+                case FixEscape:
+                    Append(FixEscape);
+                    Append(FixEscape);
+                    break;
+                case WhiteChar2:
+                    Append(FixEscape);
+                    Append(EscapedWhiteChar2);
+                    break;
+                case WhiteChar3:
+                    Append(FixEscape);
+                    Append(EscapedWhiteChar3);
+                    break;
+                case WhiteChar4:
+                    Append(FixEscape);
+                    Append(EscapedWhiteChar4);
+                    break;
+                case WhiteChar5:
+                    Append(FixEscape);
+                    Append(EscapedWhiteChar5);
+                    break;
+                case WhiteChar6:
+                    Append(FixEscape);
+                    Append(EscapedWhiteChar6);
+                    break;
+                default:
+                    Append(value);
+                    break;
+            }
+
+            Append(FixString);
+
+            AppendValueAfter();
+        }
+
+        public void WriteDateTime(DateTime value)
+        {
+            WriteValueBefore();
+
+            Expand(DateTimeHelper.ISOStringMaxLength);
+
+            Append(FixString);
+
+            current += DateTimeHelper.ToISOString(value, current);
+
+            Append(FixString);
+
+            AppendValueAfter();
+        }
+
+        public void WriteDecimal(decimal value)
+        {
+            WriteValueBefore();
+
+            Expand(NumberHelper.DecimalStringMaxLength);
+
+            current += NumberHelper.ToString(value, current);
+
+            AppendValueAfter();
+        }
+
+        public void WriteDouble(double value)
+        {
+            WriteValueBefore();
+
+            if (NumberHelper.IsSpecialValue(value))
+            {
+                InternalWriteDoubleString(value);
+            }
+            else
+            {
+                Expand(NumberHelper.DecimalMaxDoubleStringLength);
+
+                if (On(UseSystemFloatingPointsMethods))
+                {
+#if Span
+                    value.TryFormat(new Span<char>(current, Rest), out var charsWritter); // 在空间足够，此处一定成功。
+
+                    current += charsWritter;
+#else
+                    Append(value.ToString());
+#endif
+                }
+                else
+                {
+                    current += NumberHelper.Decimal.ToString(value, current);
+                }
+            }
+
+            AppendValueAfter();
+        }
+
+        public void WriteInt16(short value) => WriteInt64(value);
+
+        public void WriteInt32(int value) => WriteInt64(value);
+
+        public void WriteInt64(long value)
+        {
+            WriteValueBefore();
+
+            InternalWriteInt64(value);
+
+            AppendValueAfter();
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWriteInt64(long value)
+        {
+            Expand(NumberHelper.DecimalMaxInt64NumbersLength);
+
+            current += NumberHelper.ToDecimalString(value, current);
+        }
+
+        public void WriteObject(IDataReader<string> dataReader)
+        {
+            if (IsReferenceMode && dataReader.ContentType?.IsValueType == false && CheckObjectReference(dataReader.Content))
+            {
+                return;
+            }
+
+            WriteValueBefore();
+
+            Expand(2);
+
+            Append(FixObject);
+
+            AppendStructBefore();
+
+            var isInArray = false;
+
+            if (!IsSimpleMode)
+            {
+                isInArray = IsInArray;
+
+                IsInArray = false;
+            }
+
+            if (depth >= maxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+            else
+            {
+                var tCurrent = current;
+
+                ++depth;
+
+                if (IsSimpleMode)
+                {
+                    dataReader.OnReadAll(this);
+                }
+                else
+                {
+                    if (IsReferenceMode)
+                    {
+                        Reference = RWPathInfo.Create(default(string), Reference);
+
+                        if (On(MultiReferencingOptimizeLayout))
+                        {
+                            if (dataReader.Count > 0)
+                            {
+                                dataReader.OnReadAll(References);
+                            }
+                        }
+                    }
+
+                    if (IsFilterMode)
+                    {
+                        dataReader.OnReadAll(new DataFilterWriter<string>(this, this));
+                    }
+                    else
+                    {
+                        dataReader.OnReadAll(this);
+                    }
+
+                    if (IsReferenceMode)
+                    {
+                        Reference = Reference.Parent;
+                    }
+                }
+
+                --depth;
+
+                Expand(2);
+
+                if (tCurrent != current)
+                {
+                    --current;
+                }
+            }
+
+            AppendStructAfter();
+
+            Append(ObjectEnding);
+
+            if (!IsSimpleMode)
+            {
+                IsInArray = isInArray;
+            }
+
+            AppendValueAfter();
+        }
+
+        public void WriteSByte(sbyte value) => WriteInt64(value);
+
+        public void WriteSingle(float value)
+        {
+            WriteValueBefore();
+
+            if (NumberHelper.IsSpecialValue(value))
+            {
+                InternalWriteDoubleString(value);
+            }
+            else
+            {
+                Expand(NumberHelper.DecimalMaxSingleStringLength);
+
+                if (On(UseSystemFloatingPointsMethods))
+                {
+#if Span
+                    value.TryFormat(new Span<char>(current, Rest), out var charsWritter); // 在空间足够，此处一定成功。
+
+                    current += charsWritter;
+#else
+                    Append(value.ToString());
+#endif
+                }
+                else
+                {
+                    current += NumberHelper.Decimal.ToString(value, current);
+                }
+            }
+
+            AppendValueAfter();
+        }
+
+
+        public void WriteString(string value)
+        {
+            if (value is null)
+            {
+                WriteNull();
+            }
+            else
+            {
+                if (IsReferenceMode &&
+                    On(MultiReferencingAlsoString) &&
+                    On(MultiReferencingReference | MultiReferencingNull) &&
+                    CheckObjectReference(value))
+                {
+                    return;
+                }
+
+                WriteValueBefore();
+
+                InternalWriteString(value);
+
+                AppendValueAfter();
+            }
+        }
+
+        public void WriteUInt16(ushort value) => WriteUInt64(value);
+
+        public void WriteUInt32(uint value) => WriteUInt64(value);
+
+        public void WriteUInt64(ulong value)
+        {
+            WriteValueBefore();
+
+            InternalWriteUInt64(value);
+
+            AppendValueAfter();
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWriteUInt64(ulong value)
+        {
+            Expand(NumberHelper.DecimalMaxUInt64NumbersLength);
+
+            current += NumberHelper.ToDecimalString(value, current);
+        }
+
+        public void WriteEnum<T>(T value) where T : struct, Enum
+        {
+            Expand(128);
+
+            WriteValueBefore();
+
+            if (EnumHelper.IsFlagsEnum<T>() && EnumHelper.AsUInt64(value) != 0)
+            {
+                // TODO: 枚举值不应该出现 '"' '\n' '\r' 等违法字符；如果存在违法字符串，这里序列化的 Json 将格式错误。
+                // TODO: 通常情况下，hGCache 剩余的空间完全足够任何枚举的 Flags 字符串，这里如果超出了，将使用整数格式。
+
+                if (EnumHelper.AsUInt64(
+                    EnumHelper.FormatEnumFlags(value, current + 1, (hGCache.Available - Offset - 18), out var written)
+                    ) == 0)
+                {
+                    Append(FixString);
+
+                    current += written;
+
+                    Append(FixString);
+
+                    goto After;
+                }
+            }
+            else if (EnumHelper.GetEnumName(value) is string name)
+            {
+                InternalWriteString(name);
+
+                goto After;
+            }
+
+            switch (EnumHelper.GetEnumTypeCode<T>())
+            {
+                case TypeCode.SByte:
+                    InternalWriteInt64(Underlying.As<T, sbyte>(ref value));
+                    break;
+                case TypeCode.Int16:
+                    InternalWriteInt64(Underlying.As<T, short>(ref value));
+                    break;
+                case TypeCode.Int32:
+                    InternalWriteInt64(Underlying.As<T, int>(ref value));
+                    break;
+                case TypeCode.Int64:
+                    InternalWriteInt64(Underlying.As<T, long>(ref value));
+                    break;
+                default:
+                    InternalWriteUInt64(EnumHelper.AsUInt64(value));
+                    break;
+            }
+
+            After:
+
+            AppendValueAfter();
+        }
+
+        void IValueWriter<Guid>.WriteValue(Guid value) => WriteGuid(value);
+
+        void IValueWriter<DateTimeOffset>.WriteValue(DateTimeOffset value) => WriteDateTimeOffset(value);
+
+        public void WriteGuid(Guid value)
+        {
+            WriteValueBefore();
+
+            Expand(NumberHelper.GuidStringWithSeparatorsLength);
+
+            Append(FixString);
+
+            current += NumberHelper.ToString(value, current, true);
+
+            Append(FixString);
+
+            AppendValueAfter();
+        }
+
+        public void WriteDateTimeOffset(DateTimeOffset value)
+        {
+            WriteValueBefore();
+
+            Expand(DateTimeHelper.ISOStringMaxLength);
+
+            Append(FixString);
+
+            current += DateTimeHelper.ToISOString(value, current);
+
+            Append(FixString);
+
+            AppendValueAfter();
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private void WriteValueBefore()
+        {
+            if (!IsSimpleMode)
+            {
+                if (On(Indented))
+                {
+                    if (IsInArray)
+                    {
+                        Append(LineBreakChars);
+
+                        for (int i = depth; i > 0; --i)
+                        {
+                            Append(IndentedChars);
+                        }
+                    }
+                }
             }
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void SubtractDepth()
+        public void AppendValueAfter()
         {
-            --depth;
+            Append(ValueEnding);
         }
 
-        public RWPathInfo GetReference(IDataReader dataReader)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendKeyBefore()
         {
-            var token = dataReader.ReferenceToken;
-
-            if (token != null && References.TryGetValue(token, out var reference) && !Reference.Equals(reference))
+            if (!IsSimpleMode)
             {
+                if (On(Indented))
+                {
+                    if (!IsInArray)
+                    {
+                        Append(LineBreakChars);
+
+                        for (int i = depth; i > 0; --i)
+                        {
+                            Append(IndentedChars);
+                        }
+                    }
+                }
+            }
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendKeyAfter()
+        {
+            Append(KeyEnding);
+
+            AppendMiddleChars();
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendMiddleChars()
+        {
+            if (!IsSimpleMode)
+            {
+                if (On(Indented))
+                {
+                    Append(MiddleChars);
+                }
+            }
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendStructBefore()
+        {
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendStructAfter()
+        {
+            if (!IsSimpleMode)
+            {
+                if (On(Indented))
+                {
+                    Append(LineBreakChars);
+
+                    for (int i = depth; i > 0; --i)
+                    {
+                        Append(IndentedChars);
+                    }
+                }
+            }
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWriteString(string value)
+        {
+            var expand = value.Length + 5;
+
+            Expand(expand);
+
+            Append(FixString);
+
+            var current = this.current;
+
+            for (int i = 0; i < value.Length; i++)
+            {
+                switch (value[i])
+                {
+                    case FixString:
+                        *current = FixEscape; ++current;
+                        *current = FixString; ++current;
+                        goto Expand;
+                    case FixEscape:
+                        *current = FixEscape; ++current;
+                        *current = FixEscape; ++current;
+                        goto Expand;
+                    case WhiteChar2:
+                        *current = FixEscape; ++current;
+                        *current = EscapedWhiteChar2; ++current;
+                        goto Expand;
+                    case WhiteChar3:
+                        *current = FixEscape; ++current;
+                        *current = EscapedWhiteChar3; ++current;
+                        goto Expand;
+                    case WhiteChar4:
+                        *current = FixEscape; ++current;
+                        *current = EscapedWhiteChar4; ++current;
+                        goto Expand;
+                    case WhiteChar5:
+                        *current = FixEscape; ++current;
+                        *current = EscapedWhiteChar5; ++current;
+                        goto Expand;
+                    case WhiteChar6:
+                        *current = FixEscape; ++current;
+                        *current = EscapedWhiteChar6; ++current;
+
+                        Expand:
+
+                        ++expand;
+
+                        if (this.current + expand > hGCache.Last)
+                        {
+                            var offset = current - this.current;
+
+                            InternalExpand(expand);
+
+                            current = this.current + offset;
+                        }
+
+                        break;
+                    case var other:
+                        *current = other; ++current;
+                        break;
+                }
+            }
+
+            this.current = current;
+
+            Append(FixString);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void InternalWriteDoubleString(double value)
+        {
+            // NaN, PositiveInfinity, NegativeInfinity, Or Other...
+            InternalWriteString(value.ToString());
+        }
+
+        public RWPathInfo GetReference(object content)
+        {
+            if (References.TryGetValue(content, out var reference))
+            {
+                if (Reference.Equals(reference))
+                {
+                    return null;
+                }
+
                 return reference;
             }
+
+            References.Add(content, Reference.Clone());
 
             return null;
         }
@@ -936,52 +1312,56 @@ namespace Swifter.Json
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public bool CheckObjectReference(IDataReader dataReader)
+        public bool CheckObjectReference(object content)
         {
             if (Reference.IsRoot)
             {
-                var token = dataReader.ReferenceToken;
-
-                if (token != null)
+                if (References.Count > 0)
                 {
-                    References.DirectAdd(token, Reference);
+                    References.Clear();
                 }
+
+                References.Add(content, Reference);
+
+                return false;
             }
-            else
+
+            var reference = GetReference(content);
+
+            if (reference is null)
             {
-                var reference = GetReference(dataReader);
-
-                if (reference != null)
-                {
-                    if ((Options & JsonFormatterOptions.MultiReferencingReference) != 0)
-                    {
-                        WriteReference(reference);
-
-                        return false;
-                    }
-                    else if ((Options & JsonFormatterOptions.MultiReferencingNull) != 0)
-                    {
-                        WriteNull();
-
-                        return false;
-                    }
-                    else if (IsLoopReferencing(reference))
-                    {
-                        if ((Options & JsonFormatterOptions.LoopReferencingException) != 0)
-                        {
-                            throw new JsonLoopReferencingException(reference, Reference);
-                        }
-                        else /*if ((options & JsonFormatterOptions.LoopReferencingNull) != 0)*/
-                        {
-                            WriteNull();
-                        }
-
-                        return false;
-                    }
-                }
+                return false;
             }
 
-            return true;
+            if (On(MultiReferencingReference))
+            {
+                WriteReference(reference);
+
+                return true;
+            }
+
+            if (On(MultiReferencingNull))
+            {
+                WriteNull();
+
+                return true;
+            }
+
+            if (IsLoopReferencing(reference))
+            {
+                if (On(LoopReferencingException))
+                {
+                    throw new JsonLoopReferencingException(reference, Reference, content);
+                }
+                else
+                {
+                    WriteNull();
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -1095,18 +1475,23 @@ namespace Swifter.Json
 
             AppendStructBefore();
 
-            AddDepth();
+            if (depth >= maxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+
+            ++depth;
         }
 
         public void WriteEndObject()
         {
-            SubtractDepth();
+            --depth;
 
             Expand(2);
 
-            if (offset > 0 && HGCache.GetPointer()[--offset] != ValueEnding)
+            if (current != hGCache.First && *(--current) != ValueEnding)
             {
-                ++offset;
+                ++current;
             }
 
             AppendStructAfter();
@@ -1126,18 +1511,23 @@ namespace Swifter.Json
 
             AppendStructBefore();
 
-            AddDepth();
+            if (depth >= maxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+
+            ++depth;
         }
 
         public void WriteEndArray()
         {
-            SubtractDepth();
+            --depth;
 
             Expand(2);
 
-            if (offset > 0 && HGCache.GetPointer()[--offset] != ValueEnding)
+            if (current != hGCache.First && *(--current) != ValueEnding)
             {
-                ++offset;
+                ++current;
             }
 
             AppendStructAfter();
@@ -1160,11 +1550,121 @@ namespace Swifter.Json
         {
             Flush();
 
-            return HGCache.ToStringEx();
+            return hGCache.ToStringEx();
+        }
+
+        public int Count => -1;
+
+        long ITargetedBind.TargetedId => jsonFormatter?.targeted_id ?? GlobalTargetedId;
+
+        IEnumerable<string> IDataWriter<string>.Keys => null;
+
+        IEnumerable<int> IDataWriter<int>.Keys => null;
+
+        Type IDataWriter.ContentType => null;
+
+        object IDataWriter.Content
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
         }
 
         public void MakeTargetedId()
         {
         }
+
+        public void Initialize()
+        {
+        }
+
+        public void Initialize(int capacity)
+        {
+        }
+
+        public void OnWriteAll(IDataReader<string> dataReader)
+        {
+        }
+
+        public void OnWriteAll(IDataReader<int> dataReader)
+        {
+        }
+
+        public void OnWriteValue(string key, IValueReader valueReader)
+        {
+            ValueInterface.WriteValue(this[key], valueReader.DirectRead());
+        }
+
+        public void OnWriteValue(int key, IValueReader valueReader)
+        {
+            ValueInterface.WriteValue(this[key], valueReader.DirectRead());
+        }
+
+        void IValueWriter<bool[]>.WriteValue(bool[] value) => WriteArray(value);
+
+        void IValueWriter<byte[]>.WriteValue(byte[] value) => WriteArray(value);
+
+        void IValueWriter<sbyte[]>.WriteValue(sbyte[] value) => WriteArray(value);
+
+        void IValueWriter<short[]>.WriteValue(short[] value) => WriteArray(value);
+
+        void IValueWriter<ushort[]>.WriteValue(ushort[] value) => WriteArray(value);
+
+        void IValueWriter<char[]>.WriteValue(char[] value) => WriteArray(value);
+
+        void IValueWriter<int[]>.WriteValue(int[] value) => WriteArray(value);
+
+        void IValueWriter<uint[]>.WriteValue(uint[] value) => WriteArray(value);
+
+        void IValueWriter<long[]>.WriteValue(long[] value) => WriteArray(value);
+
+        void IValueWriter<ulong[]>.WriteValue(ulong[] value) => WriteArray(value);
+
+        void IValueWriter<float[]>.WriteValue(float[] value) => WriteArray(value);
+
+        void IValueWriter<double[]>.WriteValue(double[] value) => WriteArray(value);
+
+        void IValueWriter<DateTime[]>.WriteValue(DateTime[] value) => WriteArray(value);
+
+        void IValueWriter<DateTimeOffset[]>.WriteValue(DateTimeOffset[] value) => WriteArray(value);
+
+        void IValueWriter<decimal[]>.WriteValue(decimal[] value) => WriteArray(value);
+
+        void IValueWriter<Guid[]>.WriteValue(Guid[] value) => WriteArray(value);
+
+        void IValueWriter<string[]>.WriteValue(string[] value) => WriteArray(value);
+
+        void IValueWriter<List<bool>>.WriteValue(List<bool> value) => WriteList(value);
+
+        void IValueWriter<List<byte>>.WriteValue(List<byte> value) => WriteList(value);
+
+        void IValueWriter<List<sbyte>>.WriteValue(List<sbyte> value) => WriteList(value);
+
+        void IValueWriter<List<short>>.WriteValue(List<short> value) => WriteList(value);
+
+        void IValueWriter<List<ushort>>.WriteValue(List<ushort> value) => WriteList(value);
+
+        void IValueWriter<List<char>>.WriteValue(List<char> value) => WriteList(value);
+
+        void IValueWriter<List<int>>.WriteValue(List<int> value) => WriteList(value);
+
+        void IValueWriter<List<uint>>.WriteValue(List<uint> value) => WriteList(value);
+
+        void IValueWriter<List<long>>.WriteValue(List<long> value) => WriteList(value);
+
+        void IValueWriter<List<ulong>>.WriteValue(List<ulong> value) => WriteList(value);
+
+        void IValueWriter<List<float>>.WriteValue(List<float> value) => WriteList(value);
+
+        void IValueWriter<List<double>>.WriteValue(List<double> value) => WriteList(value);
+
+        void IValueWriter<List<DateTime>>.WriteValue(List<DateTime> value) => WriteList(value);
+
+        void IValueWriter<List<DateTimeOffset>>.WriteValue(List<DateTimeOffset> value) => WriteList(value);
+
+        void IValueWriter<List<decimal>>.WriteValue(List<decimal> value) => WriteList(value);
+
+        void IValueWriter<List<Guid>>.WriteValue(List<Guid> value) => WriteList(value);
+
+        void IValueWriter<List<string>>.WriteValue(List<string> value) => WriteList(value);
     }
 }

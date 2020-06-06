@@ -1,8 +1,4 @@
-﻿
-#if NET20 || NET30 || NET35
-
-
-#else
+﻿#if Dynamic
 
 using System;
 using System.Dynamic;
@@ -11,19 +7,6 @@ namespace Swifter.Json
 {
     partial class JsonValue : DynamicObject
     {
-        static void AssertOneArguments(int length)
-        {
-            if (length != 1)
-            {
-                Throw();
-            }
-
-            void Throw()
-            {
-                throw new NotSupportedException("Indexer must be one arguments.");
-            }
-        }
-
         /// <summary>
         /// Dynamic 对象尝试获取成员值。
         /// </summary>
@@ -46,22 +29,23 @@ namespace Swifter.Json
         /// <returns>是否获取成功</returns>
         public override bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object result)
         {
-            AssertOneArguments(indexes.Length);
-
-            var key = indexes[0];
-
-            if (key is int index)
+            if (indexes.Length != 1)
             {
-                result = AsValue(this[index]);
+                var key = indexes[0];
 
-                return true;
-            }
+                if (key is int index)
+                {
+                    result = AsValue(this[index]);
 
-            if (key is string name)
-            {
-                result = AsValue(this[name]);
-                
-                return result != null;
+                    return true;
+                }
+
+                if (key is string name)
+                {
+                    result = AsValue(this[name]);
+
+                    return result != null;
+                }
             }
 
             result = null;

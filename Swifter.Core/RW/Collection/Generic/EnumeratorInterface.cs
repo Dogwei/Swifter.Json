@@ -14,16 +14,17 @@ namespace Swifter.RW
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
 
                 return;
             }
 
-            var enumeratorReader = new EnumeratorReader<T, TValue>();
-
-            enumeratorReader.Initialize(value);
+            var enumeratorReader = new EnumeratorReader<T, TValue>
+            {
+                content = value
+            };
 
             valueWriter.WriteArray(enumeratorReader);
         }

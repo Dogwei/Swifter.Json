@@ -1,547 +1,322 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Reflection.Emit;
 
 namespace Swifter.Tools
 {
-    internal static class InternalConvert<TSource, TDestination>
+    internal static class InternalConvert
     {
-        public static readonly IXConvert<TSource, TDestination> Instance;
+        internal static readonly List<IConverterFactory> factories;
 
         static InternalConvert()
         {
-            foreach (var item in GetImpls())
-            {
-                if (item is IXConvert<TSource, TDestination> instance)
-                {
-                    Instance = instance;
+            factories = new List<IConverterFactory>();
+        }
 
-                    return;
+        public static int GetImplicitCode(Type type)
+        {
+            const int
+                Boolean = 0x1,
+                Byte = 0x2,
+                SByte = 0x4,
+                Int16 = 0x8 | Byte | SByte,
+                UInt16 = 0x10 | Byte,
+                Int32 = 0x20 | UInt16 | Int16,
+                UInt32 = 0x40 | UInt16,
+                Int64 = 0x80 | UInt32 | Int32,
+                UInt64 = 0x100 | UInt32,
+                Char = 0x200,
+                Single = 0x400 | Int64 | UInt64,
+                Double = 0x800 | Single;
+
+            return Type.GetTypeCode(type) switch
+            {
+                TypeCode.Boolean => Boolean,
+                TypeCode.Byte => Byte,
+                TypeCode.SByte => SByte,
+                TypeCode.Int16 => Int16,
+                TypeCode.UInt16 => UInt16,
+                TypeCode.Int32 => Int32,
+                TypeCode.UInt32 => UInt32,
+                TypeCode.Int64 => Int64,
+                TypeCode.UInt64 => UInt64,
+                TypeCode.Char => Char,
+                TypeCode.Single => Single,
+                TypeCode.Double => Double,
+                _ => 0
+            };
+        }
+
+        public static int GetExplicitCode(Type type)
+        {
+            const int
+                Boolean = 0x1,
+                Byte = 0x2,
+                SByte = 0x4,
+                Int16 = 0x8,
+                UInt16 = 0x10,
+                Int32 = 0x20,
+                UInt32 = 0x40,
+                Int64 = 0x80,
+                UInt64 = 0x100,
+                Char = 0x200,
+                Single = 0x400,
+                Double = 0x800;
+
+            const int Number = Byte | SByte | Int16 | UInt16 | Int32 | UInt32 | Int64 | UInt64 | Char | Single | Double;
+
+            return Type.GetTypeCode(type) switch
+            {
+                TypeCode.Boolean => Boolean,
+                TypeCode.Byte => Number,
+                TypeCode.SByte => Number,
+                TypeCode.Int16 => Number,
+                TypeCode.UInt16 => Number,
+                TypeCode.Int32 => Number,
+                TypeCode.UInt32 => Number,
+                TypeCode.Int64 => Number,
+                TypeCode.UInt64 => Number,
+                TypeCode.Char => Number,
+                TypeCode.Single => Number,
+                TypeCode.Double => Number,
+                _ => 0
+            };
+        }
+
+        public static bool IsImplicitConvert(Type sourceType, Type destinationType)
+        {
+            var sourceCode = GetImplicitCode(sourceType);
+
+            if (sourceCode != 0 && (GetImplicitCode(destinationType) & sourceCode) == sourceCode)
+            {
+                return true;
+            }
+
+            if (destinationType.IsAssignableFrom(sourceType))
+            {
+                return true;
+            }
+
+            if (ImplicitConvert.TryGetMathod(sourceType, destinationType, out _))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool IsExplicitConvert(Type sourceType, Type destinationType)
+        {
+            if (IsImplicitConvert(sourceType, destinationType))
+            {
+                return true;
+            }
+
+            var sourceCode = GetImplicitCode(sourceType);
+
+            if (sourceCode != 0 && (GetExplicitCode(destinationType) & sourceCode) == sourceCode)
+            {
+                return true;
+            }
+
+            if (sourceType.IsAssignableFrom(destinationType))
+            {
+                return true;
+            }
+
+            if (ExplicitConvert.TryGetMathod(sourceType, destinationType, out _))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static Type GetConverterType(Type sourceType, Type destinationType)
+        {
+            return typeof(IXConverter<,>).MakeGenericType(sourceType, destinationType);
+        }
+
+        public static bool IsCustomConvert(Type sourceType, Type destinationType)
+        {
+            foreach (var factory in factories)
+            {
+                var converter = factory.GetConverter(sourceType, destinationType);
+
+                if (converter != null && GetConverterType(sourceType, destinationType).IsInstanceOfType(converter))
+                {
+                    return true;
                 }
             }
 
-            throw new NotSupportedException();
+            if (destinationType == typeof(string))
+            {
+                return true;
+            }
+
+            if (sourceType == typeof(DBNull))
+            {
+                return true;
+            }
+
+            if (destinationType == typeof(DBNull))
+            {
+                return true;
+            }
+
+
+            if (sourceType == typeof(string) && destinationType.IsEnum)
+            {
+                return true;
+            }
+
+
+            if (ParseConvert.TryGetMathod(sourceType, destinationType, out _))
+            {
+                return true;
+            }
+
+            if (ToConvert.TryGetMathod(sourceType, destinationType, out _))
+            {
+                return true;
+            }
+
+            if (ConstructorConvert.TryGetMathod(sourceType, destinationType, out _))
+            {
+                return true;
+            }
+
+            return false;
         }
+
+        public static bool IsBasicConvert(Type sourceType, Type destinationType)
+        {
+            return GetConverterType(sourceType, destinationType).IsInstanceOfType(BasicConvert.Instance);
+        }
+    }
+
+    internal static class InternalConvert<TSource, TDestination>
+    {
+        public static readonly IXConverter<TSource, TDestination> Instance 
+            = Underlying.As<IXConverter<TSource, TDestination>>(
+                GetImpls().FirstOrDefault(item => item is IXConverter<TSource, TDestination>));
 
         private static IEnumerable<object> GetImpls()
         {
+            var sourceType = typeof(TSource);
+            var destinationType = typeof(TDestination);
+
+            // Custom
+            foreach (var factory in InternalConvert.factories)
+            {
+                yield return factory.GetConverter(sourceType, destinationType);
+            }
+
+            // Basic
             yield return BasicConvert.Instance;
 
-            if (typeof(TSource) == typeof(TDestination))
+            // Implicit
+            if (sourceType == destinationType)
             {
                 yield return new EqualsConvert<TSource>();
             }
 
-            if (Nullable.GetUnderlyingType(typeof(TDestination)) == typeof(TSource))
+            // Implicit
+            if (Nullable.GetUnderlyingType(destinationType) == sourceType)
             {
-                yield return Activator.CreateInstance(typeof(StructToNullableConvert<>).MakeGenericType(typeof(TSource)));
+                yield return Activator.CreateInstance(typeof(StructToNullableConvert<>).MakeGenericType(sourceType));
             }
 
-            if (Nullable.GetUnderlyingType(typeof(TSource)) == typeof(TDestination))
+            // Explicit
+            if (Nullable.GetUnderlyingType(sourceType) == destinationType)
             {
-                yield return Activator.CreateInstance(typeof(NullableToStructConvert<>).MakeGenericType(typeof(TDestination)));
+                yield return Activator.CreateInstance(typeof(NullableToStructConvert<>).MakeGenericType(destinationType));
             }
 
-            if (typeof(TDestination) == typeof(string))
+            // Custom
+            if (destinationType == typeof(string))
             {
                 yield return new ToStringConvert<TSource>();
             }
 
-            if (typeof(TDestination).IsAssignableFrom(typeof(TSource)))
+            // Implicit
+            if (destinationType.IsAssignableFrom(sourceType))
             {
-                yield return Activator.CreateInstance(typeof(AssignableConvert<,>).MakeGenericType(typeof(TSource), typeof(TDestination)));
+                yield return Activator.CreateInstance(typeof(AssignableConvert<,>).MakeGenericType(sourceType, destinationType));
             }
 
-            if (typeof(TSource) == typeof(DBNull))
+            // Custom
+            if (sourceType == typeof(DBNull))
             {
-                var underlyingType = Nullable.GetUnderlyingType(typeof(TDestination));
-
-                if (underlyingType != null && underlyingType != typeof(TDestination))
-                {
-                    yield return Activator.CreateInstance(typeof(DBNullToNullableConvert<>).MakeGenericType(underlyingType));
-                }
-
-                if (typeof(TDestination).IsClass)
-                {
-                    yield return Activator.CreateInstance(typeof(DBNullToClassConvert<>).MakeGenericType(typeof(TDestination)));
-                }
+                yield return new FromDBNullConvert<TDestination>();
             }
 
-            if (typeof(TDestination) == typeof(DBNull))
+            // Custom
+            if (destinationType == typeof(DBNull))
             {
                 yield return new ToDBNullConvert<TSource>();
             }
 
-            if (typeof(TSource) == typeof(string) && typeof(TDestination).IsEnum)
+            // Implicit & XConvert
             {
-                yield return Activator.CreateInstance(typeof(ParseEnum<>).MakeGenericType(typeof(TDestination)));
-            }
-
-            if (typeof(TSource).IsVisible && typeof(TDestination).IsVisible)
-            {
-                if (ImplicitConvert.TryGetMathod(typeof(TSource), typeof(TDestination), out var method))
+                if (Nullable.GetUnderlyingType(sourceType) is Type underlyingType && underlyingType != sourceType)
                 {
-                    yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
-                }
-
-                if (ExplicitConvert.TryGetMathod(typeof(TSource), typeof(TDestination), out method))
-                {
-                    yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
-                }
-
-                if (ParseConvert.TryGetMathod(typeof(TSource), typeof(TDestination), out method))
-                {
-                    yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
-                }
-
-                if (ToConvert.TryGetMathod(typeof(TSource), typeof(TDestination), out method))
-                {
-                    yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
-                }
-
-                if (ConstructorConvert.TryGetMathod(typeof(TSource), typeof(TDestination), out var constructor))
-                {
-                    yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(constructor);
+                    yield return Activator.CreateInstance(typeof(NullableToValueConvert<,>).MakeGenericType(underlyingType, destinationType));
                 }
             }
 
-            if (typeof(TSource).IsAssignableFrom(typeof(TDestination)))
+            // XConvert & Implicit
             {
-                yield return Activator.CreateInstance(typeof(BaseConvert<,>).MakeGenericType(typeof(TSource), typeof(TDestination)));
+                if (Nullable.GetUnderlyingType(destinationType) is Type underlyingType && underlyingType != destinationType)
+                {
+                    yield return Activator.CreateInstance(typeof(ValueToNullableConvert<,>).MakeGenericType(sourceType, underlyingType));
+                }
             }
 
+            // Custom
+            if (sourceType == typeof(string) && destinationType.IsEnum)
+            {
+                yield return Activator.CreateInstance(typeof(ParseEnum<>).MakeGenericType(destinationType));
+            }
+
+            // Implicit
+            if (ImplicitConvert.TryGetMathod(sourceType, destinationType, out var method))
+            {
+                yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
+            }
+
+            // Explicit
+            if (ExplicitConvert.TryGetMathod(sourceType, destinationType, out method))
+            {
+                yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
+            }
+
+            // Custom
+            if (ParseConvert.TryGetMathod(sourceType, destinationType, out method))
+            {
+                yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
+            }
+
+            // Custom
+            if (ToConvert.TryGetMathod(sourceType, destinationType, out method))
+            {
+                yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(method);
+            }
+
+            // Custom
+            if (ConstructorConvert.TryGetMathod(sourceType, destinationType, out var constructor))
+            {
+                yield return BaseDynamicConvert.CreateInstanceByIL<TSource, TDestination>(constructor);
+            }
+
+            // Explicit
+            if (sourceType.IsAssignableFrom(destinationType))
+            {
+                yield return Activator.CreateInstance(typeof(BaseConvert<,>).MakeGenericType(sourceType, destinationType));
+            }
+
+            // Error
             yield return new ForceConvert<TSource, TDestination>();
-        }
-    }
-
-    internal sealed class ToStringConvert<T> : IXConvert<T, string>
-    {
-        public string Convert(T value) => value?.ToString();
-    }
-
-    internal sealed class ParseEnum<TDestination> : IXConvert<string, TDestination> where TDestination:struct
-    {
-        public TDestination Convert(string value)
-        {
-#if NET20 || NET30 || NET35
-            return (TDestination)Enum.Parse(typeof(TDestination), value);
-#else
-            if (Enum.TryParse<TDestination>(value, out var result))
-            {
-                return result;
-            }
-
-            return (TDestination)Enum.Parse(typeof(TDestination), value);
-#endif
-        }
-    }
-
-    internal sealed class EqualsConvert<T> : IXConvert<T, T>
-    {
-        public T Convert(T value) => value;
-    }
-
-    internal sealed class DBNullToNullableConvert<T> : IXConvert<DBNull, T?> where T : struct
-    {
-        public T? Convert(DBNull value) => null;
-    }
-
-    internal sealed class DBNullToClassConvert<T> : IXConvert<DBNull, T> where T : class
-    {
-        public T Convert(DBNull value) => null;
-    }
-
-    internal sealed class ToDBNullConvert<T> : IXConvert<T, DBNull>
-    {
-        public DBNull Convert(T value) => value == null ? DBNull.Value : throw new InvalidOperationException("Unable convert a value to DBNull.");
-    }
-
-    internal sealed class StructToNullableConvert<T> : IXConvert<T, T?> where T : struct
-    {
-        public T? Convert(T value) => value;
-    }
-
-    internal sealed class NullableToStructConvert<T> : IXConvert<T?, T> where T : struct
-    {
-        public T Convert(T? value) => value.Value;
-    }
-
-    internal sealed class AssignableConvert<T, TBase> : IXConvert<T, TBase> where T : TBase
-    {
-        public TBase Convert(T value) => value;
-    }
-
-    internal sealed class BaseConvert<TBase, T> : IXConvert<TBase, T> where T : TBase
-    {
-        public T Convert(TBase value) => (T)value;
-    }
-
-    internal sealed class ForceConvert<TSource, TDestination> : IXConvert<TSource, TDestination>
-    {
-        public TDestination Convert(TSource value) => (TDestination)(object)value;
-    }
-
-    internal abstract class BaseDynamicConvert
-    {
-        public static bool FirstEqualsSpecifiedType(MethodBase method, Type type)
-        {
-            var @params = method.GetParameters();
-
-            return @params.Length == 1 && @params[0].ParameterType == type;
-        }
-
-        public static object CreateInstanceByIL<TSource, TDestination>(MethodBase method)
-        {
-            if (!VersionDifferences.IsSupportEmit)
-            {
-                return null;
-            }
-
-            var typeBuilder = DynamicAssembly.DefineType(
-                $"{typeof(TSource).Name}_To_{typeof(TDestination).Name}_{Guid.NewGuid().ToString("N")}",
-                TypeAttributes.Public | TypeAttributes.Sealed);
-
-            typeBuilder.AddInterfaceImplementation(typeof(IXConvert<TSource, TDestination>));
-
-            var methodBuilder = typeBuilder.DefineMethod(
-                nameof(IXConvert<TSource, TDestination>.Convert),
-                MethodAttributes.Virtual | MethodAttributes.Public | MethodAttributes.Final,
-                CallingConventions.HasThis,
-                typeof(TDestination),
-                new Type[] { typeof(TSource) });
-
-            var ilGen = methodBuilder.GetILGenerator();
-            
-            List<Type> argsTypes = new List<Type>();
-            Type returnType;
-
-            // Get args types and return type.
-            {
-                if (method is ConstructorInfo constructor)
-                {
-                    returnType = constructor.DeclaringType;
-                }
-                else if (method is MethodInfo methodInfo)
-                {
-                    if (!method.IsStatic)
-                    {
-                        var thisType = methodInfo.DeclaringType; ;
-
-                        if (thisType.IsValueType)
-                        {
-                            thisType = thisType.MakeByRefType();
-                        }
-
-                        argsTypes.Add(thisType);
-                    }
-
-                    returnType = methodInfo.ReturnType;
-                }
-                else
-                {
-                    throw new NotSupportedException(nameof(method));
-                }
-
-                foreach (var item in method.GetParameters())
-                {
-                    argsTypes.Add(item.ParameterType);
-                }
-            }
-
-            // Load args
-            {
-                foreach (var item in argsTypes)
-                {
-                    if (item == typeof(Type))
-                    {
-                        ilGen.LoadType(typeof(TDestination));
-                    }
-                    else if (item == typeof(TSource))
-                    {
-                        ilGen.LoadArgument(1);
-                    }
-                    else if (item == typeof(TSource).MakeByRefType())
-                    {
-                        ilGen.LoadArgumentAddress(1);
-                    }
-                    else if (typeof(TSource).IsValueType && item.IsAssignableFrom(typeof(TSource)))
-                    {
-                        ilGen.LoadArgument(1);
-                        ilGen.Box(typeof(TSource));
-                    }
-                    else if (item.IsAssignableFrom(typeof(TSource)))
-                    {
-                        ilGen.LoadArgument(1);
-                    }
-                    else
-                    {
-                        throw new NotSupportedException(nameof(method));
-                    }
-                }
-            }
-
-            // Call
-            {
-                if (method is ConstructorInfo constructor)
-                {
-                    ilGen.NewObject(constructor);
-                }
-                else
-                {
-                    ilGen.Call(method);
-                }
-            }
-
-            // Return
-            {
-                if (returnType.IsByRef)
-                {
-                    returnType = returnType.GetElementType();
-
-                    ilGen.LoadValue(returnType);
-                }
-
-                if (returnType.IsValueType && returnType != typeof(TDestination))
-                {
-                    if (typeof(TDestination).IsAssignableFrom(returnType))
-                    {
-                        // Box
-                        ilGen.Box(typeof(TDestination));
-                    }
-                    else
-                    {
-                        var convertMethod = typeof(XConvert<TDestination>).GetMethod(nameof(XConvert<TDestination>.Convert));
-
-                        convertMethod = convertMethod.MakeGenericMethod(returnType);
-
-                        ilGen.Call(convertMethod);
-                    }
-                }
-            }
-
-            ilGen.Return();
-
-            var type = typeBuilder.CreateTypeInfo();
-
-            return Activator.CreateInstance(type);
-        }
-    }
-
-    internal sealed class ImplicitConvert : BaseDynamicConvert
-    {
-        public const BindingFlags ImplicitFlags = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
-
-        public static readonly string ImplicitName =
-            typeof(ImplicitConvert).GetMethods(ImplicitFlags)
-            .First(item => item.ReturnType == typeof(ImplicitConvert) && FirstEqualsSpecifiedType(item, typeof(int)))
-            .Name;
-
-        public static bool TryGetMathod(Type tSource, Type tDestination, out MethodInfo method)
-        {
-            foreach (var item in tSource.GetMethods(ImplicitFlags))
-            {
-                if (item.Name == ImplicitName &&
-                    item.ReturnType == tDestination &&
-                    FirstEqualsSpecifiedType(item, tSource) &&
-                    item.DeclaringType.IsVisible)
-                {
-                    method = item;
-
-                    return true;
-                }
-            }
-
-            method = tDestination.GetMethod(ImplicitName, ImplicitFlags, Type.DefaultBinder, new Type[] { tSource }, null);
-
-            return method != null;
-        }
-
-        public static implicit operator ImplicitConvert(int _) => default;
-    }
-
-    internal sealed class ExplicitConvert : BaseDynamicConvert
-    {
-        public const BindingFlags ExplicitFlags = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
-
-        public static readonly string ExplicitName =
-            typeof(ExplicitConvert).GetMethods(ExplicitFlags)
-            .First(item => item.ReturnType == typeof(ExplicitConvert) && FirstEqualsSpecifiedType(item, typeof(int)))
-            .Name;
-
-        public static bool TryGetMathod(Type tSource, Type tDestination, out MethodInfo method)
-        {
-            foreach (var item in tSource.GetMethods(ExplicitFlags))
-            {
-                if (item.Name == ExplicitName &&
-                    item.ReturnType == tDestination &&
-                    FirstEqualsSpecifiedType(item, tSource) &&
-                    item.DeclaringType.IsVisible)
-                {
-                    method = item;
-
-                    return true;
-                }
-            }
-
-            method = tDestination.GetMethod(ExplicitName, ExplicitFlags, Type.DefaultBinder, new Type[] { tSource }, null);
-
-            return method != null;
-
-        }
-
-        public static explicit operator ExplicitConvert(int _) => default;
-    }
-
-    internal sealed class ParseConvert : BaseDynamicConvert
-    {
-        public const BindingFlags ParseFlags = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
-
-        public static readonly string[] ParseNames = ArrayHelper.Filter(
-                typeof(ParseConvert).GetMethods(ParseFlags),
-                item => item.ReturnType == typeof(ParseConvert) && FirstEqualsSpecifiedType(item, typeof(string)),
-                item => item.Name);
-
-        public static bool TryGetMathod(Type tSource, Type tDestination, out MethodInfo method)
-        {
-            var types = new Type[] { tSource };
-
-            foreach (var item in ParseNames)
-            {
-                method = tDestination.GetMethod(item, ParseFlags, Type.DefaultBinder, types, null);
-
-                if (method == null)
-                {
-                    continue;
-                }
-
-                if (method.IsGenericMethodDefinition)
-                {
-                    var gArgs = method.GetGenericArguments();
-
-                    if (gArgs.Length == 1 && method.ReturnType == gArgs[0])
-                    {
-                        method = method.MakeGenericMethod(tDestination);
-                    }
-                    else
-                    {
-                        method = null;
-                    }
-                }
-
-                if (method != null)
-                {
-                    return true;
-                }
-            }
-
-            method = null;
-
-            return false;
-        }
-
-        public static ParseConvert Parse(string value) => default;
-
-        public static ParseConvert ValueOf(string value) => default;
-    }
-
-    internal sealed class ToConvert : BaseDynamicConvert
-    {
-        public const BindingFlags ToFlags = BindingFlags.Public | BindingFlags.Instance;
-
-        public static readonly NameInfo[] ToNames =
-            typeof(ToConvert).GetMethods(ToFlags)
-            .Where(item => item.ReturnType != typeof(void) && item.GetParameters().Length == 0 && CreateNameInfo(item) != null)
-            .Select(item => CreateNameInfo(item))
-            .Distinct()
-            .ToArray();
-
-        public static NameInfo CreateNameInfo(MethodInfo item)
-        {
-            var split = item.Name.Split(new string[] { item.ReturnType.Name }, StringSplitOptions.None);
-
-            if (split.Length == 2)
-            {
-                return new NameInfo { Before = split[0], After = split[1] };
-            }
-
-            return null;
-        }
-
-        public static IEnumerable<string> GetDestinationName(Type tDestination)
-        {
-            if (tDestination.IsArray)
-            {
-                yield return nameof(Array);
-
-                foreach (var item in GetDestinationName(tDestination.GetElementType()))
-                {
-                    yield return item + nameof(Array);
-                    yield return item + "s";
-                    yield return item + "es";
-
-                    if (item.EndsWith("y")) yield return item.Substring(0, item.Length - 1) + "ies";
-                    if (item.EndsWith("f")) yield return item.Substring(0, item.Length - 1) + "ves";
-                    if (item.EndsWith("fe")) yield return item.Substring(0, item.Length - 2) + "ves";
-                }
-            }
-
-            yield return tDestination.Name;
-        }
-
-        public static bool TryGetMathod(Type tSource, Type tDestination, out MethodInfo method)
-        {
-            foreach (var item in ToNames)
-            {
-                foreach (var dName in GetDestinationName(tDestination))
-                {
-                    method = tSource.GetMethod(
-                        item.Before + dName + item.After,
-                        ToFlags,
-                        Type.DefaultBinder,
-                        Type.EmptyTypes,
-                        null);
-
-                    if (method != null)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            method = null;
-
-            return false;
-        }
-
-        public int ToInt32() => default;
-
-        public int Int32 => default;
-
-        public long Int64() => default;
-
-        public sealed class NameInfo : IEquatable<NameInfo>
-        {
-            public string Before;
-
-            public string After;
-
-            public bool Equals(NameInfo other) => other != null && Before == other.Before && After == other.After;
-
-            public override bool Equals(object obj) => obj is NameInfo other && Equals(other);
-
-            public override int GetHashCode() => Before.GetHashCode() ^ After.GetHashCode();
-        }
-    }
-
-    internal sealed class ConstructorConvert : BaseDynamicConvert
-    {
-        public static bool TryGetMathod(Type tSource, Type tDestination, out ConstructorInfo method)
-        {
-            method = tDestination.GetConstructor(new Type[] { tSource });
-
-            return method != null;
         }
     }
 }

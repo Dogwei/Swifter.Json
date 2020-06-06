@@ -17,6 +17,8 @@ namespace Swifter.Tools
             var nums = uInt64Numbers;
             var length = nums.Length;
 
+            // 一个二分树。
+            // Binary Tree
             if (value >= nums[5])
             {
                 if (value >= nums[10])
@@ -86,9 +88,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public int ToString(ulong value, char* chars)
         {
-            var l = threeDigitalsLength;
-
-            if (l == 1000)
+            if (radix == DecimalRadix)
             {
                 return ToDecimalString(value, chars);
             }
@@ -101,50 +101,30 @@ namespace Swifter.Tools
                 if (value >= nums[10])
                     if (length > 15 && value >= nums[15])
                         if (length > 17 && value >= nums[17])
-                            if (length > 19 && value >= nums[19])
-                                goto L20;
-                            else if (length > 18 && value >= nums[18])
-                                goto L19;
-                            else
-                                goto L18;
-                        else if (length > 16 && value >= nums[16])
-                            goto L17;
-                        else
-                            goto L16;
+                            if (length > 19 && value >= nums[19]) goto L20;
+                            else if (length > 18 && value >= nums[18]) goto L19;
+                            else goto L18;
+                        else if (length > 16 && value >= nums[16]) goto L17;
+                        else goto L16;
                     else if (length > 12 && value >= nums[12])
-                        if (length > 14 && value >= nums[14])
-                            goto L15;
-                        else if (length > 13 && value >= nums[13])
-                            goto L14;
-                        else
-                            goto L13;
-                    else if (length > 11 && value >= nums[11])
-                        goto L12;
-                    else
-                        goto L11;
+                        if (length > 14 && value >= nums[14]) goto L15;
+                        else if (length > 13 && value >= nums[13]) goto L14;
+                        else goto L13;
+                    else if (length > 11 && value >= nums[11]) goto L12;
+                    else goto L11;
                 else if (value >= nums[7])
-                    if (value >= nums[9])
-                        goto L10;
-                    else if (value >= nums[8])
-                        goto L9;
-                    else
-                        goto L8;
-                else if (value >= nums[6])
-                    goto L7;
-                else
-                    goto L6;
+                    if (value >= nums[9]) goto L10;
+                    else if (value >= nums[8]) goto L9;
+                    else goto L8;
+                else if (value >= nums[6]) goto L7;
+                else goto L6;
             }
             else if (value >= nums[2])
-                if (value >= nums[4])
-                    goto L5;
-                else if (value >= nums[3])
-                    goto L4;
-                else
-                    goto L3;
-            else if (value >= nums[1])
-                goto L2;
-            else
-                goto L1;
+                if (value >= nums[4]) goto L5;
+                else if (value >= nums[3]) goto L4;
+                else goto L3;
+            else if (value >= nums[1]) goto L2;
+            else goto L1;
 
             L20:
 
@@ -160,104 +140,104 @@ namespace Swifter.Tools
             }
 
             AppendD2(chars, s);
-            AppendD18(chars+2, value - s * nums[18]);
+            AppendD18(chars + 2, value - s * nums[18]);
             return 20;
 
-        L19:
+            L19:
             s = value / nums[18];
             AppendD1(chars, s);
-            AppendD18(chars+1, value - s * nums[18]);
+            AppendD18(chars + 1, value - s * nums[18]);
             return 19;
 
-        L18:
+            L18:
             AppendD18(chars, value);
             return 18;
 
-        L17:
+            L17:
             s = value / nums[15];
             AppendD2(chars, s);
             AppendD15(chars + 2, value - s * nums[15]);
             return 17;
 
-        L16:
+            L16:
             s = value / nums[15];
             AppendD1(chars, s);
             AppendD15(chars + 1, value - s * nums[15]);
             return 16;
 
-        L15:
+            L15:
             AppendD15(chars, value);
             return 15;
 
-        L14:
+            L14:
             s = value / nums[12];
             AppendD2(chars, s);
             AppendD12(chars + 2, value - s * nums[12]);
             return 14;
 
-        L13:
+            L13:
             s = value / nums[12];
             AppendD1(chars, s);
             AppendD12(chars + 1, value - s * nums[12]);
             return 13;
 
-        L12:
+            L12:
             AppendD12(chars, value);
             return 12;
 
-        L11:
+            L11:
             s = value / nums[9];
             AppendD2(chars, s);
             AppendD9(chars + 2, value - s * nums[9]);
             return 11;
 
-        L10:
+            L10:
             s = value / nums[9];
             AppendD1(chars, s);
             AppendD9(chars + 1, value - s * nums[9]);
             return 10;
 
-        L9:
+            L9:
             AppendD9(chars, value);
             return 9;
 
-        L8:
+            L8:
             s = value / nums[6];
             AppendD2(chars, s);
             AppendD6(chars + 2, value - s * nums[6]);
             return 8;
 
-        L7:
+            L7:
             s = value / nums[6];
             AppendD1(chars, s);
             AppendD6(chars + 1, value - s * nums[6]);
             return 7;
 
-        L6:
+            L6:
             AppendD6(chars, value);
             return 6;
 
-        L5:
-            s = value / l;
+            L5:
+            s = value / nums[3];
             AppendD2(chars, s);
-            AppendD3(chars + 2, value - s * l);
+            AppendD3(chars + 2, value - s * nums[3]);
             return 5;
 
-        L4:
-            s = value / l;
+            L4:
+            s = value / nums[3];
             AppendD1(chars, s);
-            AppendD3(chars + 1, value - s * l);
+            AppendD3(chars + 1, value - s * nums[3]);
             return 4;
 
-        L3:
+            L3:
             AppendD3(chars, value);
             return 3;
 
-        L2:
+            L2:
             AppendD2(chars, value);
             return 2;
 
-        L1:
+            L1:
             AppendD1(chars, value);
             return 1;
         }
@@ -272,16 +252,14 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void ToString(ulong value, byte length, char* chars)
         {
-            var l = threeDigitalsLength;
-
-            if (l == 1000)
+            if (radix == DecimalRadix)
             {
                 ToDecimalString(value, length, chars);
 
                 return;
             }
 
-            var n = uInt64Numbers;
+            var nums = uInt64Numbers;
 
             switch (length)
             {
@@ -327,7 +305,7 @@ namespace Swifter.Tools
                     goto L19;
             }
 
-            var s = value / n[18];
+            var s = value / nums[18];
 
             if (length > 20)
             {
@@ -335,110 +313,110 @@ namespace Swifter.Tools
 
                 ToString(s, length, chars);
 
-                AppendD18(chars + length, value - s * n[18]);
+                AppendD18(chars + length, value - s * nums[18]);
 
                 return;
             }
 
             AppendD2(chars, s);
-            AppendD18(chars + 2, value - s * n[18]);
+            AppendD18(chars + 2, value - s * nums[18]);
             return;
 
-        L19:
-            s = value / n[18];
+            L19:
+            s = value / nums[18];
             AppendD1(chars, s);
-            AppendD18(chars + 1, value - s * n[18]);
+            AppendD18(chars + 1, value - s * nums[18]);
             return;
 
-        L18:
+            L18:
             AppendD18(chars, value);
             return;
 
-        L17:
-            s = value / n[15];
+            L17:
+            s = value / nums[15];
             AppendD2(chars, s);
-            AppendD15(chars + 2, value - s * n[15]);
+            AppendD15(chars + 2, value - s * nums[15]);
             return;
 
-        L16:
-            s = value / n[15];
+            L16:
+            s = value / nums[15];
             AppendD1(chars, s);
-            AppendD15(chars + 1, value - s * n[15]);
+            AppendD15(chars + 1, value - s * nums[15]);
             return;
 
-        L15:
+            L15:
             AppendD15(chars, value);
             return;
 
-        L14:
-            s = value / n[12];
+            L14:
+            s = value / nums[12];
             AppendD2(chars, s);
-            AppendD12(chars + 2, value - s * n[12]);
+            AppendD12(chars + 2, value - s * nums[12]);
             return;
 
-        L13:
-            s = value / n[12];
+            L13:
+            s = value / nums[12];
             AppendD1(chars, s);
-            AppendD12(chars + 1, value - s * n[12]);
+            AppendD12(chars + 1, value - s * nums[12]);
             return;
 
-        L12:
+            L12:
             AppendD12(chars, value);
             return;
 
-        L11:
-            s = value / n[9];
+            L11:
+            s = value / nums[9];
             AppendD2(chars, s);
-            AppendD9(chars + 2, value - s * n[9]);
+            AppendD9(chars + 2, value - s * nums[9]);
             return;
 
-        L10:
-            s = value / n[9];
+            L10:
+            s = value / nums[9];
             AppendD1(chars, s);
-            AppendD9(chars + 1, value - s * n[9]);
+            AppendD9(chars + 1, value - s * nums[9]);
             return;
 
-        L9:
+            L9:
             AppendD9(chars, value);
             return;
 
-        L8:
-            s = value / n[6];
+            L8:
+            s = value / nums[6];
             AppendD2(chars, s);
-            AppendD6(chars + 2, value - s * n[6]);
+            AppendD6(chars + 2, value - s * nums[6]);
             return;
 
-        L7:
-            s = value / n[6];
+            L7:
+            s = value / nums[6];
             AppendD1(chars, s);
-            AppendD6(chars + 1, value - s * n[6]);
+            AppendD6(chars + 1, value - s * nums[6]);
             return;
 
-        L6:
+            L6:
             AppendD6(chars, value);
             return;
 
-        L5:
-            s = value / l;
+            L5:
+            s = value / nums[3];
             AppendD2(chars, s);
-            AppendD3(chars + 2, value - s * l);
+            AppendD3(chars + 2, value - s * nums[3]);
             return;
 
-        L4:
-            s = value / l;
+            L4:
+            s = value / nums[3];
             AppendD1(chars, s);
-            AppendD3(chars + 1, value - s * l);
+            AppendD3(chars + 1, value - s * nums[3]);
             return;
 
-        L3:
+            L3:
             AppendD3(chars, value);
             return;
 
-        L2:
+            L2:
             AppendD2(chars, value);
             return;
 
-        L1:
+            L1:
             AppendD1(chars, value);
             return;
         }
@@ -484,72 +462,6 @@ namespace Swifter.Tools
             return DirectOperateToString(temp, length, chars);
         }
 
-
-        /// <summary>
-        /// 将 UInt64 值转换为字符串表现形式。
-        /// </summary>
-        /// <param name="value">UInt64 值</param>
-        /// <returns>返回一个 String 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public string ToString(ulong value)
-        {
-            var len = GetLength(value);
-
-            var str = new string('\0', len);
-
-            fixed (char* pStr = str)
-            {
-                ToString(value, len, pStr);
-            }
-
-            return str;
-        }
-
-        /// <summary>
-        /// 将 Int64 值转换为字符串表现形式。
-        /// </summary>
-        /// <param name="value">Int64 值</param>
-        /// <returns>返回一个 String 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public string ToString(long value)
-        {
-            if (value >= 0)
-            {
-                return ToString((ulong)value);
-            }
-
-            var uValue = (ulong)-value;
-
-            var len = GetLength(uValue);
-
-            var str = new string('\0', len + 1);
-
-            fixed (char* pStr = str)
-            {
-                pStr[0] = NegativeSign;
-
-                ToString(uValue, len, pStr + 1);
-            }
-
-            return str;
-        }
-
-        /// <summary>
-        /// 将字节正整数转换为字符串表现形式。
-        /// </summary>
-        /// <param name="value">字节正整数</param>
-        /// <param name="length">字节正整数长度</param>
-        /// <returns>返回一个 String 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public string ToString(uint* value, int length)
-        {
-            var chars = stackalloc char[(uInt32NumbersLength * length) + 1];
-
-            var writeCount = ToString(value, length, chars);
-
-            return new string(chars, 0, writeCount);
-        }
-
         /// <summary>
         /// 将一个字节正整数写入到空间足够的字符串中。此方法对字节正整数直接运算，所以会改变它的值。
         /// </summary>
@@ -560,249 +472,352 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public int DirectOperateToString(uint* value, int length, char* chars)
         {
-            var divisor = this.divisor;
-
-            if (divisor == 1000000000)
+            if (radix == DecimalRadix)
             {
                 return DirectOperateToDecimalString(value, length, chars);
             }
-            
-            int l;
 
-            l = Div(value, length, divisor, out var r);
+            length = Div(value, length, divisor, out var r);
 
-            if (l == 0)
+            if (length == 0)
             {
                 return ToString((ulong)r, chars);
             }
 
-            int s;
+            length = length == 1 ? 
+                ToString(*value, chars) : 
+                DirectOperateToString(value, length, chars);
 
-            if (l == 1)
-            {
-                s = ToString(*value, chars);
-            }
-            else
-            {
-                s = DirectOperateToString(value, l, chars);
-            }
+            ToString(r, divisorLength, chars + length);
 
-            ToString(r, divisorLength, chars + s);
-
-            return s + divisorLength;
+            return length + divisorLength;
         }
 
-
-
-
-
         /// <summary>
-        /// 尝试从字符串开始位置解析一个 Int64 值。
+        /// 
         /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 Int64 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
+        /// <param name="chars"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int TryParse(char* chars, int length, out long value, bool exception = false)
+        public (ParseCode code, int length, long value) ParseInt64(char* chars, int length)
         {
-            var r = radix;
-
-            if (r == 10)
+            if (radix == DecimalRadix)
             {
-                return DecimalTryParse(chars, length, out value, exception);
+                return DecimalParseInt64(chars, length);
             }
-
-            var v = 0L; // Value
-            var c = chars;
-            var u = int64NumbersLength;
-            var n = false; // IsNegative
 
             if (length <= 0)
             {
-                goto EmptyLength;
+                return (ParseCode.Empty, 0, 0);
             }
 
-            switch (*c)
+            byte sign = 0;
+
+            var offset = 0;
+
+            switch (chars[offset])
             {
                 case NegativeSign:
-                    n = true;
-                    goto Sign;
+                    ++offset;
+                    sign = 1;
+                    break;
                 case PositiveSign:
-                    goto Sign;
+                    ++offset;
+                    break;
             }
 
-        IgnoreZero:
-
-            while (*c == DigitalsZeroValue && length != 1)
+            while (offset < length && chars[offset] == DigitalsZeroValue)
             {
-                ++c;
-                --length;
+                ++offset;
             }
 
-            var e = c + Math.Min(u, length);
+            var value = 0L;
+            var code = ParseCode.Success;
 
-        Loop:
-            
-            var d = ToRadix(*c);
-
-            if (d >= r)
+            for (int right = Math.Min((int64NumbersLength - 1) + offset, length); offset < right; ++offset)
             {
-                goto OutOfRadix;
-            }
+                var digital = ToRadix(chars[offset]);
 
-            ++c;
-
-            if (c == e)
-            {
-                if (length >= u && v < (n ? (Int64MinValue + d) / r : (NegativeInt64MaxValue + d) / r))
+                if (digital >= radix)
                 {
-                    --c;
+                    code = ParseCode.OutOfRadix;
 
-                    goto OutOfRange;
+                    goto Return;
                 }
 
-                v = v * r - d;
+                value = value * radix - digital;
+            }
 
-                if (length > u)
+            if (offset < length)
+            {
+                var digital = ToRadix(chars[offset]);
+
+                if (digital >= radix)
                 {
-                    goto OutOfRange;
+                    code = ParseCode.OutOfRadix;
+
+                    goto Return;
                 }
+
+                if (value < (-long.MaxValue - sign + digital) / radix)
+                {
+                    code = ParseCode.OutOfRange;
+
+                    goto Return;
+                }
+
+                value = value * radix - digital;
+
+                ++offset;
             }
-            else
+
+            Return:
+
+            if (sign == 0)
             {
-                v = v * r - d;
-
-                goto Loop;
+                value = -value;
             }
 
-        Return:
-
-            value = n ? v : -v;
-
-            return (int)(c - chars);
-
-        OutOfRadix:
-            if (exception) ThreadException = new FormatException("Digit out of radix.");
-            goto Return;
-
-        OutOfRange:
-            if (exception) ThreadException = new OverflowException("value out of range.");
-            goto Return;
-
-        Sign:
-
-            if (length != 1)
-            {
-                ++c;
-                --length;
-
-                goto IgnoreZero;
-            }
-
-        EmptyLength:
-            if (exception) ThreadException = new ArgumentException("Length cna't be less than 1");
-            goto Return;
+            return (code, offset, value);
         }
         
         /// <summary>
-        /// 尝试从字符串开始位置解析一个 UInt64 值。
+        /// 
         /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 UInt64 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
+        /// <param name="chars"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int TryParse(char* chars, int length, out ulong value, bool exception = false)
+        public static (ParseCode code, int length, long value) DecimalParseInt64(char* chars, int length)
         {
-            var r = radix;
-
-            if (r == 10)
+            if (length <= 0)
             {
-                return DecimalTryParse(chars, length, out value, exception);
+                return (ParseCode.Empty, 0, 0);
             }
 
-            var v = 0UL; // Value
-            var c = chars;
-            var u = uInt64NumbersLength;
+            byte sign = 0;
+
+            var offset = 0;
+
+            switch (chars[offset])
+            {
+                case NegativeSign:
+                    ++offset;
+                    sign = 1;
+                    break;
+                case PositiveSign:
+                    ++offset;
+                    break;
+            }
+
+            while (offset < length && chars[offset] == DigitalsZeroValue)
+            {
+                ++offset;
+            }
+
+            const byte radix = DecimalRadix;
+            var value = 0L;
+            var code = ParseCode.Success;
+
+            for (int right = Math.Min((DecimalInt64NumbersLength - 1) + offset, length); offset < right; ++offset)
+            {
+                var digital = (uint)(chars[offset] - DigitalsZeroValue);
+
+                if (digital >= radix)
+                {
+                    code = ParseCode.OutOfRadix;
+
+                    goto Return;
+                }
+
+                value = value * radix - digital;
+            }
+
+            if (offset < length)
+            {
+                var digital = (uint)(chars[offset] - DigitalsZeroValue);
+
+                if (digital >= radix)
+                {
+                    code = ParseCode.OutOfRadix;
+
+                    goto Return;
+                }
+
+                if (value < (-long.MaxValue - sign + digital) / radix)
+                {
+                    code = ParseCode.OutOfRange;
+
+                    goto Return;
+                }
+
+                value = value * radix - digital;
+
+                ++offset;
+            }
+
+            Return:
+
+            if (sign == 0)
+            {
+                value = -value;
+            }
+
+            return (code, offset, value);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="chars"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public (ParseCode code, int length, ulong value) ParseUInt64(char* chars, int length)
+        {
+            if (radix == DecimalRadix)
+            {
+                return DecimalParseUInt64(chars, length);
+            }
 
             if (length <= 0)
             {
-                goto EmptyLength;
+                return (ParseCode.Empty, 0, 0);
             }
 
-            if (*c == PositiveSign)
+            var offset = 0;
+
+            switch (chars[offset])
             {
-                if (length == 1)
+                case PositiveSign:
+                    ++offset;
+                    break;
+            }
+
+            while (offset < length && chars[offset] == DigitalsZeroValue)
+            {
+                ++offset;
+            }
+
+            var value = 0UL;
+            var code = ParseCode.Success;
+
+            for (int right = Math.Min((uInt64NumbersLength - 1) + offset, length); offset < right; ++offset)
+            {
+                var digital = ToRadix(chars[offset]);
+
+                if (digital >= radix)
                 {
-                    goto EmptyLength;
+                    code = ParseCode.OutOfRadix;
+
+                    goto Return;
                 }
 
-                ++c;
-                --length;
+                value = value * radix + digital;
             }
 
-            while (*c == DigitalsZeroValue && length != 1)
+            if (offset < length)
             {
-                ++c;
-                --length;
-            }
+                var digital = ToRadix(chars[offset]);
 
-            var e = c + Math.Min(u, length);
-
-        Loop:
-            var d = ToRadix(*c);
-
-            if (d >= r)
-            {
-                goto OutOfRadix;
-            }
-
-            ++c;
-
-            if (c == e)
-            {
-                if (length >= u && v > (UInt64MaxValue - d) / r)
+                if (digital >= radix)
                 {
-                    --c;
+                    code = ParseCode.OutOfRadix;
 
-                    goto OutOfRange;
+                    goto Return;
                 }
 
-                v = v * r + d;
-
-                if (length > u)
+                if (value > (ulong.MaxValue - digital) / radix)
                 {
-                    goto OutOfRange;
+                    code = ParseCode.OutOfRange;
+
+                    goto Return;
                 }
+
+                value = value * radix + digital;
+
+                ++offset;
             }
-            else
+
+            Return:
+
+            return (code, offset, value);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="chars"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static (ParseCode code, int length, ulong value) DecimalParseUInt64(char* chars, int length)
+        {
+            const byte radix = DecimalRadix;
+
+            if (length <= 0)
             {
-                v = v * r + d;
-
-                goto Loop;
+                return (ParseCode.Empty, 0, 0);
             }
 
+            var offset = 0;
 
-        Return:
+            switch (chars[offset])
+            {
+                case PositiveSign:
+                    ++offset;
+                    break;
+            }
 
-            value = v;
+            while (offset < length && chars[offset] == DigitalsZeroValue)
+            {
+                ++offset;
+            }
 
-            return (int)(c - chars);
+            var value = 0UL;
+            var code = ParseCode.Success;
 
-        OutOfRadix:
-            if (exception) ThreadException = new FormatException("Digit out of radix.");
-            goto Return;
+            for (int right = Math.Min((DecimalUInt64NumbersLength - 1) + offset, length); offset < right; ++offset)
+            {
+                var digital = (uint)(chars[offset] - DigitalsZeroValue);
 
-        OutOfRange:
-            if (exception) ThreadException = new OverflowException("value out of range.");
-            goto Return;
+                if (digital >= radix)
+                {
+                    code = ParseCode.OutOfRadix;
 
-        EmptyLength:
-            if (exception) ThreadException = new ArgumentException("Length cna't be less than 1");
-            goto Return;
+                    goto Return;
+                }
+
+                value = value * radix + digital;
+            }
+
+            if (offset < length)
+            {
+                var digital = (uint)(chars[offset] - DigitalsZeroValue);
+
+                if (digital >= radix)
+                {
+                    code = ParseCode.OutOfRadix;
+
+                    goto Return;
+                }
+
+                if (value > (ulong.MaxValue - digital) / radix)
+                {
+                    code = ParseCode.OutOfRange;
+
+                    goto Return;
+                }
+
+                value = value * radix + digital;
+
+                ++offset;
+            }
+
+            Return:
+
+            return (code, offset, value);
         }
 
         /// <summary>
@@ -811,74 +826,74 @@ namespace Swifter.Tools
         /// <param name="chars">字符串</param>
         /// <param name="length">字符串长度</param>
         /// <param name="value">字节正整数空间</param>
-        /// <param name="writeCount">返回写入长度</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
         /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int TryParse(char* chars, int length, uint* value, out int writeCount, bool exception = false)
+        public (ParseCode code, int length, int written) ParseBigInteger(char* chars, int length, uint* value)
         {
-            int writeLength = 0;
-            var current = chars;
-            var num = 0U;
-            var numbers = uInt32Numbers;
-            var baseCount = divisorLength;
-            int count = baseCount;
-            var r = radix;
-
             if (length <= 0)
             {
-                goto EmptyLength;
+                return (ParseCode.Empty, 0, 0);
             }
 
-            int i = length / baseCount;
+            var code = ParseCode.Success;
+            var written = 0;
+            var offset = chars;
+            var num = 0U;
+            var numbers = uInt32Numbers;
+            var basen = divisorLength;
+            int count = basen;
+            var radix = this.radix;
 
-        Loop:
+
+            int i = length / basen;
+
+            Loop:
 
             if (i == 0)
             {
-                count = length % baseCount;
+                count = length % basen;
             }
 
-            for (var end = current + count; current < end; ++current)
+            for (var end = offset + count; offset < end; ++offset)
             {
-                var digit = ToRadix(*current);
+                var digit = ToRadix(*offset);
 
-                if (digit >= r)
+                if (digit >= radix)
                 {
                     goto OutOfRadix;
                 }
 
-                num = num * r + digit;
+                num = num * radix + digit;
             }
 
-        MultAndAdd:
+            MultAndAdd:
 
             uint carry;
 
-            if (r == 10 && count == 9)
+            if (radix == DecimalRadix && count == DecimalDivisorLength)
             {
-                writeLength = Mult(value, writeLength, DecimalBaseDivisor, out carry);
+                written = Mult(value, written, DecimalDivisor, out carry);
             }
             else
             {
-                writeLength = Mult(value, writeLength, numbers[count], out carry);
+                written = Mult(value, written, numbers[count], out carry);
             }
 
 
             if (carry != 0)
             {
-                value[writeLength] = carry;
+                value[written] = carry;
 
-                ++writeLength;
+                ++written;
             }
 
-            writeLength = Add(value, writeLength, num, out carry);
+            written = Add(value, written, num, out carry);
 
             if (carry != 0)
             {
-                value[writeLength] = carry;
+                value[written] = carry;
 
-                ++writeLength;
+                ++written;
             }
 
             if (i != 0)
@@ -890,163 +905,45 @@ namespace Swifter.Tools
                 goto Loop;
             }
 
-            writeCount = writeLength;
-
-            return (int)(current - chars);
+            return (code, (int)(offset - chars), written);
 
 
-        OutOfRadix:
-            if (exception) ThreadException = new FormatException("Digit out of radix.");
+            OutOfRadix:
+
+            code = ParseCode.OutOfRadix;
+
             goto ErrorReturn;
 
-        EmptyLength:
-            if (exception) ThreadException = new ArgumentException("Length cna't be less than 1");
-            goto ErrorReturn;
+            ErrorReturn:
 
-
-        ErrorReturn:
-
-            count = ((int)(current - chars)) % baseCount;
+            count = ((int)(offset - chars)) % basen;
 
             i = 0;
 
             goto MultAndAdd;
         }
 
-        /// <summary>
-        /// 尝试从字符串开始位置解析一个 Int32 值。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 Int32 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int TryParse(char* chars, int length, out int value, bool exception = false)
+        internal static bool DecimalTryParse(char* chars, int count, out int value)
         {
-            int r = TryParse(chars, length, out long int64Value, exception);
-
-            if (int64Value > int.MaxValue || int64Value < int.MinValue)
+            unchecked
             {
-                if(exception) ThreadException = new OverflowException("Value out of Int32 range.");
-            }
+                value = 0;
 
-            value = (int)int64Value;
-
-            return r;
-        }
-
-        /// <summary>
-        /// 尝试将字符串转换为 Int64 值。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <param name="value">返回一个 Int64 值</param>
-        /// <returns>返回转换是否成功</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryParse(string text, out long value)
-        {
-            var length = text.Length;
-
-            fixed (char* chars = text)
-            {
-                return TryParse(chars, length, out value) == length;
-            }
-        }
-
-
-
-
-        /// <summary>
-        /// 尝试将字符串转换为 UInt64 值。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <param name="value">返回一个 UInt64 值</param>
-        /// <returns>返回转换是否成功</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryParse(string text, out ulong value)
-        {
-            var length = text.Length;
-
-            fixed (char* chars = text)
-            {
-                return TryParse(chars, length, out value) == length;
-            }
-        }
-
-        /// <summary>
-        /// 尝试将字符串转换为字节正整数值。
-        /// </summary>
-        /// <param name="text"></param>
-        /// <param name="value">字节正整数</param>
-        /// <param name="length">返回写入长度</param>
-        /// <returns>返回转换是否成功</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryParse(string text, uint* value, out int length)
-        {
-            fixed (char* chars = text)
-            {
-                return TryParse(chars, text.Length, value, out length, true) == text.Length;
-            }
-        }
-
-
-        /// <summary>
-        /// 将字符串转换为 Int64 值。失败将引发异常。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <returns>返回一个 Int64 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public long ParseInt64(string text)
-        {
-            var length = text.Length;
-
-            fixed (char* chars = text)
-            {
-                if (TryParse(chars, length, out long value, true) == length)
+                for (int i = 0; i < count; i++)
                 {
-                    return value;
+                    var digit = (uint)(chars[i] - DigitalsZeroValue);
+
+                    if (digit >= DecimalRadix)
+                    {
+                        return false;
+                    }
+
+                    value = value * DecimalRadix + (int)digit;
                 }
 
-                throw ThreadException;
+                return true;
             }
-        }
-
-        /// <summary>
-        /// 将字符串转换为 UInt64 值。失败将引发异常。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <returns>返回一个 UInt64 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public ulong ParseUInt64(string text)
-        {
-            var length = text.Length;
-
-            fixed (char* chars = text)
-            {
-                if (TryParse(chars, length, out ulong value, true) == length)
-                {
-                    return value;
-                }
-
-                throw ThreadException;
-            }
-        }
-
-        /// <summary>
-        /// 将字符串转换为字节正整数值。失败将引发异常。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <param name="value">字节正整数</param>
-        /// <returns>返回写入长度</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int ParseBigInteger(string text, uint* value)
-        {
-            if (TryParse(text, value, out int r))
-            {
-                return r;
-            }
-
-            throw ThreadException;
         }
     }
 }

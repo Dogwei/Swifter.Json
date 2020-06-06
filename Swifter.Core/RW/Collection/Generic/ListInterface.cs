@@ -8,27 +8,35 @@ namespace Swifter.RW
     {
         public T ReadValue(IValueReader valueReader)
         {
-            var listRW = new ListRW<T, TValue>();
-            
-            valueReader.ReadArray(listRW);
+            if (valueReader is IValueReader<T> reader)
+            {
+                return reader.ReadValue();
+            }
+            else
+            {
+                var listRW = new ListRW<T, TValue>();
 
-            return listRW.Content;
+                valueReader.ReadArray(listRW);
+
+                return listRW.content;
+            }
+
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            var listRW = new ListRW<T, TValue>();
-
-            listRW.Initialize(value);
-
-            valueWriter.WriteArray(listRW);
+            else if (valueWriter is IValueWriter<T> writer)
+            {
+                writer.WriteValue(value);
+            }
+            else
+            {
+                valueWriter.WriteArray(new ListRW<T, TValue> { content = value });
+            }
         }
     }
 }

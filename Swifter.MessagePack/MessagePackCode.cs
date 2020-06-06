@@ -1,5 +1,8 @@
-﻿namespace Swifter.MessagePack
+﻿using System.Runtime.CompilerServices;
+
+namespace Swifter.MessagePack
 {
+
     static class MessagePackCode
     {
         public const byte FixInt = 0x00;
@@ -100,5 +103,13 @@
         public const int Array16MaxCount = 0xffff;
 
 
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static uint CloseRight(ulong value)
+            => LowRight((value | (value >> 8)) & 0x00007f7f00007f7fu);
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static uint LowRight(ulong value)
+            => (uint)(value | (value >> 16));
     }
 }

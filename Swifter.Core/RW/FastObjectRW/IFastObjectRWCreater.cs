@@ -1,7 +1,4 @@
-﻿using Swifter.Tools;
-using System;
-
-namespace Swifter.RW
+﻿namespace Swifter.RW
 {
     /// <summary>
     /// FastObjectRW 创建接口。

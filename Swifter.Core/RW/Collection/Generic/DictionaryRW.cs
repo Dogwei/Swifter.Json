@@ -1,23 +1,15 @@
-﻿
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Swifter.RW
 {
-    internal sealed class DictionaryRW<T, TKey, TValue> : IDataRW<TKey>, IDirectContent, IInitialize<T> where T : IDictionary<TKey, TValue>
+    internal sealed class DictionaryRW<T, TKey, TValue> : IDataRW<TKey> where T : IDictionary<TKey, TValue>
     {
         public const int DefaultCapacity = 3;
 
-        internal T content;
+        static readonly bool IsAssignableFromDictionary = typeof(T).IsAssignableFrom(typeof(Dictionary<TKey, TValue>));
 
-        public T Content
-        {
-            get
-            {
-                return content;
-            }
-        }
+        internal T content;
 
         public ValueCopyer<TKey> this[TKey key] => new ValueCopyer<TKey>(this, key);
 
@@ -29,25 +21,13 @@ namespace Swifter.RW
 
         public int Count => content.Count;
 
-        object IDirectContent.DirectContent
+        public object Content
         {
-            get
-            {
-                return content;
-            }
-            set
-            {
-                content = (T)value;
-            }
+            get => content;
+            set => content = (T)value;
         }
 
-        public object ReferenceToken
-        {
-            get
-            {
-                return content;
-            }
-        }
+        public Type ContentType => typeof(T);
 
         IValueRW IDataRW<TKey>.this[TKey key] => this[key];
 
@@ -56,16 +36,11 @@ namespace Swifter.RW
             Initialize(DefaultCapacity);
         }
 
-        public void Initialize(T content)
-        {
-            this.content = content;
-        }
-
         public void Initialize(int capacity)
         {
-            if (typeof(T) == typeof(Dictionary<TKey, TValue>) || typeof(T).IsAssignableFrom(typeof(Dictionary<TKey, TValue>)))
+            if (IsAssignableFromDictionary)
             {
-                content = (T)(object)new Dictionary<TKey, TValue>(capacity);
+                Underlying.As<T, Dictionary<TKey, TValue>>(ref content) = new Dictionary<TKey, TValue>(capacity);
             }
             else
             {
@@ -75,9 +50,19 @@ namespace Swifter.RW
 
         public void OnReadAll(IDataWriter<TKey> dataWriter)
         {
-            foreach (var item in content)
+            if (content is Dictionary<TKey, TValue> dictionary)
             {
-                ValueInterface<TValue>.WriteValue(dataWriter[item.Key], item.Value);
+                foreach (var item in dictionary)
+                {
+                    ValueInterface<TValue>.WriteValue(dataWriter[item.Key], item.Value);
+                }
+            }
+            else
+            {
+                foreach (var item in content)
+                {
+                    ValueInterface<TValue>.WriteValue(dataWriter[item.Key], item.Value);
+                }
             }
         }
 
@@ -91,26 +76,10 @@ namespace Swifter.RW
             content[key] = ValueInterface<TValue>.ReadValue(valueReader);
         }
 
-        public void OnReadAll(IDataWriter<TKey> dataWriter, IValueFilter<TKey> valueFilter)
-        {
-            var valueInfo = new ValueFilterInfo<TKey>();
-
-            foreach (var item in content)
-            {
-                ValueInterface<TValue>.WriteValue(valueInfo.ValueCopyer, item.Value);
-
-                valueInfo.Key = item.Key;
-                valueInfo.Type = typeof(TValue);
-
-                if (valueFilter.Filter(valueInfo))
-                {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
-                }
-            }
-        }
-
         public void OnWriteAll(IDataReader<TKey> dataReader)
         {
+            // TODO: Fast
+
             var buckets = new KeyValuePair<TKey, TValue>[content.Count];
 
             var index = 0;

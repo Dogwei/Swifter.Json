@@ -3,12 +3,11 @@
 namespace Swifter.Tools
 {
     /// <summary>
-    /// XConvert 内部实现接口。
+    /// XConvert 实现接口。
     /// </summary>
     /// <typeparam name="TSource">原类型</typeparam>
     /// <typeparam name="TDestination">目标类型</typeparam>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public interface IXConvert<TSource, TDestination>
+    public interface IXConverter<TSource, TDestination>
     {
         /// <summary>
         /// 将原类型的值转换为目标类型的值。

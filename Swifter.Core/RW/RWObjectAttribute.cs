@@ -1,11 +1,14 @@
-﻿using System;
+﻿using Swifter.Tools;
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Swifter.RW
 {
     /// <summary>
     /// 对象读写器的特性形式配置项。
     /// </summary>
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true)]
     public class RWObjectAttribute : Attribute
     {
         /// <summary>
@@ -18,12 +21,23 @@ namespace Swifter.RW
         }
 
         /// <summary>
+        /// 在加载成员时的处理方法
+        /// </summary>
+        /// <param name="type">对象类型</param>
+        /// <param name="memberInfo">成员信息</param>
+        /// <param name="attributes">成员的特性</param>
+        public virtual void OnLoadMember(Type type, MemberInfo memberInfo, ref List<RWFieldAttribute> attributes)
+        {
+
+        }
+
+        /// <summary>
         /// 是否忽略大小写。
         /// </summary>
         public RWBoolean IgnoreCace { get; set; }
 
         /// <summary>
-        /// 是否字段为找到时发生异常。
+        /// 是否字段未找到时发生异常。
         /// </summary>
         public RWBoolean NotFoundException { get; set; }
 

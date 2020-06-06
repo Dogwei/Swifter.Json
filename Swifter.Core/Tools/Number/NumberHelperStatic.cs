@@ -10,10 +10,16 @@ namespace Swifter.Tools
         /// 十进制数字字符串最大可能的长度。
         /// </summary>
         public const int DecimalStringMaxLength = 30;
+
+        /// <summary>
+        /// Guid 字符串包含分隔符的长度。
+        /// </summary>
+        public const int GuidStringWithSeparatorsLength = 36;
+
         /// <summary>
         /// Guid 字符串的长度。
         /// </summary>
-        public const int GuidStringLength = 36;
+        public const int GuidStringLength = 32;
 
 
         /* ['0', '1', '2', '3',... 'a', 'b', 'c',... 'A', 'B', 'C',... 'Z', '~', '!'] */
@@ -23,8 +29,11 @@ namespace Swifter.Tools
         /* ['0': 0, '1': 1, '2': 2,... '9': 9, 'a': 10, 'b':11,... 'A': 10, 'B': 11,... 'Z': 35, Other: ErrorRadix] */
         private static readonly byte* IgnoreCaseRadixes;
 
-        [ThreadStatic]
-        private static Exception ThreadException;
+        private static readonly ThreeChar* DecimalThreeDigitals;
+        private static readonly ulong[] DecimalUInt64Numbers;
+
+        private const byte DecimalInt64NumbersLength = 19;
+        private const byte DecimalUInt64NumbersLength = 20;
 
         /// <summary>
         /// 十进制实例。
@@ -33,15 +42,15 @@ namespace Swifter.Tools
         /// <summary>
         /// 十六进制实例。
         /// </summary>
-        public static readonly NumberHelper Hex;
+        public static NumberHelper Hex => GetOrCreateInstance(HexRadix);
         /// <summary>
         /// 八进制实例。
         /// </summary>
-        public static readonly NumberHelper Octal;
+        public static NumberHelper Octal => GetOrCreateInstance(OctalRadix);
         /// <summary>
         /// 二进制实例。
         /// </summary>
-        public static readonly NumberHelper Binary;
+        public static NumberHelper Binary => GetOrCreateInstance(BinaryRadix);
 
         static readonly NumberHelper[] Instances;
         static readonly object InstancesLock;
@@ -52,7 +61,7 @@ namespace Swifter.Tools
         /// <param name="radix">进制数</param>
         /// <returns>返回 NumberHelper 实例</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static NumberHelper InstanceByRadix(byte radix)
+        public static NumberHelper GetOrCreateInstance(byte radix)
         {
             if (radix > MaxRadix || radix < MinRadix)
             {
@@ -61,13 +70,13 @@ namespace Swifter.Tools
 
             var instance = Instances[radix];
 
-            if (instance == null)
+            if (instance is null)
             {
                 lock (InstancesLock)
                 {
                     instance = Instances[radix];
 
-                    if (instance == null)
+                    if (instance is null)
                     {
                         instance = new NumberHelper(radix);
 
@@ -106,10 +115,10 @@ namespace Swifter.Tools
                 IgnoreCaseRadixes[digital] = SlowToRadixIgnoreCase(digital);
             }
 
-            Decimal = InstanceByRadix(10);
-            Hex = InstanceByRadix(16);
-            Octal = InstanceByRadix(8);
-            Binary = InstanceByRadix(2);
+            Decimal = GetOrCreateInstance(DecimalRadix);
+
+            DecimalThreeDigitals = Decimal.threeDigitals;
+            DecimalUInt64Numbers = Decimal.uInt64Numbers;
         }
 
 
@@ -205,227 +214,20 @@ namespace Swifter.Tools
             return result;
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static bool IsNaN(double d)
-        {
-            return (*(ulong*)(&d) & 0x7FFFFFFFFFFFFFFFL) > 0x7FF0000000000000L;
-        }
-
-
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static int Append(char* chars, string text)
+        private static int Copy(char* destination, string source)
         {
-            for (int i = 0; i < text.Length; i++)
+            var index = source.Length - 1;
+
+            while (index >= 0)
             {
-                chars[i] = text[i];
+                destination[index] = source[index];
+
+                --index;
             }
 
-            return text.Length;
-        }
-
-
-
-
-
-
-        
-
-        /// <summary>
-        /// 尝试从字符串开始位置解析一个 Int64 值。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 Int64 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int DecimalTryParse(char* chars, int length, out long value, bool exception = false)
-        {
-            var v = 0L; // Value
-            var c = chars;
-            const byte u = 19;
-            const byte r = 10;
-            var n = false; // IsNegative
-
-            if (length <= 0)
-            {
-                goto EmptyLength;
-            }
-
-            switch (*c)
-            {
-                case NegativeSign:
-                    n = true;
-                    goto Sign;
-                case PositiveSign:
-                    goto Sign;
-            }
-
-        IgnoreZero:
-
-            while (*c == DigitalsZeroValue && length != 1)
-            {
-                ++c;
-                --length;
-            }
-
-            var e = c + Math.Min(u, length);
-
-        Loop:
-
-            var d = (uint)(*c - DigitalsZeroValue);
-
-            if (d >= r)
-            {
-                goto OutOfRadix;
-            }
-
-            ++c;
-
-            if (c == e)
-            {
-                if (length >= u && v < (n ? (Int64MinValue + d) / r : (NegativeInt64MaxValue + d) / r))
-                {
-                    --c;
-
-                    goto OutOfRange;
-                }
-
-                v = v * r - d;
-
-                if (length > u)
-                {
-                    goto OutOfRange;
-                }
-            }
-            else
-            {
-                v = v * r - d;
-
-                goto Loop;
-            }
-
-        Return:
-
-            value = n ? v : -v;
-
-            return (int)(c - chars);
-
-        OutOfRadix:
-            if (exception) ThreadException = new FormatException("Digit out of radix.");
-            goto Return;
-
-        OutOfRange:
-            if (exception) ThreadException = new OverflowException("value out of range.");
-            goto Return;
-
-        Sign:
-
-            if (length != 1)
-            {
-                ++c;
-                --length;
-
-                goto IgnoreZero;
-            }
-
-        EmptyLength:
-            if (exception) ThreadException = new ArgumentException("Length cna't be less than 1");
-            goto Return;
-        }
-
-        /// <summary>
-        /// 尝试从字符串开始位置解析一个 UInt64 值。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 UInt64 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int DecimalTryParse(char* chars, int length, out ulong value, bool exception = false)
-        {
-            var v = 0UL; // Value
-            var c = chars;
-            const byte u = 20;
-            const byte r = 10;
-
-            if (length <= 0)
-            {
-                goto EmptyLength;
-            }
-
-            if (*c == PositiveSign)
-            {
-                if (length == 1)
-                {
-                    goto EmptyLength;
-                }
-
-                ++c;
-                --length;
-            }
-
-            while (*c == DigitalsZeroValue && length != 1)
-            {
-                ++c;
-                --length;
-            }
-
-            var e = c + Math.Min(u, length);
-
-        Loop:
-            var d = (uint)(*c - '0');
-
-            if (d >= r)
-            {
-                goto OutOfRadix;
-            }
-
-            ++c;
-
-            if (c == e)
-            {
-                if (length >= u && v > (UInt64MaxValue - d) / r)
-                {
-                    --c;
-
-                    goto OutOfRange;
-                }
-
-                v = v * r + d;
-
-                if (length > u)
-                {
-                    goto OutOfRange;
-                }
-            }
-            else
-            {
-                v = v * r + d;
-
-                goto Loop;
-            }
-
-
-        Return:
-
-            value = v;
-
-            return (int)(c - chars);
-
-        OutOfRadix:
-            if (exception) ThreadException = new FormatException("Digit out of radix.");
-            goto Return;
-
-        OutOfRange:
-            if (exception) ThreadException = new OverflowException("value out of range.");
-            goto Return;
-
-        EmptyLength:
-            if (exception) ThreadException = new ArgumentException("Length cna't be less than 1");
-            goto Return;
+            return source.Length;
         }
 
 
@@ -434,56 +236,108 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="value">Guid 值</param>
         /// <param name="chars">空间足够的字符串</param>
+        /// <param name="separator">是否包含分隔符</param>
         /// <returns>返回写入长度。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int ToString(Guid value, char* chars)
+        public static int ToString(Guid value, char* chars, bool separator)
         {
-            var h = Hex;
-            var c = chars;
-            var p = (GuidStruct*)(&value);
+            var hex = Hex;
+            var offset = chars;
+            var ptr = (GuidStruct*)(&value);
 
-            h.AppendD2(c, p->_a1); c += 2;
-            h.AppendD2(c, p->_a2); c += 2;
-            h.AppendD2(c, p->_a3); c += 2;
-            h.AppendD2(c, p->_a4); c += 2;
+            hex.AppendD2(offset, ptr->_a1); offset += 2;
+            hex.AppendD2(offset, ptr->_a2); offset += 2;
+            hex.AppendD2(offset, ptr->_a3); offset += 2;
+            hex.AppendD2(offset, ptr->_a4); offset += 2;
 
-            *c = '-'; ++c;
+            if (separator)
+            {
+                *offset = '-'; ++offset;
+            }
 
-            h.AppendD2(c, p->_b1); c += 2;
-            h.AppendD2(c, p->_b2); c += 2;
+            hex.AppendD2(offset, ptr->_b1); offset += 2;
+            hex.AppendD2(offset, ptr->_b2); offset += 2;
 
-            *c = '-'; ++c;
+            if (separator)
+            {
+                *offset = '-'; ++offset;
+            }
 
-            h.AppendD2(c, p->_c1); c += 2;
-            h.AppendD2(c, p->_c2); c += 2;
+            hex.AppendD2(offset, ptr->_c1); offset += 2;
+            hex.AppendD2(offset, ptr->_c2); offset += 2;
 
-            *c = '-'; ++c;
+            if (separator)
+            {
+                *offset = '-'; ++offset;
+            }
 
-            h.AppendD2(c, p->_d); c += 2;
-            h.AppendD2(c, p->_e); c += 2;
+            hex.AppendD2(offset, ptr->_d); offset += 2;
+            hex.AppendD2(offset, ptr->_e); offset += 2;
 
-            *c = '-'; ++c;
+            if (separator)
+            {
+                *offset = '-'; ++offset;
+            }
 
-            h.AppendD2(c, p->_f); c += 2;
-            h.AppendD2(c, p->_g); c += 2;
-            h.AppendD2(c, p->_h); c += 2;
-            h.AppendD2(c, p->_i); c += 2;
-            h.AppendD2(c, p->_j); c += 2;
-            h.AppendD2(c, p->_k); c += 2;
+            hex.AppendD2(offset, ptr->_f); offset += 2;
+            hex.AppendD2(offset, ptr->_g); offset += 2;
+            hex.AppendD2(offset, ptr->_h); offset += 2;
+            hex.AppendD2(offset, ptr->_i); offset += 2;
+            hex.AppendD2(offset, ptr->_j); offset += 2;
+            hex.AppendD2(offset, ptr->_k); offset += 2;
 
-            return 36;
+            return (int)(offset - chars);
         }
+
 
         /// <summary>
         /// 获取一个十进制数字的小数刻度。
         /// </summary>
-        /// <param name="pDecimal">十进制数字的指针</param>
+        /// <param name="value">十进制数字</param>
         /// <returns>返回小数的位数</returns>
-        public static int GetScale(decimal* pDecimal)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static int GetScale(decimal value)
         {
-            // TODO
+            return Underlying.As<decimal, DecimalStruct>(ref value).Scale;
+        }
 
-            return ((byte*)pDecimal)[2];
+        /// <summary>
+        /// 获取十进制数字的长度。
+        /// </summary>
+        /// <param name="value">数字</param>
+        /// <returns>返回长度</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static int GetDecimalLength(ulong value)
+        {
+            if (value >= 100000)
+            {
+                if (value >= 10000000000)
+                    if (value >= 1000000000000000)
+                        if (value >= 100000000000000000)
+                            if (value >= 10000000000000000000) return 20;
+                            else if (value >= 1000000000000000000) return 19;
+                            else return 18;
+                        else if (value >= 10000000000000000) return 17;
+                        else return 16;
+                    else if (value >= 1000000000000)
+                        if (value >= 100000000000000) return 15;
+                        else if (value >= 10000000000000) return 14;
+                        else return 13;
+                    else if (value >= 100000000000) return 12;
+                    else return 11;
+                else if (value >= 10000000)
+                    if (value >= 1000000000) return 10;
+                    else if (value >= 100000000) return 9;
+                    else return 8;
+                else if (value >= 1000000) return 7;
+                else return 6;
+            }
+            else if (value >= 100)
+                if (value >= 10000) return 5;
+                else if (value >= 1000) return 4;
+                else return 3;
+            else if (value >= 10) return 2;
+            else return 1;
         }
 
         /// <summary>
@@ -495,72 +349,73 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int ToString(decimal value, char* chars)
         {
-               var t = value;
-            var c = chars;
-            var n = 0;
+            var offset = chars;
 
-            var p = (uint*)&t;
+            var pDecimal = (DecimalStruct*)&value;
+            var scale = pDecimal->Scale;
+            var sign = pDecimal->Sign;
 
-            if ((p[0] & SignMask) != 0)
+            pDecimal->GetBits((int*)pDecimal);
+
+            if (sign != 0)
             {
-                *c = NegativeSign;
+                offset[0] = NegativeSign;
 
-                ++n;
-                ++c;
+                sign = 1;
+                ++offset;
             }
 
-            // scale
-            int s = ((byte*)p)[2];
+            var length = DirectOperateToDecimalString((uint*)pDecimal, 3, offset);
 
-            p[0] = p[2];
-            p[2] = p[1];
-            p[1] = p[3];
-
-            var l = DirectOperateToDecimalString(p, 3, c);
-
-            if (s == 0)
+            if (scale == 0)
             {
-                return l + n;
+                // Only integer.
+
+                return length + sign;
             }
-            else if (s >= l)
+            else if (scale >= length)
             {
+                // Only fractional.
+
                 // = scale + lengthOf(0.)
-                var r = s + 2;
+                var i = scale + 2;
 
-                while (l > 0)
+                while (length > 0)
                 {
-                    --l;
-                    --r;
+                    --length;
+                    --i;
 
-                    c[r] = c[l];
+                    offset[i] = offset[length];
                 }
 
-                while (r > 2)
+                while (i > 2)
                 {
-                    --r;
+                    --i;
 
-                    c[r] = DigitalsZeroValue;
+                    offset[i] = DigitalsZeroValue;
                 }
 
-                c[1] = DotSign;
-                c[0] = DigitalsZeroValue;
+                offset[1] = DotSign;
+                offset[0] = DigitalsZeroValue;
 
-                return s + n + 2;
+                return scale + sign + 2;
             }
             else
             {
-                var r = l;
+                // Integer and fractional.
 
-                while (s > 0)
+                var i = length;
+
+                while (scale > 0)
                 {
-                    c[r] = c[--r];
+                    offset[i] = offset[--i];
 
-                    --s;
+                    --scale;
                 }
 
-                c[r] = DotSign;
+                offset[i] = DotSign;
 
-                return l + n + 1;
+                return length + sign + 1;
             }
         }
 
@@ -578,50 +433,30 @@ namespace Swifter.Tools
                 if (value >= 10000000000)
                     if (value >= 1000000000000000)
                         if (value >= 100000000000000000)
-                            if (value >= 10000000000000000000)
-                                goto L20;
-                            else if (value >= 1000000000000000000)
-                                goto L19;
-                            else
-                                goto L18;
-                        else if (value >= 10000000000000000)
-                            goto L17;
-                        else
-                            goto L16;
+                            if (value >= 10000000000000000000) goto L20;
+                            else if (value >= 1000000000000000000) goto L19;
+                            else goto L18;
+                        else if (value >= 10000000000000000) goto L17;
+                        else goto L16;
                     else if (value >= 1000000000000)
-                        if (value >= 100000000000000)
-                            goto L15;
-                        else if (value >= 10000000000000)
-                            goto L14;
-                        else
-                            goto L13;
-                    else if (value >= 100000000000)
-                        goto L12;
-                    else
-                        goto L11;
+                        if (value >= 100000000000000) goto L15;
+                        else if (value >= 10000000000000) goto L14;
+                        else goto L13;
+                    else if (value >= 100000000000) goto L12;
+                    else goto L11;
                 else if (value >= 10000000)
-                    if (value >= 1000000000)
-                        goto L10;
-                    else if (value > 100000000)
-                        goto L9;
-                    else
-                        goto L8;
-                else if (value >= 1000000)
-                    goto L7;
-                else
-                    goto L6;
+                    if (value >= 1000000000) goto L10;
+                    else if (value >= 100000000) goto L9;
+                    else goto L8;
+                else if (value >= 1000000) goto L7;
+                else goto L6;
             }
             else if (value >= 100)
-                if (value >= 10000)
-                    goto L5;
-                else if (value >= 1000)
-                    goto L4;
-                else
-                    goto L3;
-            else if (value >= 10)
-                goto L2;
-            else
-                goto L1;
+                if (value >= 10000) goto L5;
+                else if (value >= 1000) goto L4;
+                else goto L3;
+            else if (value >= 10) goto L2;
+            else goto L1;
 
             L20:
             ulong s = value / 1000000000000000000;
@@ -728,6 +563,26 @@ namespace Swifter.Tools
             return 1;
         }
 
+        /// <summary>
+        /// 将一个 Int64 值写入到空间足够的字符串中。
+        /// </summary>
+        /// <param name="value">Int64 值</param>
+        /// <param name="chars">空间足够的字符串</param>
+        /// <returns>返回写入长度</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static int ToDecimalString(long value, char* chars)
+        {
+            if (value >= 0)
+            {
+                return ToDecimalString((ulong)(value), chars);
+            }
+            else
+            {
+                *chars = NegativeSign;
+
+                return ToDecimalString((ulong)(-value), chars + 1) + 1;
+            }
+        }
 
 
         /// <summary>
@@ -900,54 +755,20 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int DirectOperateToDecimalString(uint* value, int length, char* chars)
         {
-            int l = Div(value, length, DecimalBaseDivisor, out uint r);
+            length = Div(value, length, DecimalDivisor, out uint remainder);
 
-            if (l == 0)
+            if (length == 0)
             {
-                return ToDecimalString(r, chars);
+                return ToDecimalString(remainder, chars);
             }
 
-            if (l == 1)
-            {
-                l = ToDecimalString(*value, chars);
-            }
-            else
-            {
-                l = DirectOperateToDecimalString(value, l, chars);
-            }
+            length = length == 1 ?
+                ToDecimalString(*value, chars) :
+                DirectOperateToDecimalString(value, length, chars);
 
-            ToDecimalString(r, 9, chars + l);
+            ToDecimalString(remainder, 9, chars + length);
 
-            return l + 9;
-        }
-
-
-
-
-
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static bool TryParseHexByte(ref char* chars, out byte value)
-        {
-            var h = Hex;
-            var a = h.ToRadix(chars[0]);
-            var b = h.ToRadix(chars[1]);
-
-            if ((a | b) >= 16)
-            {
-                goto OutOfRadix;
-            }
-
-            value = (byte)((a << 4) | b);
-
-            chars += 2;
-
-            return true;
-
-        OutOfRadix:
-            ThreadException = new FormatException("Digit out of radix.");
-            value = 0;
-            return false;
+            return length + 9;
         }
 
         /// <summary>
@@ -955,557 +776,299 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="chars">字符串</param>
         /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 Guid 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
         /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int TryParse(char* chars, int length, out Guid value, bool exception = false)
+        public static (ParseCode code, int length, Guid value) ParseGuid(char* chars, int length)
         {
-            GuidStruct r;
+            GuidStruct value = default;
 
-            var c = chars;
-            var l = length;
+            var offset = chars;
 
-            if (l < 32)
+            if (length < 32)
             {
-                goto LengthError;
+                goto Error;
             }
 
-            if (*c == '{')
+            if (*offset == '{')
             {
-                ++c;
-                --l;
+                ++offset;
+                --length;
             }
 
-            if (!TryParseHexByte(ref c, out r._a1)) goto False;
-            if (!TryParseHexByte(ref c, out r._a2)) goto False;
-            if (!TryParseHexByte(ref c, out r._a3)) goto False;
-            if (!TryParseHexByte(ref c, out r._a4)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._a1)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._a2)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._a3)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._a4)) goto False;
 
 
-            if (*c == '-')
+            if (*offset == '-')
             {
-                ++c;
-                --l;
+                ++offset;
+                --length;
             }
 
-            if (!TryParseHexByte(ref c, out r._b1)) goto False;
-            if (!TryParseHexByte(ref c, out r._b2)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._b1)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._b2)) goto False;
 
-            if (*c == '-')
+            if (*offset == '-')
             {
-                ++c;
-                --l;
+                ++offset;
+                --length;
             }
 
-            if (!TryParseHexByte(ref c, out r._c1)) goto False;
-            if (!TryParseHexByte(ref c, out r._c2)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._c1)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._c2)) goto False;
 
-            if (*c == '-')
+            if (*offset == '-')
             {
-                ++c;
-                --l;
+                ++offset;
+                --length;
             }
 
-            if (!TryParseHexByte(ref c, out r._d)) goto False;
-            if (!TryParseHexByte(ref c, out r._e)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._d)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._e)) goto False;
 
-            if (*c == '-')
+            if (*offset == '-')
             {
-                ++c;
-                --l;
+                ++offset;
+                --length;
             }
 
-            if (l < 32)
+            if (length < 32)
             {
-                goto LengthError;
+                goto Error;
             }
 
-            if (!TryParseHexByte(ref c, out r._f)) goto False;
-            if (!TryParseHexByte(ref c, out r._g)) goto False;
-            if (!TryParseHexByte(ref c, out r._h)) goto False;
-            if (!TryParseHexByte(ref c, out r._i)) goto False;
-            if (!TryParseHexByte(ref c, out r._j)) goto False;
-            if (!TryParseHexByte(ref c, out r._k)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._f)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._g)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._h)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._i)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._j)) goto False;
+            if (!TryParseHexByte(ref offset, ref value._k)) goto False;
 
-            if (*c == '}')
+            if (*offset == '}')
             {
-                ++c;
-                --l;
+                ++offset;
+                --length;
             }
 
-            value = *(Guid*)(&r);
-            return (int)(c - chars);
+            return (ParseCode.Success, (int)(offset - chars), Underlying.As<GuidStruct, Guid>(ref value));
 
-        LengthError:
-            if (exception) ThreadException = new FormatException("Guid length error!");
+            Error:
+            return (ParseCode.WrongFormat, 0, default);
 
             False:
-            value = Guid.Empty;
-            return 0;
+            return (ParseCode.OutOfRadix, 0, default);
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private static bool TryParseHexByte(ref char* chars, ref byte value)
+        {
+            var a = Hex.ToRadix(chars[0]);
+            var b = Hex.ToRadix(chars[1]);
+
+            if ((a | b) >= 16)
+            {
+                return false;
+            }
+
+            value = (byte)((a << 4) | b);
+
+            chars += 2;
+
+            return true;
         }
 
         /// <summary>
-        /// 判断一个字符是否为数字的特殊意义字符。
+        /// 
         /// </summary>
-        /// <param name="c">字符</param>
-        /// <returns>返回一个 bool 值</returns>
+        /// <param name="chars"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static bool IsExp(char c)
+        public static (ParseCode code, int length, decimal value) ParseDecimal(char* chars, int length)
         {
-            switch (c)
-            {
-                case ExponentSign:
-                case exponentSign:
-                case HexSign:
-                case hexSign:
-                case BinarySign:
-                case binarySign:
-                case DotSign:
-                case SplitSign:
-                    return true;
-            }
+            var isNegative = false;
+            var exponent = 0L;
+            var floating = -1;
+            const byte radix = DecimalRadix;
 
-            return false;
-        }
+            var offset = 0;
 
-        /// <summary>
-        /// 尝试从字符串开始位置解析一个 Decimal 值。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 Decimal 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int TryParse(char* chars, int length, out decimal value, bool exception = false)
-        {
-            int index = 0;
-            int sign = 0;
-            int dotIndex = -1;
-            int scale = 0;
-            var dec = Decimal;
-            var aValue = stackalloc uint[4];
-            var numbers = dec.uInt32Numbers;
-            var disabled = false;
-            int aValueCount = 0;
-            int result = -1;
-            int zeroCount = 0;
-
-            if (length <= 0)
-            {
-                goto EmptyLength;
-            }
-
-            switch (chars[0])
+            switch (chars[offset])
             {
                 case PositiveSign:
-                    ++index;
-                    sign = 1;
+                    ++offset;
                     break;
                 case NegativeSign:
-                    ++index;
-                    sign = -1;
+                    ++offset;
+
+                    isNegative = true;
                     break;
             }
 
-        Loop:
+            var value = default(decimal);
+            var lengthOfValueBits = 1;
+            var code = ParseCode.Success;
 
-            uint add = 0;
-            int i = 0;
-            int zero = 0;
+            Loop:
 
-            for (; i < DecimalBaseDivisorLength && index < length; ++index)
+            var swap = 0U;
+            var number = 0;
+
+            for (; number < DecimalDivisorLength && offset < length; ++offset)
             {
-                char c = chars[index];
+                var digital = (uint)(chars[offset] - DigitalsZeroValue);
 
-                if (c == DigitalsZeroValue)
+                if (digital >= radix)
                 {
-                    ++zero;
-                }
-                else
-                {
-                    uint n = (uint)(c - DigitalsZeroValue);
-
-                    if (n > 0 && n < DecimalRadix)
+                    switch (chars[offset])
                     {
-                        if (zero == 0)
-                        {
-                            add = add * DecimalRadix + n;
-                        }
-                        else
-                        {
-                            add = add * numbers[zero + 1] + n;
+                        case DotSign:
 
-                            zero = 0;
-                        }
-                    }
-                    else
-                    {
-                        switch (c)
-                        {
-                            case DotSign:
-                                if (dotIndex != -1)
-                                {
-                                    goto FormatException;
-                                }
+                            if (floating == -1)
+                            {
+                                ++floating;
 
-                                dotIndex = index;
                                 continue;
-                            case ExponentSign:
-                            case exponentSign:
-                                goto Exponent;
-                        }
+                            }
 
-                        goto OutOfRadix;
+                            break;
+                        case ExponentSign:
+                        case exponentSign:
+                            ++offset;
+                            goto Exponent;
                     }
+
+                    code = ParseCode.OutOfRadix;
+
+                    length = 0;
+
+                    goto Return;
                 }
 
+                swap = swap * radix + digital;
 
-                ++i;
-            }
+                ++number;
 
-            uint carry;
-
-            int mult;
-
-        GetAndMultAndAdd:
-
-            if (zero != i && zeroCount != 0)
-            {
-                i += zeroCount;
-
-                zeroCount = 0;
-            }
-
-            if (zero != 0)
-            {
-                mult = i - zero;
-
-                zeroCount += zero;
-            }
-            else
-            {
-                mult = i;
-            }
-
-            i = 0;
-
-            zero = 0;
-
-        MultAndAdd:
-
-            while (mult > 0 && aValueCount != 0)
-            {
-                if (mult >= DecimalBaseDivisorLength)
+                if (floating >= 0)
                 {
-                    Mult(aValue, aValueCount, DecimalBaseDivisor, out carry);
-
-                    mult -= DecimalBaseDivisorLength;
+                    ++floating;
                 }
-                else
-                {
-                    Mult(aValue, aValueCount, numbers[mult], out carry);
+            }
 
-                    mult = 0;
-                }
+            Return:
+
+            if (number != 0)
+            {
+                Mult((uint*)&value, lengthOfValueBits, (uint)DecimalUInt64Numbers[number], out var carry);
 
                 if (carry != 0)
                 {
-                    aValue[aValueCount] = carry;
+                    ((uint*)&value)[lengthOfValueBits] = carry;
 
-                    ++aValueCount;
+                    ++lengthOfValueBits;
                 }
-            }
 
-            if (add != 0)
-            {
-                Add(aValue, aValueCount, add, out carry);
+                Add((uint*)&value, lengthOfValueBits, swap, out carry);
 
                 if (carry != 0)
                 {
-                    aValue[aValueCount] = carry;
+                    ((uint*)&value)[lengthOfValueBits] = carry;
 
-                    ++aValueCount;
+                    ++lengthOfValueBits;
                 }
-
-                add = 0;
             }
 
-            if (aValueCount > 3)
+            if (lengthOfValueBits > 3)
             {
-                goto OutOfRange;
+                code = ParseCode.OutOfRange;
+
+                length = 0;
             }
 
-            if (index < length && !disabled)
+            if (offset < length)
             {
                 goto Loop;
             }
 
-        Return:
-
-            if (dotIndex == -1 && zeroCount != 0)
+            if (floating >= 1)
             {
-                mult = zeroCount;
-
-                zeroCount = 0;
-
-                disabled = true;
-
-                goto MultAndAdd;
+                exponent -= floating;
             }
 
-            if ((i | zero) != 0)
+            if (exponent > 0)
             {
-                disabled = true;
-
-                goto GetAndMultAndAdd;
-            }
-
-            if (result == -1)
-            {
-                result = index;
-            }
-
-            if (dotIndex != -1)
-            {
-                int t = sign == 0 ? 0 : 1;
-
-                if (dotIndex == t)
+                if (exponent > DecimalMaxExponent)
                 {
-                    goto FormatException;
-                }
-
-                scale += index - dotIndex - 1 - t - zeroCount;
-
-                dotIndex = -1;
-
-                zeroCount = 0;
-            }
-
-            if (scale < 0)
-            {
-                mult = -scale;
-
-                scale = 0;
-
-                disabled = true;
-
-                goto MultAndAdd;
-            }
-
-            if (aValueCount == 0 && *aValue == 0)
-            {
-                value = 0;
-
-                return result;
-            }
-            else
-            {
-                if (scale > DecimalMaxScale)
-                {
-                    goto ExponentOutOfRange;
-                }
-
-                fixed (decimal* pValue = &value)
-                {
-                    var upValue = (uint*)pValue;
-
-                    upValue[2] = aValue[0];
-                    upValue[3] = aValue[1];
-                    upValue[1] = aValue[2];
-
-                    if (sign == -1)
-                    {
-                        upValue[0] = SignMask;
-                    }
-
-                    if (scale != 0)
-                    {
-                        ((byte*)upValue)[2] = (byte)scale;
-                    }
-                }
-
-                return result;
-            }
-
-
-        Exponent:
-
-            int exponent;
-
-            result = index + 1;
-
-            result += dec.TryParse(chars + result, length - result, out exponent);
-
-            scale -= exponent;
-
-            goto Return;
-
-        EmptyLength:
-            if (exception) ThreadException = new FormatException("Decimal text format error.");
-            goto ReturnFalse;
-        FormatException:
-            if (exception) ThreadException = new FormatException("Decimal text format error.");
-            goto ReturnFalse;
-        OutOfRange:
-            if (exception) ThreadException = new OverflowException("Value out of decimal range.");
-            goto ReturnFalse;
-        OutOfRadix:
-            if (exception) ThreadException = new OverflowException("Digit out of Decimal radix.");
-            goto Return;
-        ExponentOutOfRange:
-            if (exception) ThreadException = new OverflowException("Exponent out of Decimal range.");
-            goto ReturnFalse;
-
-        ReturnFalse:
-            value = 0;
-            return 0;
-
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static void ToDecimalNumber(char* chars, int count, uint* number, ref int length)
-        {
-            var decimalInstance = Decimal;
-
-            for (int i = 0; i < count;)
-            {
-                int j = 0;
-                uint t = 0;
-
-                for (; j < DecimalBaseDivisorLength && i < count; ++j, ++i)
-                {
-                    t = t * DecimalRadix + decimalInstance.ToRadix(chars[i]);
-                }
-
-                uint carry;
-
-                if (j == DecimalBaseDivisorLength)
-                {
-                    Mult(number, length, DecimalBaseDivisor, out carry);
+                    code = ParseCode.OutOfRange;
                 }
                 else
                 {
-                    Mult(number, length, decimalInstance.uInt32Numbers[j], out carry);
-                }
-
-                if (carry != 0)
-                {
-                    number[length] = carry;
-
-                    ++length;
-                }
-
-                Add(number, length, t, out carry);
-
-                if (carry != 0)
-                {
-                    number[length] = carry;
-
-                    ++length;
-                }
-            }
-        }
-
-        /// <summary>
-        /// 将一个 NumberInfo 转换为 Decimal。转换失败则引发异常。
-        /// </summary>
-        /// <param name="numberInfo">NumberInfo</param>
-        /// <returns>返回一个 Decimal</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static decimal ToDecimal(NumberInfo numberInfo)
-        {
-            if (numberInfo.radix != DecimalRadix)
-            {
-                throw new FormatException("decimal radix.");
-            }
-
-            if (numberInfo.exponentCount > 5)
-            {
-                throw new OverflowException("Exponent too big.");
-            }
-
-            if (numberInfo.integerCount + numberInfo.fractionalCount > DecimalMaxScale + 2)
-            {
-                throw new OverflowException("Number out of Decimal range.");
-            }
-
-            var decimalInstance = Decimal;
-
-            var exponent = decimalInstance.UncheckedParse(numberInfo.chars + numberInfo.exponentBegin, numberInfo.exponentCount);
-
-            if (numberInfo.exponentIsNegative)
-            {
-                exponent = -exponent;
-            }
-
-            var number = stackalloc uint[5];
-            var numberLength = 0;
-
-            ToDecimalNumber(numberInfo.chars + numberInfo.integerBegin, numberInfo.integerCount, number, ref numberLength);
-
-            ToDecimalNumber(numberInfo.chars + numberInfo.fractionalBegin, numberInfo.fractionalCount, number, ref numberLength);
-
-            var scale = numberInfo.fractionalCount - exponent;
-
-            if (scale < 0)
-            {
-                scale = -scale;
-
-                if (scale > DecimalMaxScale - (numberInfo.integerCount + numberInfo.fractionalCount))
-                {
-                    throw new OverflowException("Exponent too big.");
-                }
-
-                while (scale > 0)
-                {
-                    Mult(number, numberLength, DecimalRadix, out uint carry);
-
-                    if (carry != 0)
+                    do
                     {
-                        number[numberLength] = carry;
+                        number = Math.Min(DecimalDivisorLength, (int)exponent);
 
-                        ++numberLength;
-                    }
+                        exponent -= number;
 
-                    --scale;
+                        Mult((uint*)&value, lengthOfValueBits, (uint)DecimalUInt64Numbers[number], out var carry);
+
+                        if (carry != 0)
+                        {
+                            ((uint*)&value)[lengthOfValueBits] = carry;
+
+                            ++lengthOfValueBits;
+
+                            if (lengthOfValueBits > 3)
+                            {
+                                code = ParseCode.OutOfRange;
+
+                                break;
+                            }
+                        }
+
+                    } while (exponent > 0);
                 }
             }
 
-            if (numberLength > 3)
+            ((DecimalStruct*)(&value))->SetBits((int*)(&value));
+
+            if (exponent < 0)
             {
-                throw new OverflowException("Number out of Decimal range.");
-            }
-
-            decimal r;
-
-            var upValue = (uint*)(&r);
-
-            upValue[2] = number[0];
-            upValue[3] = number[1];
-            upValue[1] = number[2];
-
-            if (numberInfo.isNegative)
-            {
-                upValue[0] = SignMask;
-            }
-
-            if (scale != 0)
-            {
-                if (scale > DecimalMaxScale)
+                if (exponent < -DecimalMaxScale)
                 {
-                    throw new OverflowException("Scale too big.");
+                    code = ParseCode.OutOfRange;
                 }
-
-                ((byte*)upValue)[2] = (byte)scale;
+                else
+                {
+                    ((DecimalStruct*)(&value))->Scale = (int)(-exponent);
+                }
             }
 
-            return r;
+            if (isNegative)
+            {
+                ((DecimalStruct*)(&value))->Sign = 1;
+            }
+
+            return (code, offset, value);
+
+            Exponent:
+
+            var expParse = DecimalParseInt64(chars + offset, length - offset);
+
+            if (expParse.code != ParseCode.Success)
+            {
+                code = expParse.code;
+            }
+
+            offset += expParse.length;
+
+            exponent = expParse.value;
+
+            length = 0;
+
+            goto Return;
         }
-
-
-
 
 
 
@@ -1746,113 +1309,6 @@ namespace Swifter.Tools
             *number = 0;
 
             return 0;
-        }
-
-
-
-
-
-
-        /// <summary>
-        /// 将一个 Guid 值转换为 String 表现形式。转换失败将引发异常。
-        /// </summary>
-        /// <param name="value">Guid 值</param>
-        /// <returns>返回一个 String 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ToString(Guid value)
-        {
-            var result = new string('\0', GuidStringLength);
-
-            fixed (char* pResult = result)
-            {
-                ToString(value, pResult);
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// 将一个 Decimal 值转换为 String 表现形式。转换失败将引发异常。
-        /// </summary>
-        /// <param name="value">Decimal 值</param>
-        /// <returns>返回一个 String 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ToString(decimal value)
-        {
-            char* chars = stackalloc char[DecimalStringMaxLength];
-
-            int length = ToString(value, chars);
-
-            return new string(chars, 0, length);
-        }
-
-        /// <summary>
-        /// 尝试将 String 值转换为 Guid 值。
-        /// </summary>
-        /// <param name="text">String 值</param>
-        /// <param name="value">返回 Guid 值</param>
-        /// <returns>返回成功否</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static bool TryParse(string text, out Guid value)
-        {
-            fixed (char* chars = text)
-            {
-                return TryParse(chars, text.Length, out value) == text.Length;
-            }
-        }
-
-        /// <summary>
-        /// 将 String 值转换为 Guid 值。失败将引发异常。
-        /// </summary>
-        /// <param name="text">String 值</param>
-        /// <returns>返回 Guid 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static Guid ParseGuid(string text)
-        {
-            if (TryParse(text, out Guid r))
-            {
-                return r;
-            }
-
-            throw ThreadException;
-        }
-
-        /// <summary>
-        /// 尝试将 String 值转换为 Decimal 值。
-        /// </summary>
-        /// <param name="text">String 值</param>
-        /// <param name="value">返回 Decimal 值</param>
-        /// <returns>返回成功否</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static bool TryParse(string text, out decimal value)
-        {
-            var length = text.Length;
-
-            fixed (char* chars = text)
-            {
-                return TryParse(chars, length, out value, false) == length;
-            }
-        }
-
-        /// <summary>
-        /// 将 String 值转换为 Decimal 值。失败将引发异常。
-        /// </summary>
-        /// <param name="text">String 值</param>
-        /// <returns>返回 Decimal 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static decimal ParseDecimal(string text)
-        {
-            var length = text.Length;
-
-            fixed (char* chars = text)
-            {
-                if (TryParse(chars, length, out decimal r, false) == length)
-                {
-                    return r;
-                }
-            }
-
-            throw ThreadException;
         }
     }
 }

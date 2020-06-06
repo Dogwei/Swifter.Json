@@ -12,21 +12,22 @@ namespace Swifter.RW
 
             valueReader.ReadArray(collectionRW);
 
-            return collectionRW.Content;
+            return collectionRW.content;
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
 
                 return;
             }
 
-            var collectionRW = new CollectionRW<T>();
-
-            collectionRW.Initialize(value);
+            var collectionRW = new CollectionRW<T>
+            {
+                content = value
+            };
 
             valueWriter.WriteArray(collectionRW);
         }

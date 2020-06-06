@@ -15,7 +15,7 @@ namespace Swifter.RW
 
             var value = valueReader.ReadNullable<long>();
 
-            if (value == null)
+            if (value is null)
             {
                 return IntPtr.Zero;
             }

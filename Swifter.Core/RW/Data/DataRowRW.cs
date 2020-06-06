@@ -11,22 +11,11 @@ namespace Swifter.RW
     /// <summary>
     /// System.Data.DataRow Reader impl.
     /// </summary>
-    internal sealed class DataRowRW<T> : IDataRW<string>, IDataRW<int>, IInitialize<T>, IDirectContent where T : DataRow
+    internal sealed class DataRowRW<T> : IDataRW<string>, IDataRW<int> where T : DataRow
     {
-        internal readonly List<KeyValuePair<string, object>> Items;
-        internal readonly bool SetTypeOfValues;
+        const int DefaultCapacity = 3;
 
-        internal T DataRow;
-
-        bool Initialized;
-
-
-        public DataRowRW(bool setTypeOfValues = false)
-        {
-            Items = new List<KeyValuePair<string, object>>();
-
-            SetTypeOfValues = setTypeOfValues;
-        }
+        internal T datarow;
 
         IValueWriter IDataWriter<int>.this[int key] => this[key];
 
@@ -40,7 +29,7 @@ namespace Swifter.RW
 
         public IValueRW this[int key] => new ValueCopyer<int>(this, key);
 
-        public IEnumerable<string> Keys => ArrayHelper.CreateNamesIterator(Content.Table);
+        public IEnumerable<string> Keys => ArrayHelper.CreateNamesIterator(datarow.Table);
 
         IEnumerable<int> IDataRW<int>.Keys => null;
 
@@ -48,136 +37,53 @@ namespace Swifter.RW
 
         IEnumerable<int> IDataWriter<int>.Keys => null;
 
-        public int Count => Content.Table.Columns.Count;
+        public int Count => datarow?.Table.Columns.Count ?? -1;
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void Fill()
+        public Type ContentType => typeof(T);
+
+        public object Content
         {
-            if (!Initialized && DataRow == null)
-            {
-                return;
-            }
-
-            if (DataRow == null)
-            {
-                if (typeof(T) == typeof(DataRow))
-                {
-                    var dataTable = new DataTable();
-
-                    foreach (var item in Items)
-                    {
-                        dataTable.Columns.Add(item.Key, SetTypeOfValues ? item.Value?.GetType() ?? typeof(object) : typeof(object));
-                    }
-
-                    DataRow = Unsafe.As<T>(dataTable.NewRow());
-
-                    for (int i = 0; i < Items.Count; i++)
-                    {
-                        DataRow[i] = Items[i].Value;
-                    }
-
-                    return;
-                }
-
-                DataRow = Activator.CreateInstance<T>();
-            }
-
-            var columns = DataRow.Table.Columns;
-
-            foreach (var item in Items)
-            {
-                var column = columns[item.Key];
-
-                if (column == null)
-                {
-                    columns.Add(item.Key, SetTypeOfValues ? item.Value?.GetType() ?? typeof(object) : typeof(object));
-                }
-
-                DataRow[column] = item.Value;
-            }
-        }
-
-        public void Clear()
-        {
-            Items.Clear();
-
-            DataRow = null;
-
-            Initialized = false;
-        }
-
-        public T Content
-        {
-            get
-            {
-                if (Items.Count != 0)
-                {
-                    Fill();
-                }
-
-                return DataRow;
-            }
-        }
-
-        object IDataReader.ReferenceToken => Content;
-
-        object IDirectContent.DirectContent
-        {
-            get
-            {
-                return Content;
-            }
-            set
-            {
-                Initialize((T)value);
-            }
-        }
-
-        public void Initialize(T dataRow)
-        {
-            Items.Clear();
-
-            DataRow = dataRow;
-
-            Initialized = false;
+            get => datarow;
+            set => datarow = (T)value;
         }
 
         public void Initialize()
         {
-            Items.Clear();
-
-            Initialized = true;
+            Initialize(DefaultCapacity);
         }
 
         public void Initialize(int capacity)
         {
-            Initialize();
+            if (datarow is null)
+            {
+                if (typeof(T) == typeof(DataRow))
+                {
+                    datarow = Underlying.As<T>(new DataTable().NewRow());
+                }
+                else
+                {
+                    datarow = Activator.CreateInstance<T>();
+                }
+            }
         }
 
         public void OnReadAll(IDataWriter<string> dataWriter)
         {
-            foreach (DataColumn item in Content.Table.Columns)
+            var columns = datarow.Table.Columns;
+
+            var length = columns.Count;
+
+            for (int i = 0; i < length; i++)
             {
-                var value = Content[item.Ordinal];
+                var column = columns[i];
 
-                if (value == DBNull.Value)
-                {
-                    value = null;
-                }
-
-                ValueInterface.WriteValue(dataWriter[item.ColumnName], value);
+                WriteValue(datarow[column], dataWriter[column.ColumnName]);
             }
         }
 
-        public void OnReadAll(IDataWriter<string> dataWriter, IValueFilter<string> valueFilter)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void WriteValue(object value, IValueWriter valueWriter)
         {
-            OnReadAll(new DataFilterWriter<string>(dataWriter, valueFilter));
-        }
-
-        public void OnReadValue(string key, IValueWriter valueWriter)
-        {
-            var value = Content[key];
-
             if (value == DBNull.Value)
             {
                 value = null;
@@ -186,69 +92,103 @@ namespace Swifter.RW
             ValueInterface.WriteValue(valueWriter, value);
         }
 
+        public void OnReadValue(string key, IValueWriter valueWriter)
+        {
+            WriteValue(datarow[key], valueWriter);
+        }
+
         public void OnWriteValue(string key, IValueReader valueReader)
         {
-            DataColumn column;
+            var column = datarow.Table.Columns[key];
 
-            if (DataRow != null && (column = DataRow.Table.Columns[key]) != null && column.DataType != typeof(object))
+            // 此方法允许列不存在时新增列。
+            if (column is null)
             {
-                DataRow[column] = ValueInterface.GetInterface(column.DataType).Read(valueReader);
-
-                return;
+                column = datarow.Table.Columns.Add(key, typeof(object));
             }
 
-            Items.Add(new KeyValuePair<string, object>(key, valueReader.DirectRead()));
+            if (column.DataType == typeof(object))
+            {
+                datarow[column] = valueReader.DirectRead();
+            }
+            else
+            {
+                datarow[column] = ValueInterface.GetInterface(column.DataType).Read(valueReader);
+            }
         }
 
         public void OnWriteAll(IDataReader<string> dataReader)
         {
-            foreach (DataColumn item in Content.Table.Columns)
+            var columns = datarow.Table.Columns;
+
+            var length = columns.Count;
+
+            for (int i = 0; i < length; i++)
             {
-                Content[item] = ValueInterface.GetInterface(item.DataType).Read(dataReader[item.ColumnName]);
+                var column = columns[i];
+
+                if (column.DataType == typeof(object))
+                {
+                    datarow[column] = dataReader[column.ColumnName].DirectRead();
+                }
+                else
+                {
+                    datarow[column] = ValueInterface.GetInterface(column.DataType).Read(dataReader[column.ColumnName]);
+                }
             }
         }
 
         public void OnReadValue(int key, IValueWriter valueWriter)
         {
-            var value = Content[key];
-
-            if (value == DBNull.Value)
-            {
-                value = null;
-            }
-
-            ValueInterface.WriteValue(valueWriter, value);
+            WriteValue(datarow[key], valueWriter);
         }
 
         public void OnReadAll(IDataWriter<int> dataWriter)
         {
-            var length = Content.Table.Columns.Count;
+            var columns = datarow.Table.Columns;
+
+            var length = columns.Count;
 
             for (int i = 0; i < length; i++)
             {
-                OnReadValue(i, dataWriter[i]);
-            }
-        }
+                var column = columns[i];
 
-        public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
-        {
-            OnReadAll(new DataFilterWriter<int>(dataWriter, valueFilter));
+                WriteValue(datarow[column], dataWriter[i]);
+            }
         }
 
         public void OnWriteValue(int key, IValueReader valueReader)
         {
-            var type = Content.Table.Columns[key].DataType;
+            var column = datarow.Table.Columns[key];
 
-            Content[key] = type == typeof(object) ? valueReader.DirectRead() : ValueInterface.GetInterface(type).Read(valueReader);
+            if (column.DataType == typeof(object))
+            {
+                datarow[column] = valueReader.DirectRead();
+            }
+            else
+            {
+                datarow[column] = ValueInterface.GetInterface(column.DataType).Read(valueReader);
+            }
         }
 
         public void OnWriteAll(IDataReader<int> dataReader)
         {
-            var length = Content.Table.Columns.Count;
+            var columns = datarow.Table.Columns;
+
+            var length = columns.Count;
 
             for (int i = 0; i < length; i++)
             {
-                OnWriteValue(i, dataReader[i]);
+                var column = columns[i];
+
+                if (column.DataType == typeof(object))
+                {
+                    datarow[column] = dataReader[i].DirectRead();
+                }
+                else
+                {
+                    datarow[column] = ValueInterface.GetInterface(column.DataType).Read(dataReader[i]);
+                }
             }
         }
     }

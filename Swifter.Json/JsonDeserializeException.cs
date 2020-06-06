@@ -1,6 +1,4 @@
-﻿using Swifter.Tools;
-using System;
-using System.ComponentModel;
+﻿using System;
 
 namespace Swifter.Json
 {
@@ -10,34 +8,17 @@ namespace Swifter.Json
     public sealed class JsonDeserializeException : Exception
     {
         /// <summary>
-        /// 反序列化出错所在行。
+        /// 构建实例。
         /// </summary>
-        public int Line { get; set; }
-
-        /// <summary>
-        /// 反序列化出错所在列。
-        /// </summary>
-        public int Column { get; set; }
+        /// <param name="index">反序列化出错所在索引</param>
+        public JsonDeserializeException(int index) : base("Json deserialize failed.")
+        {
+            Index = index;
+        }
 
         /// <summary>
         /// 反序列化出错所在索引。
         /// </summary>
-        public int Index { get; set; }
-
-        /// <summary>
-        /// 导致反序列化出错的文本。
-        /// </summary>
-        public string Text { get; set; }
-
-        /// <summary>
-        /// 获取异常消息。
-        /// </summary>
-        public override string Message
-        {
-            get
-            {
-                return $"Json Deserialize Failed. Index : {Index}, Line: {Line}, Column : {Column}, Text : {Text}.";
-            }
-        }
+        public int Index { get; }
     }
 }

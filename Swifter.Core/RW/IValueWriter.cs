@@ -111,6 +111,13 @@ namespace Swifter.RW
         void WriteArray(IDataReader<int> dataReader);
 
         /// <summary>
+        /// 写入一个枚举值。
+        /// </summary>
+        /// <typeparam name="T">枚举类型</typeparam>
+        /// <param name="value">枚举值</param>
+        void WriteEnum<T>(T value) where T : struct, Enum;
+
+        /// <summary>
         /// 直接写入一个对象。
         /// </summary>
         /// <param name="value">对象 值</param>
@@ -128,18 +135,5 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="value">值</param>
         void WriteValue(T value);
-    }
-
-    /// <summary>
-    /// 表示允许写入一个 Map 对象。
-    /// </summary>
-    public interface IMapValueWriter
-    {
-        /// <summary>
-        /// 写入 Map 对象。
-        /// </summary>
-        /// <typeparam name="TKey">Map 的键类型</typeparam>
-        /// <param name="mapReader">map 读取器</param>
-        void WriteMap<TKey>(IDataReader<TKey> mapReader);
     }
 }

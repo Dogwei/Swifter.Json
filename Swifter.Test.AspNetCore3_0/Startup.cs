@@ -1,8 +1,12 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace Swifter.Test.AspNetCore3_0
 {
@@ -27,7 +31,17 @@ namespace Swifter.Test.AspNetCore3_0
 
             services.AddControllersWithViews()
                 // ´úÂëÖØµã£º
-                .ConfigureJsonFormatter();
+                .ConfigureJsonFormatter(configuration: jsonFormatter =>
+                {
+                    jsonFormatter.Options = Json.JsonFormatterOptions.Indented;
+
+                });
+
+            //services.AddControllers(options =>
+            //{
+            //    options.InputFormatters.Insert(0, new RawJsonInputFormatter());
+            //});
+
 
             services.AddRazorPages();
         }
@@ -62,6 +76,28 @@ namespace Swifter.Test.AspNetCore3_0
                     pattern: "{controller=Home}/{action=Index}/{id?}");
                 endpoints.MapRazorPages();
             });
+        }
+    }
+
+    public class RawJsonInputFormatter : InputFormatter
+    {
+        public RawJsonInputFormatter()
+        {
+            this.SupportedMediaTypes.Add("application/json");
+        }
+
+        public override async Task<InputFormatterResult> ReadRequestBodyAsync(InputFormatterContext context)
+        {
+            using (var reader = new StreamReader(context.HttpContext.Request.Body))
+            {
+                var content = await reader.ReadToEndAsync();
+                return await InputFormatterResult.SuccessAsync(content);
+            }
+        }
+
+        protected override bool CanReadType(Type type)
+        {
+            return type == typeof(string);
         }
     }
 }

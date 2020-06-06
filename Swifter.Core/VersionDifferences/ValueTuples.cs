@@ -1,8 +1,9 @@
 ﻿
 
-#if NET451 || NET45 || NET40 || NET35 || NET30 || NET20
+#if NET20 || NET35
 
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 #pragma warning disable 1591
 
@@ -34,6 +35,21 @@ namespace System
         {
             Item1 = item1;
             Item2 = item2;
+        }
+    }
+
+    [Serializable]
+    public struct ValueTuple<T1, T2, T3>
+    {
+        public T1 Item1;
+        public T2 Item2;
+        public T3 Item3;
+
+        public ValueTuple(T1 item1, T2 item2, T3 item3)
+        {
+            Item1 = item1;
+            Item2 = item2;
+            Item3 = item3;
         }
     }
     
@@ -141,21 +157,6 @@ namespace System
             Rest = rest;
         }
     }
-
-    [Serializable]
-    public struct ValueTuple<T1, T2, T3>
-    {
-        public T1 Item1;
-        public T2 Item2;
-        public T3 Item3;
-
-        public ValueTuple(T1 item1, T2 item2, T3 item3)
-        {
-            Item1 = item1;
-            Item2 = item2;
-            Item3 = item3;
-        }
-    }
 }
 
 namespace System.Runtime.CompilerServices
@@ -180,4 +181,5 @@ namespace System.Runtime.CompilerServices
         }
     }
 }
+
 #endif

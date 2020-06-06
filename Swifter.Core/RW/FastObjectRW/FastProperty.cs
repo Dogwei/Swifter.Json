@@ -15,9 +15,15 @@ namespace Swifter.RW
         {
             public PropertyInfo Property => (PropertyInfo)Member;
 
+            readonly FieldInfo AutoFieldInfo;
+
             public FastProperty(PropertyInfo property, RWFieldAttribute attribute)
                 : base(property, attribute)
             {
+                if (TypeHelper.IsAutoProperty(property, out var fieldInfo) && fieldInfo != null)
+                {
+                    AutoFieldInfo = fieldInfo;
+                }
             }
 
             public override string Name
@@ -37,24 +43,37 @@ namespace Swifter.RW
             {
                 get
                 {
-                    if (!Property.CanRead)
+                    // 没有读取方式。
+                    if (GetMethod is null && AutoFieldInfo is null)
                     {
                         return false;
                     }
 
-                    var method = GetMethod;
-
-                    if (method == null)
-                    {
-                        return false;
-                    }
-
+                    // 特性指定。
                     if (Attribute != null)
                     {
-                        return Attribute.Access == RWFieldAccess.RW || Attribute.Access == RWFieldAccess.ReadOnly;
+                        return (Attribute.Access & RWFieldAccess.ReadOnly) != 0;
                     }
 
-                    return method.IsPublic;
+                    // ref struct
+                    if (BeforeType.IsByRefLike())
+                    {
+                        return false;
+                    }
+
+                    // Get 方法可访问。
+                    if (GetMethod?.IsPublic == true)
+                    {
+                        return true;
+                    }
+
+                    // 自动属性，只有其中一个方法为 IsPublic。
+                    if ((Options & FastObjectRWOptions.AutoPropertyDirectRW) != 0)
+                    {
+                        return GetMethod?.IsPublic == true || SetMethod?.IsPublic == true;
+                    }
+
+                    return false;
                 }
             }
 
@@ -62,38 +81,43 @@ namespace Swifter.RW
             {
                 get
                 {
-                    MethodInfo method;
-
-                    if (IsByRef)
-                    {
-                        if (!Property.CanRead)
-                        {
-                            return false;
-                        }
-
-                        method = GetMethod;
-                    }
-                    else
-                    {
-                        if (!Property.CanWrite)
-                        {
-                            return false;
-                        }
-
-                        method = SetMethod;
-                    }
-
-                    if (method == null)
+                    // 没有设置方式。
+                    if (SetMethod is null && AutoFieldInfo is null && !(IsByRef && GetMethod != null))
                     {
                         return false;
                     }
 
+                    // 特性指定。
                     if (Attribute != null)
                     {
-                        return Attribute.Access == RWFieldAccess.RW || Attribute.Access == RWFieldAccess.WriteOnly;
+                        return (Attribute.Access & RWFieldAccess.WriteOnly) != 0;
                     }
 
-                    return method.IsPublic;
+                    // ref struct
+                    if (BeforeType.IsByRefLike())
+                    {
+                        return false;
+                    }
+
+                    // ByRef 属性判断 Get 方法是否可读。
+                    if (IsByRef)
+                    {
+                        return GetMethod?.IsPublic == true;
+                    }
+
+                    // Set 方法可访问。
+                    if (SetMethod?.IsPublic == true)
+                    {
+                        return true;
+                    }
+
+                    // 自动属性，只有其中一个方法为 IsPublic。
+                    if ((Options & FastObjectRWOptions.AutoPropertyDirectRW) != 0)
+                    {
+                        return GetMethod?.IsPublic == true || SetMethod?.IsPublic == true;
+                    }
+
+                    return false;
                 }
             }
             
@@ -101,13 +125,22 @@ namespace Swifter.RW
 
             public MethodInfo SetMethod => Property.GetSetMethod(true);
 
-            public override bool IsPublic => (!CanRead || GetMethod.IsPublic) && (!CanWrite || SetMethod.IsPublic);
+            public override bool IsPublicGet => AutoFieldInfo != null || GetMethod?.IsPublic == true;
+
+            public override bool IsPublicSet => AutoFieldInfo != null || SetMethod?.IsPublic == true || (IsByRef && GetMethod?.IsPublic == true);
 
             public override Type BeforeType => IsByRef ? Property.PropertyType.GetElementType() : Property.PropertyType.IsPointer ? typeof(IntPtr) : Property.PropertyType;
 
             public override Type AfterType => ReadValueMethod?.ReturnType ?? BeforeType;
 
             public override bool IsStatic => (GetMethod != null && GetMethod.IsStatic) || (SetMethod != null && SetMethod.IsStatic);
+
+            public override bool SkipDefaultValue => (Attribute?.SkipDefaultValue ?? RWBoolean.None) != RWBoolean.None ? (Attribute.SkipDefaultValue == RWBoolean.Yes) : (Options & FastObjectRWOptions.SkipDefaultValue) != 0;
+
+            public override bool CannotGetException => (Attribute?.CannotGetException ?? RWBoolean.None) != RWBoolean.None ? (Attribute.CannotGetException == RWBoolean.Yes) : (Options & FastObjectRWOptions.CannotGetException) != 0;
+
+            public override bool CannotSetException => (Attribute?.CannotSetException ?? RWBoolean.None) != RWBoolean.None ? (Attribute.CannotSetException == RWBoolean.Yes) : (Options & FastObjectRWOptions.CannotSetException) != 0;
+
 
             public bool IsByRef => Property.PropertyType.IsByRef;
 
@@ -121,7 +154,14 @@ namespace Swifter.RW
                 }
                 else
                 {
-                    ilGen.Call(GetMethod);
+                    if (GetMethod?.IsPublic == true || AutoFieldInfo is null)
+                    {
+                        ilGen.Call(GetMethod);
+                    }
+                    else
+                    {
+                        ilGen.LoadField(AutoFieldInfo);
+                    }
                 }
             }
 
@@ -133,7 +173,14 @@ namespace Swifter.RW
                 }
                 else
                 {
-                    ilGen.Call(SetMethod);
+                    if (SetMethod?.IsPublic == true || AutoFieldInfo is null)
+                    {
+                        ilGen.Call(SetMethod);
+                    }
+                    else
+                    {
+                        ilGen.StoreField(AutoFieldInfo);
+                    }
                 }
             }
 

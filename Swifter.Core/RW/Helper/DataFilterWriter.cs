@@ -62,6 +62,20 @@ namespace Swifter.RW
         public int Count => DataWriter.Count;
 
         /// <summary>
+        /// 获取数据源的类型。
+        /// </summary>
+        public Type ContentType => DataWriter.ContentType;
+
+        /// <summary>
+        /// 获取或设置数据源。
+        /// </summary>
+        public object Content
+        {
+            get => DataWriter.Content;
+            set => DataWriter.Content = value;
+        }
+
+        /// <summary>
         /// 初始化原始写入器。
         /// </summary>
         public void Initialize()
@@ -221,6 +235,13 @@ namespace Swifter.RW
         void IValueWriter.WriteUInt64(ulong value)
         {
             ValueInfo.ValueCopyer.WriteUInt64(value);
+
+            OnFilter();
+        }
+
+        void IValueWriter.WriteEnum<T>(T value)
+        {
+            ValueInfo.ValueCopyer.WriteEnum(value);
 
             OnFilter();
         }

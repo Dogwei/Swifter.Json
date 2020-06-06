@@ -1,4 +1,4 @@
-﻿#if NETCOREAPP && !NETCOREAPP2_0
+﻿#if Span
 
 using Swifter.RW;
 using System;

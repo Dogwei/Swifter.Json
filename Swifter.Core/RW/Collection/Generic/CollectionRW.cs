@@ -6,13 +6,11 @@ using System.Collections.Generic;
 
 namespace Swifter.RW
 {
-    internal sealed class CollectionRW<T, TValue> : IDataRW<int>, IDirectContent, IInitialize<T> where T : ICollection<TValue>
+    internal sealed class CollectionRW<T, TValue> : IDataRW<int> where T : ICollection<TValue>
     {
         public const int DefaultCapacity = 3;
 
         internal T content;
-
-        public T Content => content;
 
         public ValueCopyer<int> this[int key] => new ValueCopyer<int>(this, key);
 
@@ -24,13 +22,13 @@ namespace Swifter.RW
 
         public int Count => content.Count;
 
-        object IDirectContent.DirectContent
+        public object Content
         {
             get => content;
             set => content = (T)value;
         }
 
-        public object ReferenceToken => content;
+        public Type ContentType => typeof(T);
 
         IValueRW IDataRW<int>.this[int key] => this[key];
 
@@ -39,17 +37,18 @@ namespace Swifter.RW
             Initialize(DefaultCapacity);
         }
 
-        public void Initialize(T content)
-        {
-            this.content = content;
-        }
-
         public void Initialize(int capacity)
         {
             if (typeof(T).IsAssignableFrom(typeof(List<TValue>)))
             {
-                content = (T)(object)new List<TValue>(capacity);
+                Underlying.As<T, List<TValue>>(ref content) = new List<TValue>(capacity);
             }
+#if Linq
+            else if (typeof(T).IsAssignableFrom(typeof(HashSet<TValue>)))
+            {
+                Underlying.As<T, HashSet<TValue>>(ref content) = new HashSet<TValue>();
+            }
+#endif
             else
             {
                 // TODO: Capacity
@@ -85,40 +84,17 @@ namespace Swifter.RW
         {
             var value = ValueInterface<TValue>.ReadValue(valueReader);
 
-            if (key >= content.Count)
+            if (key == Count)
             {
                 content.Add(value);
-
-                return;
             }
-
-            if (content is IList<TValue> list)
+            else if (content is IList<TValue> list)
             {
                 list[key] = value;
-
-                return;
             }
-
-            throw new NotSupportedException($"TODO: '{typeof(T)}' not supported set elements.");
-        }
-
-        public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
-        {
-            var index = 0;
-
-            var valueInfo = new ValueFilterInfo<int>();
-
-            foreach (var item in content)
+            else
             {
-                ValueInterface<TValue>.WriteValue(valueInfo.ValueCopyer, item);
-
-                valueInfo.Key = index;
-                valueInfo.Type = typeof(TValue);
-
-                if (valueFilter.Filter(valueInfo))
-                {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
-                }
+                throw new NotSupportedException();
             }
         }
 
@@ -132,11 +108,11 @@ namespace Swifter.RW
                 {
                     list[i] = ValueInterface<TValue>.ReadValue(dataReader[i]);
                 }
-
-                return;
             }
-
-            throw new NotSupportedException($"TODO: '{typeof(T)}' not supported set elements.");
+            else
+            {
+                throw new NotSupportedException();
+            }
         }
     }
 }

@@ -4,6 +4,9 @@ using Swifter.RW;
 using System;
 using System.Collections.Generic;
 
+using ArrayType = System.Collections.Generic.List<object>;
+using ObjectType = System.Collections.Generic.Dictionary<string, object>;
+
 namespace Swifter.Json
 {
     /// <summary>
@@ -11,11 +14,6 @@ namespace Swifter.Json
     /// </summary>
     public sealed partial class JsonValue
     {
-        static JsonValue()
-        {
-            ValueInterface<JsonValue>.SetInterface(new JsonValueInterface());
-        }
-
         private readonly object value;
 
         private JsonValue(object value)
@@ -26,21 +24,23 @@ namespace Swifter.Json
         /// <summary>
         /// 获取这个 Json 值是否为数组。
         /// </summary>
-        public bool IsArray => value is List<object>;
+        public bool IsArray => value is ArrayType;
 
         /// <summary>
         /// 获取这个 Json 值是否为对象。
         /// </summary>
-        public bool IsObject => value is Dictionary<string, object>;
+        public bool IsObject => value is ObjectType;
 
         /// <summary>
         /// 获取这个 Json 值是否是一个基础值（数字，字符串，布尔，Null）。
         /// </summary>
         public bool IsValue => !IsArray && !IsObject;
 
-        private Dictionary<string, object> Object => value as Dictionary<string, object> ?? throw new InvalidOperationException("this value is not a object.");
+        private ObjectType Object 
+            => value as ObjectType ?? throw new InvalidOperationException("this value is not a object.");
 
-        private List<object> Array => value as List<object> ?? throw new InvalidOperationException("this value is not a array.");
+        private ArrayType Array 
+            => value as ArrayType ?? throw new InvalidOperationException("this value is not a array.");
 
         /// <summary>
         /// 获取这个 Json 对象的字段数量。
@@ -163,7 +163,7 @@ namespace Swifter.Json
         public override string ToString() => JsonFormatter.SerializeObject(value);
 
 
-        sealed class JsonValueInterface : IValueInterface<JsonValue>
+        sealed class ValueInterface : IValueInterface<JsonValue>
         {
             public JsonValue ReadValue(IValueReader valueReader)
             {
@@ -172,7 +172,7 @@ namespace Swifter.Json
 
             public void WriteValue(IValueWriter valueWriter, JsonValue value)
             {
-                ValueInterface.WriteValue(valueWriter, value.value);
+                RW.ValueInterface.WriteValue(valueWriter, value.value);
             }
         }
     }

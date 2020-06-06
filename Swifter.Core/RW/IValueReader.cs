@@ -117,11 +117,18 @@ namespace Swifter.RW
         object DirectRead();
 
         /// <summary>
-        /// 读取一个可空类型。
+        /// 读取一个可空类型。注意：不可依赖此方法读取非空类型的值。
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
+        /// <typeparam name="T">一个值类型</typeparam>
+        /// <returns>返回一个可空类型的值</returns>
         T? ReadNullable<T>() where T : struct;
+
+        /// <summary>
+        /// 读取一个枚举。
+        /// </summary>
+        /// <typeparam name="T">枚举类型</typeparam>
+        /// <returns>返回一个枚举值</returns>
+        T ReadEnum<T>() where T : struct, Enum;
     }
 
     /// <summary>
@@ -135,18 +142,5 @@ namespace Swifter.RW
         /// </summary>
         /// <returns>返回该类型的值</returns>
         T ReadValue();
-    }
-
-    /// <summary>
-    /// 表示一个 Map 读取器。
-    /// </summary>
-    public interface IMapValueReader
-    {
-        /// <summary>
-        /// 读取一个 Map 到写入器中。
-        /// </summary>
-        /// <typeparam name="TKey">Map 的键类型</typeparam>
-        /// <param name="mapWriter">Map 写入器</param>
-        void ReadMap<TKey>(IDataWriter<TKey> mapWriter);
     }
 }

@@ -6,135 +6,63 @@ namespace Swifter.Tools
 {
     public sealed unsafe partial class NumberHelper
     {
-        /// <summary>
-        /// 创建一个 NumberInfo。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="defaultRadix">默认进制数</param>
-        /// <returns>返回一个 NumberInfo</returns>
-        public static NumberInfo GetNumberInfo(char* chars, int length, byte defaultRadix)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private static byte ToDigit(char c)
         {
-            var c = chars;
-            var isNegative = false;
-
-            if (length > 0)
+            if (c < DigitalsMaxValue)
             {
-                var signChar = c[0];
+                return IgnoreCaseRadixes[c];
+            }
 
-                switch (signChar)
+            return ErrorRadix;
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private static void GetNumberCount(char* chars, int length, byte max_radix, ref int index, ref int count, ref int splitCount, ref byte max_digit)
+        {
+            Loop:
+
+            if (index < length)
+            {
+                switch (ToDigit(chars[index]))
                 {
-                    case NegativeSign:
-                    case PositiveSign:
+                    case SplitRadix:
+                        ++splitCount;
+                        ++index;
+                        goto Loop;
+                    case var digit when digit < max_radix:
+                        ++index;
 
-                        ++c;
-                        --length;
-
-                        isNegative = signChar == NegativeSign;
-                        break;
-                }
-
-                if (length >= 3)
-                {
-                    var zeroChar = c[0];
-
-                    if (zeroChar == DigitalsZeroValue)
-                    {
-                        var radixChar = c[1];
-
-                        switch (radixChar)
+                        if (digit == ExponentRadix && index < length && IsSign(chars[index]))
                         {
-                            case hexSign:
-                            case HexSign:
-                                defaultRadix = 16;
-                                break;
-                            case binarySign:
-                            case BinarySign:
-                                defaultRadix = 2;
-                                break;
-                            default:
-                                goto GetNumberInfo;
+                            --index;
+                            break;
                         }
 
-                        c += 2;
-                        length -= 2;
-                    }
+                        if (digit > max_digit) max_digit = digit;
+                        ++count;
+                        goto Loop;
                 }
-            }
-
-        GetNumberInfo:
-
-            var numberInfo = InstanceByRadix(defaultRadix).GetNumberInfo(c, length);
-
-            numberInfo.isNegative = isNegative;
-
-            if (c != chars)
-            {
-                var add = (int)(c - chars);
-
-                numberInfo.chars = chars;
-
-                if (numberInfo.integerBegin != -1)
-                {
-                    numberInfo.integerBegin += add;
-                }
-                if (numberInfo.fractionalBegin != -1)
-                {
-                    numberInfo.fractionalBegin += add;
-                }
-                if (numberInfo.exponentBegin != -1)
-                {
-                    numberInfo.exponentBegin += add;
-                }
-                if (numberInfo.end != -1)
-                {
-                    numberInfo.end += add;
-                }
-            }
-
-            return numberInfo;
-        }
-
-        /// <summary>
-        /// 创建一个 NumberInfo，注意：实用此方法请保证字符串内容不会被移址。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="defaultRadix">默认进制数</param>
-        /// <returns>返回一个 NumberInfo</returns>
-        public static unsafe NumberInfo GetNumberInfo(string chars, byte defaultRadix)
-        {
-            fixed (char* pChars = chars)
-            {
-                return GetNumberInfo(pChars, chars.Length, defaultRadix);
             }
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private void GetNumberCount(char* chars, int length,ref int index, ref int count, ref int splitCount)
+        private static bool IsSign(char c)
         {
-        Loop:
-
-            while (index < length && ToRadix(chars[index]) < radix)
+            return c switch
             {
-                ++count;
-                ++index;
-            }
-
-            if (index < length && ToRadix(chars[index]) == SplitRadix)
-            {
-                ++splitCount;
-                ++index;
-
-                goto Loop;
-            }
+                NegativeSign => true,
+                PositiveSign => true,
+                _ => false,
+            };
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private void SubBeginingZeroOrSplitAndEndingSplit(char* chars, ref int begin, ref int numberCount, ref int splitCount)
+        private static void SubBeginingZeroOrSplitAndEndingSplit(char* chars, ref int begin, ref int numberCount, ref int splitCount)
         {
             while (numberCount > 1)
             {
-                switch (ToRadix(chars[begin]))
+                switch (ToDigit(chars[begin]))
                 {
                     case 0:
                         ++begin;
@@ -149,7 +77,7 @@ namespace Swifter.Tools
                 break;
             }
 
-            while (ToRadix(chars[begin]) == SplitRadix)
+            while (ToDigit(chars[begin]) == SplitRadix)
             {
                 ++begin;
                 --splitCount;
@@ -157,7 +85,7 @@ namespace Swifter.Tools
 
             var end = begin + numberCount + splitCount - 1;
 
-            while (ToRadix(chars[end]) == SplitRadix)
+            while (ToDigit(chars[end]) == SplitRadix)
             {
                 --end;
                 --splitCount;
@@ -165,13 +93,13 @@ namespace Swifter.Tools
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private void SubBeginingSplitAndEndingZeroOrSplit(char* chars, ref int begin, ref int numberCount, ref int splitCount)
+        private static void SubBeginingSplitAndEndingZeroOrSplit(char* chars, ref int begin, ref int numberCount, ref int splitCount)
         {
             var end = begin + numberCount + splitCount - 1;
 
             while (numberCount > 0)
             {
-                switch (ToRadix(chars[end]))
+                switch (ToDigit(chars[end]))
                 {
                     case 0:
                         --end;
@@ -188,13 +116,13 @@ namespace Swifter.Tools
 
             if (numberCount > 1)
             {
-                while (ToRadix(chars[end]) == SplitRadix)
+                while (ToDigit(chars[end]) == SplitRadix)
                 {
                     --end;
                     --splitCount;
                 }
 
-                while (ToRadix(chars[begin]) == SplitRadix)
+                while (ToDigit(chars[begin]) == SplitRadix)
                 {
                     ++begin;
                     --splitCount;
@@ -207,9 +135,10 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="chars">字符串</param>
         /// <param name="length">字符串长度</param>
+        /// <param name="max_radix">最大进制数</param>
         /// <returns>返回一个 NumberInfo</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public NumberInfo GetNumberInfo(char* chars, int length)
+        public static NumberInfo GetNumberInfo(char* chars, int length, byte max_radix = DecimalFirstRadix)
         {
             var number = new NumberInfo
             {
@@ -217,30 +146,56 @@ namespace Swifter.Tools
                 fractionalBegin = -1,
                 exponentBegin = -1,
 
-                chars = chars,
-                radix = radix
+                chars = chars
             };
 
             if (length > 0)
             {
                 var index = 0;
 
-                var signChar = chars[0];
-
-                switch (signChar)
+                switch (chars[index])
                 {
                     case NegativeSign:
-                    case PositiveSign:
+                        number.isNegative = true;
                         ++index;
-                        number.isNegative = signChar == NegativeSign;
+                        break;
+                    case PositiveSign:
+                        number.isNegative = false;
+                        ++index;
                         break;
                 }
+
+                if (max_radix >= MaxFirstRadix)
+                {
+                    max_radix = (byte)(-(sbyte)max_radix);
+
+                    if (length >= 3 && chars[index] == DigitalsZeroValue)
+                    {
+                        switch (chars[index + 1])
+                        {
+                            case hexSign:
+                            case HexSign:
+                                index += 2;
+                                number.max_digit = HexRadix - 1;
+                                max_radix = HexRadix;
+                                break;
+                            case binarySign:
+                            case BinarySign:
+                                index += 2;
+                                number.max_digit = BinaryRadix - 1;
+                                max_radix = BinaryRadix;
+                                break;
+                        }
+                    }
+                }
+
+                number.max_radix = max_radix;
 
                 var integerBegin = index;
                 var integerCount = 0;
                 var integerSplitCount = 0;
 
-                GetNumberCount(chars, length, ref index, ref integerCount, ref integerSplitCount);
+                GetNumberCount(chars, length, max_radix, ref index, ref integerCount, ref integerSplitCount, ref number.max_digit);
 
                 if (integerCount != 0)
                 {
@@ -253,21 +208,18 @@ namespace Swifter.Tools
 
                 if (index < length && chars[index] == DotSign)
                 {
-                    number.isFloat = true;
-
                     ++index;
 
                     var fractionalBegin = index;
                     var fractionalCount = 0;
                     var fractionalSplitCount = 0;
 
-                    GetNumberCount(chars, length, ref index, ref fractionalCount, ref fractionalSplitCount);
+                    GetNumberCount(chars, length, max_radix, ref index, ref fractionalCount, ref fractionalSplitCount, ref number.max_digit);
 
                     if (fractionalCount != 0)
                     {
-                        SubBeginingSplitAndEndingZeroOrSplit(chars, ref integerBegin, ref integerCount, ref integerSplitCount);
+                        SubBeginingSplitAndEndingZeroOrSplit(chars, ref fractionalBegin, ref fractionalCount, ref fractionalSplitCount);
 
-                        number.haveFractional = fractionalCount != 0;
                         number.fractionalBegin = fractionalBegin;
                         number.fractionalCount = fractionalCount;
                         number.fractionalSplitCount = fractionalSplitCount;
@@ -276,7 +228,7 @@ namespace Swifter.Tools
 
                 if (index < length)
                 {
-                    bool haveExponent = false;
+                    var haveExponent = false;
 
                     switch (chars[index])
                     {
@@ -288,42 +240,19 @@ namespace Swifter.Tools
                             haveExponent = true;
 
                             break;
-                        case PositiveSign:
-                        case NegativeSign:
-                            switch (chars[index - 1])
-                            {
-                                case exponentSign:
-                                case ExponentSign:
-                                    if (number.isFloat)
-                                    {
-                                        if (number.fractionalCount >= 2)
-                                        {
-                                            --number.fractionalCount;
-
-                                            haveExponent = true;
-                                        }
-                                    }
-                                    else if (number.integerCount >= 2)
-                                    {
-                                        --number.integerCount;
-
-                                        haveExponent = true;
-                                    }
-                                    break;
-                            }
-                            break;
                     }
 
                     if (haveExponent && index < length)
                     {
-                        var exponentSignChar = chars[index];
-
-                        switch (exponentSignChar)
+                        switch (chars[index])
                         {
                             case NegativeSign:
-                            case PositiveSign:
+                                number.exponentIsNegative = true;
                                 ++index;
-                                number.exponentIsNegative = exponentSignChar == NegativeSign;
+                                break;
+                            case PositiveSign:
+                                number.exponentIsNegative = false;
+                                ++index;
                                 break;
                         }
 
@@ -331,7 +260,7 @@ namespace Swifter.Tools
                         var exponentCount = 0;
                         var exponentSplitCount = 0;
 
-                        GetNumberCount(chars, length, ref index, ref exponentCount, ref exponentSplitCount);
+                        GetNumberCount(chars, length, max_radix, ref index, ref exponentCount, ref exponentSplitCount, ref number.max_digit);
 
                         if (exponentCount != 0)
                         {
@@ -350,19 +279,97 @@ namespace Swifter.Tools
             return number;
         }
 
-        /// <summary>
-        /// 获取一个字符串的 NumberInfo。注意：实用此方法请保证字符串内容不会被移址。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <returns>返回一个 NumberInfo</returns>
-        public NumberInfo GetNumberInfo(string chars)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private ulong ForcedParseUInt64(char* chars, int count)
         {
-            fixed (char* pChars = chars)
+            var value = 0ul;
+
+            Loop:
+
+            var digit = ToRadix(*chars);
+
+            ++chars;
+
+            if (digit < radix)
             {
-                return GetNumberInfo(pChars, chars.Length);
+                --count;
+
+                if (count == 0)
+                {
+                    return checked(value * radix + digit);
+                }
+
+                value = value * radix + digit;
             }
+
+            goto Loop;
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private double ForcedParseDouble(char* chars, int count)
+        {
+            var max_segment_length = uInt64NumbersLength - 1;
+
+            var value = 0d;
+
+            var segment = 0ul;
+            var segment_length = 0;
+
+            Loop:
+
+            var digit = ToRadix(*chars);
+
+            ++chars;
+
+            if (digit < radix)
+            {
+                --count;
+                ++segment_length;
+
+                segment = segment * radix + digit;
+
+                if (count == 0)
+                {
+                    return value * uInt64Numbers[segment_length] + segment;
+                }
+                
+                if (segment_length >= max_segment_length)
+                {
+                    value = value * uInt64Numbers[segment_length] + segment;
+
+                    segment_length = 0;
+                    segment = 0;
+                }
+            }
+
+            goto Loop;
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private static ulong DecimalForcedParseUInt64(char* chars, int count)
+        {
+            var value = 0ul;
+
+            Loop:
+
+            var digit = (uint)(*chars - DigitalsZeroValue);
+
+            ++chars;
+
+            if (digit < DecimalRadix)
+            {
+                --count;
+
+                if (count == 0)
+                {
+                    return checked(value * DecimalRadix + digit);
+                }
+
+                value = value * DecimalRadix + digit;
+            }
+
+            goto Loop;
+        }
 
         /// <summary>
         /// 将 NumberInfo 转换为 UInt64。失败将引发异常。
@@ -370,95 +377,70 @@ namespace Swifter.Tools
         /// <param name="numberInfo">NumberInfo</param>
         /// <returns>返回一个 UInt64</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public ulong ToUInt64(NumberInfo numberInfo)
+        internal ulong ToUInt64(NumberInfo numberInfo)
         {
-            if (numberInfo.radix != radix)
+            const int MaxExponent = 6;
+
+            if (numberInfo.max_digit >= radix || numberInfo.max_radix < radix)
             {
                 throw new FormatException("radix");
             }
 
-            if (numberInfo.exponentCount > 5)
+            var integerCount = numberInfo.integerCount;
+
+            if (numberInfo.HaveExponent)
             {
-                throw new OverflowException("Exponent too big.");
-            }
-
-            var exponent = UncheckedParse(numberInfo.chars + numberInfo.exponentBegin, numberInfo.exponentCount);
-
-            if (numberInfo.exponentIsNegative)
-            {
-                exponent = -exponent;
-            }
-
-            int count = exponent + numberInfo.integerCount;
-
-            if (count > uInt64NumbersLength)
-            {
-                throw new OverflowException("Number out of UInt64 range.");
-            }
-
-            if (count <= 0)
-            {
-                return 0;
-            }
-
-            var c = count;
-            var r = 0UL;
-
-            byte digit;
-
-            for (int i = 0, j = numberInfo.integerBegin; i < numberInfo.integerCount; ++j)
-            {
-                digit = ToRadix(numberInfo.chars[j]);
-
-                if (c <= 1)
+                if (numberInfo.ExponentCount >= MaxExponent)
                 {
-                    goto End;
+                    goto Overflow;
                 }
 
-                if (digit < radix)
+                var exponent = (int)ForcedParseUInt64(numberInfo.chars + numberInfo.exponentBegin, numberInfo.exponentCount);
+
+                if (numberInfo.exponentIsNegative)
                 {
-                    r = r * radix + digit;
-
-                    --c;
-                    ++i;
-                }
-            }
-
-            for (int i = 0, j = numberInfo.fractionalBegin; i < numberInfo.fractionalCount; ++j)
-            {
-                digit = ToRadix(numberInfo.chars[j]);
-
-                if (c <= 1)
-                {
-                    goto End;
+                    exponent = -exponent;
                 }
 
-                if (digit < radix)
+                integerCount += exponent;
+            }
+
+            if (integerCount <= uInt64NumbersLength)
+            {
+                /* 十进制优化 */
+                if (radix == DecimalRadix && 
+                    integerCount <= numberInfo.integerCount && 
+                    integerCount < DecimalUInt64NumbersLength)
                 {
-                    r = r * radix + digit;
-
-                    --c;
-                    ++i;
+                    return DecimalForcedParseUInt64(numberInfo.chars + numberInfo.integerBegin, integerCount);
                 }
+
+                var numberCount = Math.Min(integerCount, numberInfo.integerCount + numberInfo.fractionalCount);
+
+                var value = ForcedParseUInt64(numberInfo.chars + numberInfo.integerBegin, numberCount);
+
+                integerCount -= numberCount;
+
+                while (integerCount > 4)
+                {
+                    value = checked(value * uInt64Numbers[4]);
+
+                    integerCount -= 4;
+                }
+
+                while (integerCount > 0)
+                {
+                    value = checked(value * radix);
+
+                    --integerCount;
+                }
+
+                return value;
             }
 
-            digit = 0;
+            Overflow:
 
-            for (; c > 1; --c)
-            {
-                r *= radix;
-            }
-
-        End:
-
-            if (count == uInt64NumbersLength && r > (UInt64MaxValue - digit) / radix)
-            {
-                throw new OverflowException("Number out of UInt64 range.");
-            }
-
-            r = r * radix + digit;
-
-            return r;
+            throw new OverflowException();
         }
 
         /// <summary>
@@ -467,36 +449,86 @@ namespace Swifter.Tools
         /// <param name="numberInfo">NumberInfo</param>
         /// <returns>返回一个 Int64</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public long ToInt64(NumberInfo numberInfo)
+        internal long ToInt64(NumberInfo numberInfo)
         {
-            if (numberInfo.radix != radix)
+            const int MaxExponent = 6;
+
+            if (numberInfo.max_digit >= radix || numberInfo.max_radix < radix)
             {
                 throw new FormatException("radix");
             }
 
-            ulong uInt64 = ToUInt64(numberInfo);
+            var integerCount = numberInfo.integerCount;
 
-            if (numberInfo.isNegative)
+            if (numberInfo.HaveExponent)
             {
-                if (uInt64 > PositiveInt64MinValue)
+                if (numberInfo.ExponentCount >= MaxExponent)
                 {
-                    throw new OverflowException("Number out of Int64 range.");
+                    goto Overflow;
                 }
 
-                if (uInt64 == PositiveInt64MinValue)
+                var exponent = (int)ForcedParseUInt64(numberInfo.chars + numberInfo.exponentBegin, numberInfo.exponentCount);
+
+                if (numberInfo.exponentIsNegative)
                 {
-                    return long.MinValue;
+                    exponent = -exponent;
                 }
 
-                return -(long)uInt64;
+                integerCount += exponent;
             }
 
-            if (uInt64 > Int64MaxValue)
+            if (integerCount <= uInt64NumbersLength)
             {
-                throw new OverflowException("Number out of Int64 range.");
+                ulong value;
+
+                /* 十进制优化 */
+                if (radix == DecimalRadix && 
+                    integerCount <= numberInfo.integerCount && 
+                    integerCount < (DecimalUInt64NumbersLength - 1))
+                {
+                    value = DecimalForcedParseUInt64(numberInfo.chars + numberInfo.integerBegin, integerCount);
+                }
+                else
+                {
+                    var numberCount = Math.Min(integerCount, numberInfo.integerCount + numberInfo.fractionalCount);
+
+                    value = ForcedParseUInt64(numberInfo.chars + numberInfo.integerBegin, numberCount);
+
+                    integerCount -= numberCount;
+
+                    while (integerCount > 4)
+                    {
+                        value = checked(value * uInt64Numbers[4]);
+
+                        integerCount -= 4;
+                    }
+
+                    while (integerCount > 0)
+                    {
+                        value = checked(value * radix);
+
+                        --integerCount;
+                    }
+                }
+
+                if (numberInfo.isNegative)
+                {
+                    if (value > unchecked((ulong)-long.MinValue))
+                    {
+                        return checked(-(long)value);
+                    }
+
+                    return -(long)value;
+                }
+                else
+                {
+                    return checked((long)value);
+                }
             }
 
-            return (long)uInt64;
+            Overflow:
+
+            throw new OverflowException();
         }
 
         /// <summary>
@@ -505,97 +537,210 @@ namespace Swifter.Tools
         /// <param name="numberInfo">NumberInfo</param>
         /// <returns>返回一个 Double</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public double ToDouble(NumberInfo numberInfo)
+        internal double ToDouble(NumberInfo numberInfo)
         {
-            if (numberInfo.radix != radix)
+            const int MaxExponent = 6;
+
+            if (numberInfo.max_digit >= radix || numberInfo.max_radix < radix)
             {
                 throw new FormatException("radix");
             }
 
-            if (numberInfo.exponentCount > 11)
+            var value = ForcedParseDouble(numberInfo.chars + numberInfo.integerBegin, numberInfo.integerCount + numberInfo.fractionalCount);
+
+            var fractionalCount = numberInfo.fractionalCount;
+
+            if (numberInfo.HaveExponent)
             {
-                throw new OverflowException("Exponent too big.");
-            }
-
-            var exponent = UncheckedParse(numberInfo.chars + numberInfo.exponentBegin, numberInfo.exponentCount);
-
-            if (numberInfo.exponentIsNegative)
-            {
-                exponent = -exponent;
-            }
-
-            var r = 0D;
-
-            for (int i = 0, j = numberInfo.integerBegin; i < numberInfo.integerCount; ++j)
-            {
-                var digit = ToRadix(numberInfo.chars[j]);
-
-                if (digit < radix)
+                if (numberInfo.ExponentCount >= MaxExponent)
                 {
-                    r = r * radix + digit;
-
-                    ++i;
-                }
-            }
-
-            for (int i = 0, j = numberInfo.fractionalBegin; i < numberInfo.fractionalCount; ++j)
-            {
-                var digit = ToRadix(numberInfo.chars[j]);
-
-                if (digit < radix)
-                {
-                    r = r * radix + digit;
-
-                    ++i;
-                }
-            }
-
-            var e = exponent - numberInfo.fractionalCount;
-
-            var exponents = positiveExponents;
-
-            if (e < 0)
-            {
-                exponents = negativeExponents;
-
-                e = -e;
-            }
-
-            if (e > 0)
-            {
-                while (e >= 100)
-                {
-                    r *= exponents[100];
-
-                    e -= 100;
+                    goto Overflow;
                 }
 
-                while (e >= 10)
-                {
-                    r *= exponents[10];
+                var exponent = (int)ForcedParseUInt64(numberInfo.chars + numberInfo.exponentBegin, numberInfo.exponentCount);
 
-                    e -= 10;
+                if (numberInfo.exponentIsNegative)
+                {
+                    exponent = -exponent;
                 }
 
-                while (e >= 1)
-                {
-                    r *= exponents[1];
-
-                    --e;
-                }
+                fractionalCount -= exponent;
             }
 
-            if (r > DoubleMaxPositive)
-            {
-                throw new OverflowException("Number out of Double range.");
-            }
+            value = Pow(value, -fractionalCount);
 
             if (numberInfo.isNegative)
             {
-                return -r;
+                value = -value;
             }
 
-            return r;
+            if (value >= double.MinValue && value <= double.MaxValue)
+            {
+                return value;
+            }
+
+            Overflow:
+
+            throw new OverflowException();
+        }
+
+        /// <summary>
+        /// 将一个 NumberInfo 转换为 Decimal。转换失败则引发异常。
+        /// </summary>
+        /// <param name="numberInfo">NumberInfo</param>
+        /// <returns>返回一个 Decimal</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        internal static decimal ToDecimal(NumberInfo numberInfo)
+        {
+            const int MaxExponent = 5;
+
+            if (numberInfo.max_digit >= DecimalRadix || numberInfo.max_radix < DecimalRadix)
+            {
+                throw new FormatException("decimal radix.");
+            }
+
+            if (numberInfo.integerCount + numberInfo.fractionalCount < DecimalStringMaxLength)
+            {
+                var value = default(decimal);
+                var length = 0;
+
+                ToDecimalNumber(numberInfo.chars + numberInfo.integerBegin, numberInfo.integerCount, (uint*)&value, ref length);
+
+                ToDecimalNumber(numberInfo.chars + numberInfo.fractionalBegin, numberInfo.fractionalCount, (uint*)&value, ref length);
+
+                if (length > 3)
+                {
+                    goto Overflow;
+                }
+
+                var scale = numberInfo.fractionalCount;
+
+                if (numberInfo.HaveExponent)
+                {
+                    if (numberInfo.ExponentCount >= MaxExponent)
+                    {
+                        goto Overflow;
+                    }
+
+                    var exponent = (int)DecimalForcedParseUInt64(numberInfo.chars + numberInfo.exponentBegin, numberInfo.exponentCount);
+
+                    if (numberInfo.exponentIsNegative)
+                    {
+                        exponent = -exponent;
+                    }
+
+                    scale -= exponent;
+                }
+
+                if (scale < 0)
+                {
+                    scale = -scale;
+
+                    if (scale > DecimalMaxScale - (numberInfo.integerCount + numberInfo.fractionalCount))
+                    {
+                        goto Overflow;
+                    }
+
+                    while (scale > 0)
+                    {
+                        uint carry;
+
+                        if (scale >= DecimalDivisorLength)
+                        {
+                            Mult((uint*)&value, length, DecimalDivisor, out carry);
+                        }
+                        else
+                        {
+                            Mult((uint*)&value, length, (uint)DecimalUInt64Numbers[scale], out carry);
+                        }
+
+                        if (carry != 0)
+                        {
+                            ((uint*)&value)[length] = carry;
+
+                            ++length;
+
+                            if (length > 3)
+                            {
+                                goto Overflow;
+                            }
+                        }
+
+                        scale -= 9;
+                    }
+                }
+
+                ((DecimalStruct*)&value)->SetBits((int*)&value);
+
+                if (scale > 0)
+                {
+                    ((DecimalStruct*)&value)->Scale = scale;
+                }
+
+                if (numberInfo.isNegative)
+                {
+                    ((DecimalStruct*)&value)->Sign = 1;
+                }
+
+                return value;
+            }
+
+            Overflow:
+
+            throw new OverflowException();
+        }
+
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private static void ToDecimalNumber(char* chars, int count, uint* number, ref int length)
+        {
+            while(count > 0)
+            {
+                uint segment = 0;
+                byte segment_length = 0;
+
+                while (segment_length < DecimalDivisorLength && count > 0)
+                {
+                    var digit = (uint)(*chars - DigitalsZeroValue); 
+                    
+                    ++chars;
+
+                    if (digit < DecimalRadix)
+                    {
+                        segment = segment * DecimalRadix + digit;
+
+                        ++segment_length;
+                        --count;
+                    }
+                }
+
+                uint carry;
+
+                if (segment_length == DecimalDivisorLength)
+                {
+                    Mult(number, length, DecimalDivisor, out carry);
+                }
+                else
+                {
+                    Mult(number, length, (uint)DecimalUInt64Numbers[segment_length], out carry);
+                }
+
+                if (carry != 0)
+                {
+                    number[length] = carry;
+
+                    ++length;
+                }
+
+                Add(number, length, segment, out carry);
+
+                if (carry != 0)
+                {
+                    number[length] = carry;
+
+                    ++length;
+                }
+            }
         }
     }
 }

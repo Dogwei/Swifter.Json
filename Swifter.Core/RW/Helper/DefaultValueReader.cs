@@ -44,6 +44,8 @@ namespace Swifter.RW
 
         public ulong ReadUInt64() => default;
 
+        public T ReadEnum<T>() where T : struct, Enum => default;
+
         Guid IValueReader<Guid>.ReadValue() => default;
 
         TimeSpan IValueReader<TimeSpan>.ReadValue() => default;

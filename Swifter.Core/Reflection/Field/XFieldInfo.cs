@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Swifter.Tools;
+using System;
 using System.Reflection;
 
 namespace Swifter.Reflection
@@ -17,54 +18,37 @@ namespace Swifter.Reflection
         /// <returns>返回一个 XFieldInfo 字段信息。</returns>
         public static XFieldInfo Create(FieldInfo fieldInfo, XBindingFlags flags)
         {
-            if (fieldInfo == null)
+            if (fieldInfo is null)
             {
                 throw new ArgumentNullException(nameof(fieldInfo));
             }
 
             var declaringType = fieldInfo.DeclaringType;
-            var fieldType = fieldInfo.FieldType;
 
-            Type targetType;
+            var fieldType 
+                = fieldInfo.FieldType.IsPointer ? typeof(IntPtr) 
+                : fieldInfo.FieldType;
 
-            if (fieldType.IsByRef || fieldType.IsByRefLike())
-            {
-                targetType = typeof(XDefaultFieldInfo);
-            }
-            else if (fieldInfo.IsLiteral)
-            {
-                targetType = typeof(XLiteralFieldInfo<>);
-            }
-            else if (fieldInfo.IsStatic && VersionDifferences.IsSupportEmit)
-            {
-                targetType = typeof(XStaticFieldInfo<>);
-            }
-            else if (declaringType.IsValueType && VersionDifferences.IsSupportEmit)
-            {
-                targetType = typeof(XStructFieldInfo<>);
-            }
-            else if (VersionDifferences.IsSupportEmit)
-            {
-                targetType = typeof(XClassFieldInfo<>);
-            }
-            else
-            {
-                targetType = typeof(XDefaultFieldInfo);
-            }
+            XFieldInfo result;
 
-            if (fieldType.IsPointer)
+            try
             {
-                fieldType = typeof(IntPtr);
-            }
+                var targetType
+                    = fieldInfo.IsLiteral ? typeof(XDefaultFieldInfo)
+                    : fieldInfo.IsStatic ? typeof(XStaticFieldInfo<>).MakeGenericType(fieldType)
+                    : declaringType.IsValueType ? typeof(XStructFieldInfo<,>).MakeGenericType(declaringType, fieldType)
+                    : typeof(XClassFieldInfo<>).MakeGenericType(fieldType);
 
-            if (targetType.IsGenericTypeDefinition)
+                result = (XFieldInfo)Activator.CreateInstance(targetType, true);
+
+                result.Initialize(fieldInfo, flags);
+            }
+            catch
             {
-                targetType = targetType.MakeGenericType(fieldType);
+                result = new XDefaultFieldInfo();
+
+                result.Initialize(fieldInfo, flags);
             }
-
-            var result = (XFieldInfo)Activator.CreateInstance(targetType);
-
-            result.Initialize(fieldInfo, flags);
 
             return result;
         }
@@ -73,7 +57,7 @@ namespace Swifter.Reflection
         internal XBindingFlags flags;
         internal FieldInfo fieldInfo;
 
-        internal virtual void Initialize(FieldInfo fieldInfo, XBindingFlags flags)
+        private protected virtual void Initialize(FieldInfo fieldInfo, XBindingFlags flags)
         {
             this.fieldInfo = fieldInfo;
             this.flags = flags;

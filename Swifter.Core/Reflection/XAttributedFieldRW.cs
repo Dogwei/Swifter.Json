@@ -1,10 +1,8 @@
 ﻿
 using Swifter.RW;
-using Swifter.Tools;
 
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.Reflection
@@ -16,15 +14,22 @@ namespace Swifter.Reflection
         internal readonly bool canRead;
         internal readonly bool canWrite;
         internal readonly string name;
+        internal readonly bool skipDefaultValue;
+        internal readonly bool cannotGetException;
+        internal readonly bool cannotSetException;
 
 
-        protected XAttributedFieldRW(IXFieldRW fieldRW, RWFieldAttribute attribute)
+        protected XAttributedFieldRW(IXFieldRW fieldRW, RWFieldAttribute attribute, XBindingFlags flags)
         {
             this.fieldRW = fieldRW;
             this.attribute = attribute;
 
             canRead = (attribute.Access & RWFieldAccess.ReadOnly) != 0 && fieldRW.CanRead;
             canWrite = (attribute.Access & RWFieldAccess.WriteOnly) != 0 && fieldRW.CanWrite;
+
+            skipDefaultValue = attribute.SkipDefaultValue != RWBoolean.None ? attribute.SkipDefaultValue == RWBoolean.Yes : (flags & XBindingFlags.RWSkipDefaultValue) != 0;
+            cannotGetException = attribute.CannotGetException != RWBoolean.None ? attribute.CannotGetException == RWBoolean.Yes : (flags & XBindingFlags.RWCannotGetException) != 0;
+            cannotSetException = attribute.CannotSetException != RWBoolean.None ? attribute.CannotSetException == RWBoolean.Yes : (flags & XBindingFlags.RWCannotSetException) != 0;
 
             name = attribute.Name ?? fieldRW.Name;
         }
@@ -61,6 +66,12 @@ namespace Swifter.Reflection
 
         public object Original => fieldRW.Original;
 
+        public bool SkipDefaultValue => skipDefaultValue;
+
+        public bool CannotGetException => cannotGetException;
+
+        public bool CannotSetException => cannotSetException;
+
         public virtual void OnReadValue(object obj, IValueWriter valueWriter)
         {
             Assert(canRead, "read");
@@ -90,9 +101,9 @@ namespace Swifter.Reflection
         }
 
 
-        public static implicit operator XAttributedFieldRW((IXFieldRW fieldRW, RWFieldAttribute attribute) infos)
+        public static XAttributedFieldRW Create(IXFieldRW fieldRW, RWFieldAttribute attribute, XBindingFlags flags)
         {
-            infos.attribute.GetBestMatchInterfaceMethod(infos.fieldRW.BeforeType, out var firstArg, out var read, out var write);
+            attribute.GetBestMatchInterfaceMethod(fieldRW.BeforeType, out var firstArg, out var read, out var write);
 
             if (read != null && write != null)
             {
@@ -123,8 +134,9 @@ namespace Swifter.Reflection
                                 return (XAttributedFieldRW)Activator.CreateInstance(
                                     rwType,
                                     new object[] {
-                                        infos.fieldRW,
-                                        infos.attribute,
+                                        fieldRW,
+                                        attribute,
+                                        flags,
                                         firstArg
                                     });
                             }
@@ -138,83 +150,18 @@ namespace Swifter.Reflection
                 }
 
                 return (XAttributedFieldRW)Activator.CreateInstance(
-                    typeof(XAttributedFieldRW<>).MakeGenericType(valueType),
+                    typeof(XDelegateAttributedFieldRW<>).MakeGenericType(valueType),
                     new object[] {
-                            infos.fieldRW,
-                            infos.attribute,
+                            fieldRW,
+                            attribute,
+                            flags,
                             firstArg,
                             read,
                             write
                     });
             }
 
-            return new XAttributedFieldRW(infos.fieldRW, infos.attribute);
+            return new XAttributedFieldRW(fieldRW, attribute, flags);
         }
-    }
-
-    sealed class XAttributedFieldRW<T> : XAttributedFieldRW, IObjectField
-    {
-        internal readonly Func<IValueReader, T> read;
-        internal readonly Action<IValueWriter, T> write;
-
-        public XAttributedFieldRW(IXFieldRW fieldRW, RWFieldAttribute attribute, object firstArg, MethodInfo read, MethodInfo write)
-            : base(fieldRW, attribute)
-        {
-            if (read.IsStatic)
-            {
-                this.read = MethodHelper.CreateDelegate<Func<IValueReader, T>>(read, false);
-            }
-            else
-            {
-                var _read = MethodHelper.CreateDelegate<Func<object, IValueReader, T>>(read, false);
-
-                this.read = valueReader => _read(firstArg, valueReader);
-            }
-
-            if (write.IsStatic)
-            {
-                this.write = MethodHelper.CreateDelegate<Action<IValueWriter, T>>(write, false);
-            }
-            else
-            {
-                var _write = MethodHelper.CreateDelegate<Action<object, IValueWriter, T>>(write, false);
-
-                this.write = (valueWriter, value) => _write(firstArg, valueWriter, value);
-            }
-        }
-
-        public override void OnReadValue(object obj, IValueWriter valueWriter)
-        {
-            write(valueWriter, ReadValue<T>(obj));
-        }
-
-        public override void OnWriteValue(object obj, IValueReader valueReader)
-        {
-            WriteValue(obj, read(valueReader));
-        }
-
-        Type IObjectField.AfterType => typeof(T);
-    }
-
-    sealed class XInterfaceAttributedFieldRW<T> : XAttributedFieldRW, IObjectField
-    {
-        internal readonly IValueInterface<T> valueInterface;
-
-        public XInterfaceAttributedFieldRW(IXFieldRW fieldRW, RWFieldAttribute attribute, IValueInterface<T> valueInterface) : base(fieldRW, attribute)
-        {
-            this.valueInterface = valueInterface;
-        }
-
-        public override void OnReadValue(object obj, IValueWriter valueWriter)
-        {
-            valueInterface.WriteValue(valueWriter, ReadValue<T>(obj));
-        }
-
-        public override void OnWriteValue(object obj, IValueReader valueReader)
-        {
-            WriteValue(obj, valueInterface.ReadValue(valueReader));
-        }
-
-        Type IObjectField.AfterType => typeof(T);
     }
 }

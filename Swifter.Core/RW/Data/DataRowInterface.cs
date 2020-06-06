@@ -17,12 +17,12 @@ namespace Swifter.RW
 
             valueReader.ReadObject(dataWriter);
 
-            return dataWriter.Content;
+            return dataWriter.datarow;
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
 
@@ -36,9 +36,10 @@ namespace Swifter.RW
                 return;
             }
 
-            var dataReader = new DataRowRW<T>();
-
-            dataReader.Initialize(value);
+            var dataReader = new DataRowRW<T>
+            {
+                datarow = value
+            };
 
             valueWriter.WriteObject(dataReader);
         }

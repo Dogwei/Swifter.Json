@@ -1,7 +1,4 @@
-﻿using Swifter.RW;
-using Swifter.Tools;
-
-using System;
+﻿using System;
 
 namespace Swifter.RW
 {
@@ -219,6 +216,17 @@ namespace Swifter.RW
         {
             dataReader.OnReadValue(key, valueCopyer);
             return valueCopyer.ReadNullable<T>();
+        }
+
+        /// <summary>
+        /// 读取一个枚举值。
+        /// </summary>
+        /// <typeparam name="T">枚举类型</typeparam>
+        /// <returns>返回一个枚举</returns>
+        public T ReadEnum<T>() where T : struct,Enum
+        {
+            dataReader.OnReadValue(key, valueCopyer);
+            return valueCopyer.ReadEnum<T>();
         }
     }
 }

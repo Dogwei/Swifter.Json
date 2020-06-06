@@ -381,5 +381,25 @@ namespace Swifter.Reflection
         {
             return ReadValue<T?>();
         }
+
+        /// <summary>
+        /// 获取一个枚举值。
+        /// </summary>
+        /// <typeparam name="T">枚举类型</typeparam>
+        /// <returns>返回一个枚举值</returns>
+        public T ReadEnum<T>() where T : struct, Enum
+        {
+            return ReadValue<T>();
+        }
+
+        /// <summary>
+        /// 写入一个枚举值
+        /// </summary>
+        /// <typeparam name="T">枚举类型</typeparam>
+        /// <param name="value">枚举值</param>
+        public void WriteEnum<T>(T value) where T : struct, Enum
+        {
+            WriteValue(value);
+        }
     }
 }

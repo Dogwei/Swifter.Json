@@ -3,6 +3,7 @@ using System;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Swifter
 {
@@ -11,53 +12,116 @@ namespace Swifter
     /// </summary>
     public static partial class VersionDifferences
     {
+        static VersionDifferences()
+        {
+            LoadExtensionAssembly();
+        }
+
         /// <summary>
-        /// 获取当前平台是否支持 Emit。
+        /// 一个 <see cref="bool"/> 值，指示是否使用 .Net 内部方法。
+        /// 默认为是。
+        /// 内部方法包括：
+        /// <br/>1: 使用反射调用私有成员
+        /// <br/>2: 试图访问 .Net Runtime 内部数据
+        /// <br/>3: 试图修改类型信息
         /// </summary>
+        public static bool UseInternalMethod = true;
+
 #if NETCOREAPP
+        /// <summary>
+        /// .NET CORE 平台确定支持 Emit 。
+        /// </summary>
         public const bool IsSupportEmit = true;
 #else
-        public static readonly bool IsSupportEmit = TestIsSupportEmit();
 
+        /// <summary>
+        /// 获取或设置当前平台是否支持 Emit。
+        /// </summary>
+        public static bool IsSupportEmit
+        {
+            get => _IsSupportEmit ?? (_IsSupportEmit = TestIsSupportEmit()).Value;
+            set => _IsSupportEmit = value;
+        }
+
+        private static bool? _IsSupportEmit;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static bool TestIsSupportEmit()
         {
             try
             {
-                DynamicAssembly.DefineType(nameof(TestIsSupportEmit), TypeAttributes.Public).CreateTypeInfo();
+                var typeBuilder = DynamicAssembly.DefineType(nameof(TestIsSupportEmit), TypeAttributes.Public);
 
-                return true;
+                var methodBuilder = typeBuilder.DefineMethod(
+                   nameof(IsSupportEmit),
+                    MethodAttributes.Public | MethodAttributes.Static,
+                    typeof(int),
+                    Type.EmptyTypes);
+
+                methodBuilder.GetILGenerator()
+                    .LoadConstant(1)
+                    .Return();
+
+                Type rtType = typeBuilder.CreateTypeInfo();
+
+                if (rtType.GetMethod(nameof(IsSupportEmit)).Invoke(null, null).Equals(1))
+                {
+                    return true;
+                }
             }
             catch (Exception)
             {
-                return false;
             }
+
+            return false;
         }
 #endif
+
+#if NET20 || NET35 || NET40 || NET45
+
+
+        /// <summary>
+        /// 往 StringBuilder 后面拼接一个字符串。
+        /// </summary>
+        /// <param name="sb">StringBuilder</param>
+        /// <param name="chars">字符串</param>
+        /// <param name="count">字符串长度</param>
+        /// <returns>返回当前实例</returns>
+        public static unsafe StringBuilder Append(this StringBuilder sb, char* chars, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                sb.Append(chars[i]);
+            }
+
+            return sb;
+        }
+
+#endif
+
         /// <summary>
         /// 获取对象的 TypeHandle 值。
         /// </summary>
         /// <param name="obj">对象</param>
         /// <returns>返回一个 IntPtr 值。</returns>
-
-#if NETCOREAPP
         [MethodImpl(AggressiveInlining)]
+#if NETCOREAPP
         public static IntPtr GetTypeHandle(object obj)
         {
-            return Unsafe.GetObjectTypeHandle(obj);
+            return Underlying.GetMethodTablePointer(obj);
         }
             
         /// <summary>
-        /// 获取一个值，表示 ObjectTypeHandle 和 TypeHandle 是否一致。
+        /// 获取一个值，表示 TypeHandle 和 MethodTablePointer 是否一致。
         /// </summary>
-        public const bool ObjectTypeHandleEqualsTypeHandle = true;
+        public const bool TypeHandleEqualMethodTablePointer = true;
 #else
-        [MethodImpl(AggressiveInlining)]
         public static IntPtr GetTypeHandle(object obj)
         {
-            if (ObjectTypeHandleEqualsTypeHandle)
+            if (TypeHandleEqualMethodTablePointer)
             {
                 // Faster
-                return Unsafe.GetObjectTypeHandle(obj);
+                return Underlying.GetMethodTablePointer(obj);
             }
             else
             {
@@ -67,26 +131,28 @@ namespace Swifter
         }
 
         /// <summary>
-        /// 获取一个值，表示 ObjectTypeHandle 和 TypeHandle 是否一致。
+        /// 获取一个值，表示 TypeHandle 和 MethodTablePointer 是否一致。
         /// </summary>
-        public static readonly bool ObjectTypeHandleEqualsTypeHandle = GetObjectTypeHandleEqualsTypeHandle();
+        public static readonly bool TypeHandleEqualMethodTablePointer = GetTypeHandleEqualMethodTablePointer();
 
-        static bool GetObjectTypeHandleEqualsTypeHandle()
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static bool GetTypeHandleEqualMethodTablePointer()
         {
             try
             {
                 return
-                    typeof(DBNull).TypeHandle.Value == Unsafe.GetObjectTypeHandle(DBNull.Value) &&
-                    typeof(string).TypeHandle.Value == Unsafe.GetObjectTypeHandle(string.Empty);
+                    typeof(DBNull).TypeHandle.Value == Underlying.GetMethodTablePointer(DBNull.Value) &&
+                    typeof(string).TypeHandle.Value == Underlying.GetMethodTablePointer(string.Empty);
             }
             catch (Exception)
             {
-                return false;
             }
+
+            return false;
         }
 #endif
 
-#if NET20 || NET30 || NET35 || NET40
+#if NET20 || NET35 || NET40
         /// <summary>
         /// 表示该方法尽量内敛。
         /// </summary>
@@ -114,6 +180,7 @@ namespace Swifter
             return typeBuilder.CreateType();
         }
 #else
+
         /// <summary>
         /// 表示该方法尽量内敛。
         /// </summary>
@@ -141,27 +208,30 @@ namespace Swifter
 #if NETCOREAPP && !NETCOREAPP2_0
             return type.IsByRefLike;
 #else
-            if (type.IsClass || type.IsByRef || type.IsPointer || type.IsEnum || type.IsInterface || !type.IsValueType)
+            if (type.IsValueType  // 仅栈类型是值类型
+                && !type.IsPrimitive  // 仅栈类型不是基元类型
+                && !type.IsPointer // 指针不是仅栈类型
+                && !type.IsByRef // 引用不是仅栈类型
+                && !type.IsEnum // 枚举不是仅栈类型
+                && type != typeof(void) // void 不是仅栈类型
+                && type.GetInterfaces().Length == 0 // 仅栈类型不允许实现接口
+                )
             {
-                return false;
+                try
+                {
+                    // 仅栈类型不能当作泛型。
+                    typeof(IsByRefLikeAssisted<>).MakeGenericType(type);
+                }
+                catch
+                {
+                    return true;
+                }
             }
 
-            if (type == typeof(void))
-            {
-                return false;
-            }
-
-            try
-            {
-                typeof(Action<>).MakeGenericType(type);
-
-                return false;
-            }
-            catch (Exception)
-            {
-                return true;
-            }
+            return false;
 #endif
         }
+
+        static class IsByRefLikeAssisted<T> { }
     }
 }

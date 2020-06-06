@@ -37,26 +37,6 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 获取 Double 的指数值。
-        /// </summary>
-        /// <param name="value">Double</param>
-        /// <returns>返回指数</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int GetExponent(double value)
-        {
-            if (value >= 1)
-            {
-                return GetPositiveExponent(value);
-            }
-            else if (value == 0)
-            {
-                return 0;
-            }
-
-            return -GetNegativeExponent(value);
-        }
-
-        /// <summary>
         /// 获取数字需要移动多少位才能大于等于 1。
         /// </summary>
         /// <param name="value"></param>
@@ -86,156 +66,24 @@ namespace Swifter.Tools
             return index;
         }
 
-        // Remove 0 of num tail.
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private void FRemoveTailZero(ref ulong num, ref int numLen)
-        {
-            while (numLen > 0 && num % radix == 0)
-            {
-                num /= radix;
-
-                --numLen;
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private ulong FRound(ulong num)
-        {
-            return num / radix + (num % radix >= rounded ? 1U : 0U);
-        }
-
-        // [MethodImpl(MethodImplOptions.NoInlining)]
-        private void FTryRound(ref ulong num, ref int numLen)
-        {
-            var tempNum = num;
-            var tempNumLen = numLen;
-
-            for (int i = 3; i < 6; i++)
-            {
-                tempNum = FRound(tempNum); --tempNumLen;
-                FRemoveTailZero(ref tempNum, ref tempNumLen);
-
-                if (tempNumLen + i < numLen)
-                {
-                    num = tempNum;
-                    numLen = tempNumLen;
-
-                    break;
-                }
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private int ToString(double value, int intLen/* Length of integer part in the value */, char* chars, int maxLength)
-        {
-            var c = chars;
-
-            var integer = (ulong)value;
-
-            if (integer == value) goto OnlyInteger;
-
-            var numLen = maxLength;
-
-            var fnum = (value - integer);
-
-            if (fnum < CeilingApproximateValueOfZero) goto OnlyInteger;
-
-            if (fnum > FloorApproximateValueOfOne) { ++integer; goto OnlyInteger; }
-
-            var num = (ulong)(fnum * positiveExponents[numLen + 1]);
-
-            num = FRound(num);
-
-            FRemoveTailZero(ref num, ref numLen);
-
-            // if (numLen >= 0xa) FTryRound(ref num, ref numLen);
-
-            ToString(integer, (byte)intLen, c);
-
-            c[intLen] = DotSign;
-
-            ToString(num, (byte)numLen, c + intLen + 1);
-
-            // Len of integer part + Len of dot + Len of num part.
-            return intLen + 1 + numLen;
-
-        OnlyInteger:
-
-            ToString(integer, (byte)intLen, c);
-
-            return intLen;
-        }
-
         /// <summary>
-        /// 将一个 Double 值写入到空间足够的字符串中。
+        /// 获取 Double 的指数值。
         /// </summary>
-        /// <param name="value">Double 值</param>
-        /// <param name="chars">空间足够的字符串</param>
-        /// <returns>返回写入长度</returns>
+        /// <param name="value">Double</param>
+        /// <returns>返回指数</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int ToString(double value, char* chars)
+        public int GetExponent(double value)
         {
-            var v = value;
-            var c = chars;
-
-            if (IsNaN(v))
+            if (value >= 1)
             {
-                return Append(chars, NaNSign);
+                return GetPositiveExponent(value);
+            }
+            else if (value == 0)
+            {
+                return 0;
             }
 
-            if (v < 0)
-            {
-                *c = NegativeSign;
-
-                ++c;
-
-                v = -v;
-            }
-
-            if (v < DoubleMinPositive)
-            {
-                v = 0;
-            }
-
-            if (v > DoubleMaxPositive)
-            {
-                *c = InfinitySign;
-
-                return ((int)(c - chars)) + 1;
-            }
-
-            var e = GetExponent(v);
-
-            if (e > 0 && e < maxDoubleLength)
-            {
-                /* 1e1 to 1e16 */
-                c += ToString(v, e + 1, c, maxDoubleLength);
-            }
-            else if (e <= 0 && e > -maxFractionalLength)
-            {
-                /* 1e-1 to 1e-5 */
-                c += ToString(v, 1, c, maxDoubleLength);
-            }
-            else
-            {
-                c += ToString(Pow(v, e), 1, c, maxDoubleLength);
-                
-                *c = ExponentSign; ++c;
-
-                if (e > 0)
-                {
-                    *c = PositiveSign; ++c;
-                }
-                else
-                {
-                    *c = NegativeSign; ++c;
-                    e = -e;
-                }
-
-                c += ToString(e, c);
-            }
-
-            return (int)(c - chars);
+            return -GetNegativeExponent(value);
         }
 
         /// <summary>
@@ -247,19 +95,214 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public double Pow(double x, int y)
         {
-            if (y > 0)
-            {
-                return x * negativeExponents[y];
-            }
-
-            y = -y;
-
-            if (y < positiveExponentsRight)
+            if (y >= 0 && y < positiveExponents.Length)
             {
                 return x * positiveExponents[y];
             }
 
-            return x * positiveExponents[positiveExponentsRight] * positiveExponents[y - positiveExponentsRight];
+            if (y < 0 && -y < positiveExponents.Length)
+            {
+                return x / positiveExponents[-y];
+            }
+
+            return Pow(Pow(x, y / 2), y - y / 2);
+        }
+
+        static int ToSpecialString(double value, char* chars)
+        {
+            if (double.IsNaN(value))
+            {
+                return Copy(chars, NaNSign);
+            }
+
+            if (double.IsPositiveInfinity(value))
+            {
+                return Copy(chars, PositiveInfinitySign);
+            }
+
+            if (double.IsNegativeInfinity(value))
+            {
+                return Copy(chars, NegativeInfinitySign);
+            }
+
+            chars[0] = DigitalsZeroValue;
+
+            return 1;
+        }
+
+        /// <summary>
+        /// 判断一个 <see cref="double"/> 是否为特殊值。特殊值包括 <see cref="double.PositiveInfinity"/>, <see cref="double.NegativeInfinity"/> 和 <see cref="double.NaN"/>。
+        /// </summary> 
+        /// <param name="value">需要判断的 <see cref="double"/> 值</param>
+        /// <returns>返回一个 <see cref="bool"/> 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IsSpecialValue(double value)
+        {
+            const ulong SpecialValue = 0x7FF0000000000000;
+
+            return (Underlying.As<double, ulong>(ref value) & SpecialValue) == SpecialValue;
+        }
+
+        /// <summary>
+        /// 判断一个 <see cref="float"/> 是否为特殊值。特殊值包括 <see cref="float.PositiveInfinity"/>, <see cref="float.NegativeInfinity"/> 和 <see cref="float.NaN"/>。
+        /// </summary>
+        /// <param name="value">需要判断的 <see cref="float"/> 值</param>
+        /// <returns>返回一个 <see cref="bool"/> 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IsSpecialValue(float value)
+        {
+            const uint SpecialValue = 0x7F800000;
+
+            return (Underlying.As<float, uint>(ref value) & SpecialValue) == SpecialValue;
+        }
+
+        /// <summary>
+        /// 将一个 Double 值写入到空间足够的字符串中。
+        /// </summary>
+        /// <param name="value">Double 值</param>
+        /// <param name="chars">空间足够的字符串</param>
+        /// <returns>返回写入长度</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public int ToString(double value, char* chars)
+        {
+            if (IsSpecialValue(value))
+            {
+                return ToSpecialString(value, chars);
+            }
+
+            var offset = chars;
+
+            if (value < 0)
+            {
+                *offset = NegativeSign;
+
+                ++offset;
+
+                value = -value;
+            }
+
+            var exponent = GetExponent(value);
+
+            var lengthOfInteger = exponent >= 0 && exponent < maxDoubleDigitalsLength ? exponent + 1 : 1;
+
+            var lengthOfFractional = maxDoubleDigitalsLength - lengthOfInteger;
+
+            if (exponent < maxDoubleDigitalsLength && exponent > -maxFloatingZeroLength)
+            {
+                exponent = 0;
+            }
+
+            var mantissa = (ulong)Pow(value, lengthOfFractional - exponent);
+
+            if (radix == DecimalRadix)
+            {
+                const int power4 = 10000;
+                const int radix = DecimalRadix;
+
+                ulong temp;
+
+                if (lengthOfFractional >= 2)
+                {
+                    temp = mantissa / 100;
+
+                    var tails = mantissa - temp * 100;
+
+                    if (!(tails > 30 && tails < 70))
+                    {
+                        if (tails > 30)
+                        {
+                            ++temp;
+                        }
+
+                        mantissa = temp;
+
+                        lengthOfFractional -= 2;
+                    }
+                }
+
+                // Remove 0 of tails.
+                while (lengthOfFractional >= 4 && mantissa == (temp = mantissa / power4) * power4)
+                {
+                    mantissa = temp;
+
+                    lengthOfFractional -= 4;
+                }
+
+                while (lengthOfFractional > 0 && mantissa == (temp = mantissa / radix) * radix)
+                {
+                    mantissa = temp;
+
+                    --lengthOfFractional;
+                }
+            }
+            else
+            {
+                var power4 = uInt64Numbers[4];
+
+                ulong temp;
+
+                // Remove 0 of tails.
+                while (lengthOfFractional >= 4 && mantissa == (temp = mantissa / power4) * power4)
+                {
+                    mantissa = temp;
+
+                    lengthOfFractional -= 4;
+                }
+
+                while (lengthOfFractional > 0 && mantissa == (temp = mantissa / radix) * radix)
+                {
+                    mantissa = temp;
+
+                    --lengthOfFractional;
+                }
+            }
+
+            if (lengthOfFractional == 0)
+            {
+                var length = ToString(mantissa, offset);
+
+                if (length > lengthOfInteger && exponent != 0)
+                {
+                    ++exponent;
+                    --length;
+                }
+
+                offset += length;
+            }
+            else
+            {
+                ToString(mantissa, (byte)(lengthOfInteger + lengthOfFractional), offset);
+                
+                offset += lengthOfInteger;
+
+                for (int i = lengthOfFractional; i > 0;)
+                {
+                    offset[i] = offset[--i];
+                }
+
+                *offset = DotSign;
+
+                offset += lengthOfFractional + 1;
+            }
+
+            if (exponent != 0)
+            {
+                *offset = ExponentSign; ++offset;
+
+                if (exponent > 0)
+                {
+                    *offset = PositiveSign; ++offset;
+                }
+                else
+                {
+                    *offset = NegativeSign; ++offset;
+                    exponent = -exponent;
+                }
+
+                offset += ToString((ulong)exponent, offset);
+            }
+
+            return (int)(offset - chars);
         }
 
         /// <summary>
@@ -271,382 +314,506 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public int ToString(float value, char* chars)
         {
-            double v = value;
-            var c = chars;
-
-            if (IsNaN(v))
+            if (IsSpecialValue(value))
             {
-                return Append(chars, NaNSign);
+                return ToSpecialString(value, chars);
             }
 
-            if (v < 0)
+            var offset = chars;
+
+            if (value < 0)
             {
-                *c = NegativeSign;
+                *offset = NegativeSign;
 
-                ++c;
+                ++offset;
 
-                v = -v;
+                value = -value;
             }
 
-            if (v < SingleMinPositive)
+            var exponent = GetExponent(value);
+
+            var lengthOfInteger = exponent >= 0 && exponent < maxSingleDigitalsLength ? exponent + 1 : 1;
+
+            var lengthOfFractional = maxSingleDigitalsLength - lengthOfInteger;
+
+            if (exponent < maxSingleDigitalsLength && exponent > -maxFloatingZeroLength)
             {
-                v = 0;
+                exponent = 0;
             }
 
-            if (v > SingleMaxPositive)
+            var mantissa = (ulong)Pow(value, lengthOfFractional - exponent);
+
+            if (radix == DecimalRadix)
             {
-                *c = InfinitySign;
+                const int power4 = 10000;
+                const int radix = DecimalRadix;
 
-                return ((int)(c - chars)) + 1;
-            }
+                ulong temp;
 
-            var e = GetExponent(v);
-
-            if (e > 0 && e < maxSingleLength)
-            {
-                /* 1e1 to 1e7 */
-                c += ToString(v, e + 1, c, maxSingleLength);
-            }
-            else if (e <= 0 && e > -maxFractionalLength)
-            {
-                /* 1e-1 to 1e-5 */
-                c += ToString(v, 1, c, maxSingleLength);
-            }
-            else
-            {
-                c += ToString(Pow(v, e), 1, c, maxSingleLength);
-
-                *c = ExponentSign; ++c;
-
-                if (e > 0)
+                if (lengthOfFractional >= 1)
                 {
-                    *c = PositiveSign; ++c;
-                }
-                else
-                {
-                    *c = NegativeSign; ++c;
-                    e = -e;
-                }
+                    temp = mantissa / 10;
 
-                c += ToString(e, c);
-            }
-
-            return (int)(c - chars);
-        }
-        
-        /// <summary>
-        /// 尝试从字符串开始位置解析一个 Double 值。此方法允许指数。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <param name="value">返回一个 Double 值</param>
-        /// <param name="exception">当解析到错误时是否引发异常，异常不代表解析失败。</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int TryParse(char* chars, int length, out double value, bool exception = false)
-        {
-            double v = 0;
-            var n = false;
-            var r = radix;
-            int i = 0;
-            var l = length;
-            var m = uInt64NumbersLength - 1;
-            var u = uInt64Numbers;
-            var p = positiveExponents;
-            var k = negativeExponents;
-            var f = -1;
-            var j = 0;
-            long e = 0;
-
-            if (l <= 0)
-            {
-                goto EmptyLength;
-            }
-
-            switch (chars[0])
-            {
-                case PositiveSign:
-                    ++i;
-                    break;
-                case NegativeSign:
-                    ++i;
-                    n = true;
-                    break;
-            }
-
-            ulong t = 0;
-            int s = 0;
-
-            while (i < l)
-            {
-                if (s == m)
-                {
-                    v = v * u[m] + t;
-
-                    t = 0;
-                    s = 0;
-                }
-
-                var d = ToRadix(chars[i]);
-
-                if (d >= r)
-                {
-                    switch (chars[i])
+                    if (mantissa - temp * 10 >= 5)
                     {
-                        case DotSign:
+                        mantissa = temp + 1;
 
-                            if (f != -1)
-                            {
-                                goto FormatException;
-                            }
+                        lengthOfFractional -= 1;
+                    }
+                    else
+                    {
+                        mantissa = temp;
 
-                            ++i;
-
-                            f = j;
-                            continue;
-                        case InfinitySign:
-                            if (n)
-                            {
-                                if (i == 1 && l >= 2)
-                                {
-                                    value = double.NegativeInfinity;
-
-                                    return 2;
-                                }
-                            }
-                            else if (i == 0 && l >= 1)
-                            {
-                                value = double.PositiveInfinity;
-
-                                return 1;
-                            }
-                            goto OutOfRadix;
-                        case NSign:
-                            if (i == 0 && l >= 3 && chars[1] == NaNSign[1] && chars[2] == NaNSign[2])
-                            {
-                                value = double.NaN;
-
-                                return 3;
-                            }
-                            goto OutOfRadix;
-                        case ExponentSign:
-                        case exponentSign:
-                            ++i;
-                            goto Exponent;
-                        case PositiveSign:
-                        case NegativeSign:
-                            switch (chars[i - 1])
-                            {
-                                case ExponentSign:
-                                case exponentSign:
-                                    if (s == 0)
-                                    {
-                                        v /= r;
-                                    }
-                                    else
-                                    {
-                                        t /= r;
-                                        --s;
-                                    }
-
-                                    --j;
-
-                                    goto Exponent;
-                            }
-                            goto OutOfRadix;
-                        default:
-                            goto OutOfRadix;
+                        lengthOfFractional -= 1;
                     }
                 }
 
-                t = t * r + d;
+                // Remove 0 of tails.
+                while (lengthOfFractional >= 4 && mantissa == (temp = mantissa / power4) * power4)
+                {
+                    mantissa = temp;
 
-                ++s;
-                ++i;
-                ++j;
+                    lengthOfFractional -= 4;
+                }
+
+                while (lengthOfFractional > 0 && mantissa == (temp = mantissa / radix) * radix)
+                {
+                    mantissa = temp;
+
+                    --lengthOfFractional;
+                }
+            }
+            else
+            {
+                var power4 = uInt64Numbers[4];
+
+                ulong temp;
+
+                // Remove 0 of tails.
+                while (lengthOfFractional >= 4 && mantissa == (temp = mantissa / power4) * power4)
+                {
+                    mantissa = temp;
+
+                    lengthOfFractional -= 4;
+                }
+
+                while (lengthOfFractional > 0 && mantissa == (temp = mantissa / radix) * radix)
+                {
+                    mantissa = temp;
+
+                    --lengthOfFractional;
+                }
+            }
+
+            if (lengthOfFractional == 0)
+            {
+                var length = ToString(mantissa, offset);
+
+                if (length > lengthOfInteger && exponent != 0)
+                {
+                    ++exponent;
+                    --length;
+                }
+
+                offset += length;
+            }
+            else
+            {
+                ToString(mantissa, (byte)(lengthOfInteger + lengthOfFractional), offset);
+
+                offset += lengthOfInteger;
+
+                for (int i = lengthOfFractional; i > 0;)
+                {
+                    offset[i] = offset[--i];
+                }
+
+                *offset = DotSign;
+
+                offset += lengthOfFractional + 1;
+            }
+
+            if (exponent != 0)
+            {
+                *offset = ExponentSign; ++offset;
+
+                if (exponent > 0)
+                {
+                    *offset = PositiveSign; ++offset;
+                }
+                else
+                {
+                    *offset = NegativeSign; ++offset;
+                    exponent = -exponent;
+                }
+
+                offset += ToString((ulong)exponent, offset);
+            }
+
+            return (int)(offset - chars);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="chars"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public (ParseCode code, int length, double value) ParseDouble(char* chars, int length)
+        {
+            if (this.radix == DecimalRadix)
+            {
+                return DecimalParseDouble(chars, length);
+            }
+
+            var isNegative = false;
+            var exponent = 0L;
+            var floating = -1;
+            var radix = this.radix;
+            var maxNumber = uInt64NumbersLength - 1;
+
+            var offset = 0;
+
+            switch (chars[offset])
+            {
+                case PositiveSign:
+                    ++offset;
+
+                    if (chars[offset] == InfinitySign)
+                    {
+                        return (ParseCode.Success, 2, double.PositiveInfinity);
+                    }
+
+                    break;
+                case NegativeSign:
+                    ++offset;
+
+                    if (chars[offset] == InfinitySign)
+                    {
+                        return (ParseCode.Success, 2, double.NegativeInfinity);
+                    }
+
+                    isNegative = true;
+
+                    break;
+                case NSign:
+                case nSign:
+
+                    if (StringHelper.EqualsWithIgnoreCase(new Ps<char>(chars, length), NaNSign))
+                    {
+                        return (ParseCode.Success, 3, double.NaN);
+                    }
+
+                    break;
+                case InfinitySign:
+
+                    return (ParseCode.Success, 1, double.PositiveInfinity);
+            }
+
+            var value = 0D;
+            var code = ParseCode.Success;
+
+        Loop:
+
+            var swap = 0ul;
+            var number = 0;
+
+            for (; number < maxNumber && offset < length; ++offset)
+            {
+                var digital = ToRadix(chars[offset]);
+
+                if (digital >= radix)
+                {
+                    switch (chars[offset])
+                    {
+                        case DotSign:
+
+                            if (floating == -1)
+                            {
+                                ++floating;
+
+                                continue;
+                            }
+
+                            break;
+                        case ExponentSign:
+                        case exponentSign:
+                            ++offset;
+                            goto Exponent;
+                        case PositiveSign:
+                        case NegativeSign:
+                            // 在一些进制中 (15 进制以上)，指数符 e 和 数字 e(14) 有歧义。
+                            // 这里判断当 e 后面紧随 +- 符号时当作指数符处理，否则按数字处理。
+                            switch (chars[offset - 1])
+                            {
+                                case ExponentSign:
+                                case exponentSign:
+
+                                    if (number == 0)
+                                    {
+                                        value = (value - 0xE) / radix;
+                                    }
+                                    else
+                                    {
+                                        swap /= radix;
+                                    }
+
+                                    if (number > 0)
+                                    {
+                                        --number;
+                                    }
+
+                                    if (floating > 0)
+                                    {
+                                        --floating;
+                                    }
+
+                                    goto Exponent;
+                            }
+
+                            break;
+                    }
+
+                    code = ParseCode.OutOfRadix;
+
+                    length = 0;
+
+                    goto Return;
+                }
+
+                swap = swap * radix + digital;
+
+                ++number;
+
+                if (floating >= 0)
+                {
+                    ++floating;
+                }
             }
 
         Return:
 
-            if (s != 0)
+            if (number != 0)
             {
-                v = v * u[s] + t;
+                value = value * uInt64Numbers[number] + swap;
             }
 
-            if (f != -1)
+            if (offset < length)
             {
-                if (j == f)
-                {
-                    goto FormatException;
-                }
-
-                e -= j - f;
+                goto Loop;
             }
 
-            if (e > 0)
+            if (floating >= 1)
             {
-                if (e >= 1076)
-                {
-                    goto OutOfRange;
-                }
-
-                while (e >= 100)
-                {
-                    v *= p[100];
-
-                    e -= 100;
-                }
-
-                while (e >= 10)
-                {
-                    v *= p[10];
-
-                    e -= 10;
-                }
-
-                while (e >= 1)
-                {
-                    v *= r;
-
-                    --e;
-                }
+                exponent -= floating;
             }
-            else if (e < 0)
+
+            if (exponent != 0)
             {
-                if (e <= -1076)
+                if ((int)exponent != exponent)
                 {
-                    goto OutOfRange;
+                    code = ParseCode.OutOfRange;
+
+                    value = double.PositiveInfinity;
                 }
-
-                while (e <= -100)
+                else
                 {
-                    v *= k[100];
-
-                    e += 100;
-                }
-
-                while (e <= -10)
-                {
-                    v *= k[10];
-
-                    e += 10;
-                }
-
-                while (e <= -1)
-                {
-                    v /= r;
-
-                    ++e;
+                    value = Pow(value, (int)exponent);
                 }
             }
 
-            if (v > DoubleMaxPositive)
+            if (value > DoubleMaxPositive)
             {
-                goto OutOfRange;
+                code = ParseCode.OutOfRange;
             }
 
-            if (n)
+            if (isNegative)
             {
-                value = -v;
-            }
-            else
-            {
-                value = v;
+                value = -value;
             }
 
-            return i;
+            return (code, offset, value);
 
         Exponent:
 
-            i += TryParse(chars + i, l - i, out e, exception);
+            var expParse = ParseInt64(chars + offset, length - offset);
 
-            goto Return;
-
-
-        EmptyLength:
-            if (exception) ThreadException = new FormatException("Double text format error.");
-            goto ReturnFalse;
-        FormatException:
-            if (exception) ThreadException = new FormatException("Double text format error.");
-            goto ReturnFalse;
-        OutOfRange:
-            if (exception) ThreadException = new OverflowException("Value out of Double range.");
-            goto ReturnFalse;
-        OutOfRadix:
-            if (exception) ThreadException = new FormatException("Digit out of radix.");
-            goto Return;
-
-        ReturnFalse:
-            value = 0;
-            return 0;
-        }
-        
-        /// <summary>
-        /// 将 Double 值转换为字符串表现形式。
-        /// </summary>
-        /// <param name="value">Double 值</param>
-        /// <returns>返回一个 String 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public string ToString(double value)
-        {
-            var chars = stackalloc char[68];
-
-            var length = ToString(value, chars);
-
-            return new string(chars, 0, length);
-        }
-
-        /// <summary>
-        /// 将 Single 值转换为字符串表现形式。
-        /// </summary>
-        /// <param name="value">Single 值</param>
-        /// <returns>返回一个 String 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public string ToString(float value)
-        {
-            var chars = stackalloc char[38];
-
-            var length = ToString(value, chars);
-
-            return new string(chars, 0, length);
-        }
-        
-        /// <summary>
-        /// 尝试将字符串转换为 Double 值。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <param name="value">返回一个 Double 值</param>
-        /// <returns>返回转换是否成功</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryParse(string text, out double value)
-        {
-            var length = text.Length;
-
-            fixed (char* chars = text)
+            if (expParse.code != ParseCode.Success)
             {
-                return TryParse(chars, length, out value) == length;
+                code = expParse.code;
             }
-        }
-        
-        /// <summary>
-        /// 将字符串转换为 Double 值。失败将引发异常。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <returns>返回一个 Double 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public double ParseDouble(string text)
-        {
-            var length = text.Length;
 
-            fixed (char* chars = text)
+            offset += expParse.length;
+
+            exponent = expParse.value;
+
+            length = 0;
+
+            goto Return;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="chars"></param>
+        /// <param name="length"></param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static (ParseCode code, int length, double value) DecimalParseDouble(char* chars, int length)
+        {
+            var isNegative = false;
+            var exponent = 0L;
+            var floating = -1;
+            const byte radix = DecimalRadix;
+            const byte maxNumber = DecimalUInt64NumbersLength - 1;
+
+            var offset = 0;
+
+            switch (chars[offset])
             {
-                if (TryParse(chars, length, out double value, true) == length)
+                case PositiveSign:
+                    ++offset;
+
+                    if (chars[offset] == InfinitySign)
+                    {
+                        return (ParseCode.Success, 2, double.PositiveInfinity);
+                    }
+
+                    break;
+                case NegativeSign:
+                    ++offset;
+
+                    if (chars[offset] == InfinitySign)
+                    {
+                        return (ParseCode.Success, 2, double.NegativeInfinity);
+                    }
+
+                    isNegative = true;
+
+                    break;
+                case NSign:
+                case nSign:
+
+                    if (StringHelper.EqualsWithIgnoreCase(new Ps<char>(chars, length), NaNSign))
+                    {
+                        return (ParseCode.Success, 3, double.NaN);
+                    }
+
+                    break;
+                case InfinitySign:
+
+                    return (ParseCode.Success, 1, double.PositiveInfinity);
+            }
+
+            var value = 0D;
+            var code = ParseCode.Success;
+
+            Loop:
+
+            var swap = 0ul;
+            var number = 0;
+
+            for (; number < maxNumber && offset < length; ++offset)
+            {
+                var digital = (uint)(chars[offset] - DigitalsZeroValue);
+
+                if (digital >= radix)
                 {
-                    return value;
+                    switch (chars[offset])
+                    {
+                        case DotSign:
+
+                            if (floating == -1)
+                            {
+                                ++floating;
+
+                                continue;
+                            }
+
+                            break;
+                        case ExponentSign:
+                        case exponentSign:
+                            ++offset;
+                            goto Exponent;
+                    }
+
+                    code = ParseCode.OutOfRadix;
+
+                    length = 0;
+
+                    goto Return;
                 }
 
-                throw ThreadException;
+                swap = swap * radix + digital;
+
+                ++number;
+
+                if (floating >= 0)
+                {
+                    ++floating;
+                }
             }
+
+            Return:
+
+            if (number != 0)
+            {
+                value = value * DecimalUInt64Numbers[number] + swap;
+            }
+
+            if (offset < length)
+            {
+                goto Loop;
+            }
+
+            if (floating >= 1)
+            {
+                exponent -= floating;
+            }
+
+            if (exponent != 0)
+            {
+                if ((int)exponent != exponent)
+                {
+                    code = ParseCode.OutOfRange;
+
+                    value = double.PositiveInfinity;
+                }
+                else
+                {
+                    value = Decimal.Pow(value, (int)exponent);
+                }
+            }
+
+            if (value > DoubleMaxPositive)
+            {
+                code = ParseCode.OutOfRange;
+            }
+
+            if (isNegative)
+            {
+                value = -value;
+            }
+
+            return (code, offset, value);
+
+            Exponent:
+
+            var expParse = DecimalParseInt64(chars + offset, length - offset);
+
+            if (expParse.code != ParseCode.Success)
+            {
+                code = expParse.code;
+            }
+
+            offset += expParse.length;
+
+            exponent = expParse.value;
+
+            length = 0;
+
+            goto Return;
         }
     }
 }

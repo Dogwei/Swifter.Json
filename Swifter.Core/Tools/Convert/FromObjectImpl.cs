@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Swifter.Tools
 {
@@ -6,40 +7,40 @@ namespace Swifter.Tools
     {
         private abstract class FromObjectImpl
         {
-            private static readonly MyCache Impls = new MyCache();
+            private static readonly Dictionary<IntPtr, FromObjectImpl> Impls = new Dictionary<IntPtr, FromObjectImpl>();
 
-            public static TDestination FromObject<TDestination>(object obj)
+            public static TDestination FromObject<TDestination>(object value)
             {
-                if (obj == null)
-                {
-                    return Convert<object, TDestination>(null);
-                }
+                if (value is null) return Convert<object, TDestination>(null);
+                if (Impls.TryGetValue(TypeHelper.GetMethodTablePointer(value), out var impl)) return impl.Convert<TDestination>(value);
 
-                return Impls.GetOrCreate(obj).Convert<TDestination>(obj);
+                return InternalFromObject<TDestination>(value);
+            }
+
+            public static TDestination InternalFromObject<TDestination>(object value)
+            {
+                lock (Impls)
+                {
+                    var key = TypeHelper.GetMethodTablePointer(value);
+
+                    if (!Impls.TryGetValue(key, out var impl))
+                    {
+                        var implType = typeof(Impl<>).MakeGenericType(value.GetType());
+
+                        impl = (FromObjectImpl)Activator.CreateInstance(implType);
+
+                        Impls.Add(key, impl);
+                    }
+
+                    return impl.Convert<TDestination>(value);
+                }
             }
 
             public abstract TDestination Convert<TDestination>(object obj);
 
-            private sealed class MyCache : BaseCache<IntPtr, FromObjectImpl>, BaseCache<IntPtr, FromObjectImpl>.IGetOrCreate<object>
+            private sealed class Impl<TSource> : FromObjectImpl
             {
-                public MyCache() : base(0)
-                {
-                }
-
-                public IntPtr AsKey(object token) => Unsafe.GetObjectTypeHandle(token);
-
-                public FromObjectImpl AsValue(object token)=> (FromObjectImpl)Activator.CreateInstance(typeof(Internal<>).MakeGenericType(token.GetType()));
-
-                public FromObjectImpl GetOrCreate(object token) => GetOrCreate(this, token);
-
-                protected override int ComputeHashCode(IntPtr key) => key.GetHashCode();
-
-                protected override bool Equals(IntPtr key1, IntPtr key2) => key1 == key2;
-            }
-
-            private sealed class Internal<TSource> : FromObjectImpl
-            {
-                public override TDestination Convert<TDestination>(object value) => XConvert<TDestination>.Convert((TSource)value);
+                public override TDestination Convert<TDestination>(object value) => Convert<TSource, TDestination>((TSource)value);
             }
         }
     }

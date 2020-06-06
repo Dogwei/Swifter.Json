@@ -51,5 +51,20 @@ namespace Swifter.RW
         /// 字段原始信息。
         /// </summary>
         object Original { get; }
+
+        /// <summary>
+        /// 该字段在 OnReadAll 时是否忽略默认值。
+        /// </summary>
+        bool SkipDefaultValue { get; }
+
+        /// <summary>
+        /// 当无法获取该字段的值时是否引发异常。
+        /// </summary>
+        bool CannotGetException { get; }
+
+        /// <summary>
+        /// 当无法设置该字段的值时是否引发异常。
+        /// </summary>
+        bool CannotSetException { get; }
     }
 }

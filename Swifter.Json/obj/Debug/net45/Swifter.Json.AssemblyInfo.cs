@@ -15,11 +15,11 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("A powerful, easy-to-use and fastest json serializer and deserializer on .Net plat" +
     "forms.")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("1.2.9.5")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.2.9.5")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("1.3.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.3.2")]
 [assembly: System.Reflection.AssemblyProductAttribute("Swifter.Json")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Swifter.Json")]
-[assembly: System.Reflection.AssemblyVersionAttribute("1.2.9.5")]
+[assembly: System.Reflection.AssemblyVersionAttribute("1.3.2.0")]
 
 // 由 MSBuild WriteCodeFragment 类生成。
 

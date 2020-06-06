@@ -1,1 +1,0 @@
-## 暂不提供 .Net Core 和 .Net Standard 版本的单文件 dll 下载，如果需要，请从 Nuget 上安装这些包。

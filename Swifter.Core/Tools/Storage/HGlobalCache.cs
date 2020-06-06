@@ -1,7 +1,5 @@
 ﻿using System;
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace Swifter.Tools
 {
@@ -9,21 +7,20 @@ namespace Swifter.Tools
     /// 提供指定值类型的全局内存缓存。
     /// </summary>
     /// <typeparam name="T">指定值类型</typeparam>
-    public sealed unsafe partial class HGlobalCache<T> where T : struct
+    public sealed unsafe partial class HGlobalCache<T> where T : unmanaged
     {
-        static readonly T[] empty = new T[0];
-
         /// <summary>
         /// 可以设置的最大缓存大小。
         /// </summary>
-        public const int AbsolutelyMaxSize = 400000000;
+        public static readonly int AbsolutelyMaxSize = 1218 * 500000 / sizeof(T);
 
         /// <summary>
         /// 可以设置的最小缓存大小。
         /// </summary>
-        public const int AbsolutelyMinSize = 102400;
+        public static readonly int AbsolutelyMinSize = 1218 * 70 / sizeof(T);
 
-        private static int maxSize = AbsolutelyMaxSize;
+        private static int max_size = AbsolutelyMaxSize;
+        private static int min_size = AbsolutelyMinSize;
 
         /// <summary>
         /// 读取或设置最大缓存大小。
@@ -32,92 +29,117 @@ namespace Swifter.Tools
         {
             get
             {
-                return Math.Max(Math.Min(maxSize, AbsolutelyMaxSize), AbsolutelyMinSize);
+                return max_size;
             }
             set
             {
-                if (value > AbsolutelyMaxSize || value < AbsolutelyMinSize)
+                if (value >= AbsolutelyMinSize && value <= AbsolutelyMaxSize)
+                {
+                    max_size = value;
+                }
+                else
                 {
                     throw new ArgumentOutOfRangeException(nameof(value));
                 }
-
-                maxSize = value;
             }
         }
 
         /// <summary>
-        /// 获取 T 的 Size。
+        /// 读取或设置最小缓存大小。
         /// </summary>
-        public static int TSize => Unsafe.SizeOf<T>();
+        public static int MinSize
+        {
+            get
+            {
+                return min_size;
+            }
+            set
+            {
+                if (value >= AbsolutelyMinSize && value <= AbsolutelyMaxSize)
+                {
+                    min_size = value;
+                }
+                else
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                }
+            }
+        }
 
-        GCHandle gc;
         T[] array;
+        int offset;
 
         /// <summary>
-        /// 获取数组。
+        /// 获取元数组。
         /// </summary>
         public T[] Context => array;
+
+        /// <summary>
+        /// 可用的空间总长度。
+        /// </summary>
+        public int Available => array.Length - offset;
+
+        /// <summary>
+        /// 剩余可用的空间长度。
+        /// </summary>
+        public int Rest => Available - Count;
+        
+
+        /// <summary>
+        /// 已使用的空间数量。
+        /// </summary>
+        public int Count;
 
         /// <summary>
         /// 创建全局缓存实例。
         /// </summary>
         public HGlobalCache()
         {
-            array = empty;
+            ReAlloc(MinSize);
         }
 
         /// <summary>
-        /// 全局字符串内存地址。
+        /// 第一个元素的地址。
         /// </summary>
-        public IntPtr Address => (IntPtr)Pointer;
+        public T* First { get; private set; }
 
         /// <summary>
-        /// 全局字符串内存地址。
+        /// 最后一个元素的地址。
         /// </summary>
-        public void* Pointer { get; private set; }
+        public T* Last { get; private set; }
 
         /// <summary>
-        /// 获取指定位置的 T 元素。
+        /// 当前元素的地址。
         /// </summary>
-        /// <param name="index">指定位置</param>
-        /// <returns>返回 T 值</returns>
-        public ref T this[int index] => ref array[index];
+        public T* Current => First + Count;
 
         /// <summary>
-        /// T 元素数量。
+        /// 获取或设置偏移量。
         /// </summary>
-        public int Capacity => array.Length;
-
-        /// <summary>
-        /// T 元素的内容数量。
-        /// </summary>
-        public int Count;
-
-        /// <summary>
-        /// 首个 T 元素引用。
-        /// </summary>
-        public unsafe ref T First => ref Unsafe.AsRef<T>(Pointer);
-
-        /// <summary>
-        /// 总 Byte 数量。
-        /// </summary>
-        public int ByteCount => Capacity * TSize;
-
-        /// <summary>
-        /// 释放全局内存。
-        /// </summary>
-        ~HGlobalCache()
+        public int Offset
         {
-            if (gc.IsAllocated)
+            get => offset;
+            set
             {
-                gc.Free();
+                if (offset >= 0 && offset < array.Length)
+                {
+                    First = (T*)Underlying.AsPointer(ref array[value]);
+                    Last = (T*)Underlying.AsPointer(ref array[Available - 1]);
 
-                array = empty;
+
+                    Count = Math.Max(Count + offset - value, 0);
+
+                    offset = value;
+                }
+                else
+                {
+                    throw new ArgumentException("Out of range.", nameof(Offset));
+                }
             }
         }
 
         /// <summary>
-        /// 扩展字符串长度。
+        /// 扩展全局缓存内存。
         /// </summary>
         /// <param name="expandMinSize">最小扩展长度</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -130,23 +152,39 @@ namespace Swifter.Tools
                 throw new OutOfMemoryException("HGlobal cache expand size exceeds limit.");
             }
 
-            if (Capacity >= limit)
+            if (array.Length >= limit)
             {
                 throw new OutOfMemoryException("HGlobal cache size exceeds limit.");
             }
 
-            var size = Capacity * 2 + expandMinSize;
+            ReAlloc(Math.Min(array.Length * 2 + expandMinSize, limit));
+        }
 
-            if (gc.IsAllocated)
+
+        void ReAlloc(int size)
+        {
+            if (array is null)
             {
-                gc.Free();
+                array = new T[size];
+            }
+            else
+            {
+                Array.Resize(ref array, size + 12);
             }
 
-            Array.Resize(ref array, size);
-
-            gc = GCHandle.Alloc(array, GCHandleType.Pinned);
-
-            Pointer = Unsafe.AsPointer(ref array[0]);
+            Offset = Offset;
         }
+
+        /// <summary>
+        /// 返回全局缓存中的内容 ArraySegment。
+        /// </summary>
+        /// <param name="hGCache"></param>
+        public static implicit operator ArraySegment<T>(HGlobalCache<T> hGCache) => new ArraySegment<T>(hGCache.Context, hGCache.Offset, hGCache.Count);
+
+        /// <summary>
+        /// 返回全局缓存中的内容段。
+        /// </summary>
+        /// <param name="hGCache"></param>
+        public static implicit operator Ps<T>(HGlobalCache<T> hGCache) => new Ps<T>(hGCache.First, hGCache.Count);
     }
 }

@@ -1,34 +1,49 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+
+using static Swifter.Tools.NumberHelper;
 
 namespace Swifter.Tools
 {
     /// <summary>
-    /// 储存一个字符串的数字信息
+    /// 表示一个字符串数字信息。
     /// </summary>
     public unsafe ref struct NumberInfo
     {
         internal char* chars;
-        internal bool isFloat;
-        internal bool haveFractional;
+
         internal bool isNegative;
-        internal bool exponentIsNegative;
+
         internal int integerBegin;
         internal int integerCount;
         internal int integerSplitCount;
+
         internal int fractionalBegin;
         internal int fractionalCount;
         internal int fractionalSplitCount;
+
+        internal bool exponentIsNegative;
+
         internal int exponentBegin;
         internal int exponentCount;
         internal int exponentSplitCount;
-        internal byte radix;
+
+        internal byte max_digit;
+        internal byte max_radix;
+
         internal int end;
 
         /// <summary>
-        /// 获取该数字是否为浮点数。
+        /// 获取该字符串的指针。
         /// </summary>
-        public bool IsFloat => isFloat;
+        public char* Chars => chars;
+
+        /// <summary>
+        /// 获取该字符串是否是一个数字。
+        /// </summary>
+        public bool IsNumber =>
+            (integerBegin != -1 && integerCount != 0) &&
+            (fractionalBegin == -1 || fractionalCount != 0) &&
+            (exponentBegin == -1 || exponentCount != 0);
 
         /// <summary>
         /// 获取该数字是否为负数。
@@ -36,167 +51,183 @@ namespace Swifter.Tools
         public bool IsNegative => isNegative;
 
         /// <summary>
-        /// 获取该数字的指数是否为负数。
+        /// 获取此数字的整数部分的开始位置。
         /// </summary>
-        public bool ExponentIsNegative => exponentIsNegative;
+        public int IntegerBegin => integerBegin;
 
         /// <summary>
-        /// 获取该数字的整数部分的长度。
+        /// 获取此数字的整数部分数字的数量。
         /// </summary>
         public int IntegerCount => integerCount;
 
         /// <summary>
-        /// 获取该数字的小数部分的长度。
+        /// 获取此数字的整数部分长度。
+        /// </summary>
+        public int IntegerLength => integerCount + integerSplitCount;
+
+        /// <summary>
+        /// 获取此数字是否存在小数。
+        /// </summary>
+        public bool HaveFractional => fractionalBegin != -1 && fractionalCount != 0;
+
+        /// <summary>
+        /// 获取此数字的小数部分的开始位置。
+        /// </summary>
+        public int FractionalBegin => integerBegin;
+
+        /// <summary>
+        /// 获取此数字的小数部分数字的数量。
         /// </summary>
         public int FractionalCount => fractionalCount;
 
         /// <summary>
-        /// 获取该数字的指数的长度。
+        /// 获取此数字的小数部分长度。
+        /// </summary>
+        public int FractionalLength => fractionalCount + fractionalSplitCount;
+
+        /// <summary>
+        /// 获取此数字是否存在指数。
+        /// </summary>
+        public bool HaveExponent => exponentBegin != -1 && exponentCount != 0;
+
+        /// <summary>
+        /// 获取此数字的指数是否为负数。
+        /// </summary>
+        public bool ExponentIsNegative => exponentIsNegative;
+
+        /// <summary>
+        /// 获取此数字的指数部分的开始位置（不含符号位）。
+        /// </summary>
+        public int ExponentlBegin => integerBegin;
+
+        /// <summary>
+        /// 获取此数字的指数部分数字的数量。
         /// </summary>
         public int ExponentCount => exponentCount;
 
         /// <summary>
-        /// 获取该字符串是否是一个数字。
+        /// 获取此数字的指数部分长度。
         /// </summary>
-        public bool IsNumber
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get
-            {
-                return integerCount > 0 && (!haveFractional || fractionalCount > 0) && (exponentBegin == -1 || exponentCount != 0);
-            }
-        }
+        public int ExponentLength => exponentCount + exponentSplitCount;
 
         /// <summary>
-        /// 获取是否存在指数。
-        /// 此值不考虑是否为数字。
+        /// 获取此数字出现的最大数字。
         /// </summary>
-        public bool HaveExponent
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get
-            {
-                return exponentBegin != -1 && exponentCount != 0;
-            }
-        }
+        public byte MaxDigit => max_digit;
 
         /// <summary>
-        /// 获取是否为十进制数字。
+        /// 获取此数字允许的最大进制数。
         /// </summary>
-        public bool IsDecimal => IsNumber && radix == 10;
+        public byte MaxRadix => MaxRadix;
+
+        /// <summary>
+        /// 获取是否可以为十进制。
+        /// </summary>
+        public bool IsDecimal => max_digit < DecimalRadix && max_radix >= DecimalRadix;
+
+        /// <summary>
+        /// 获取是否可以为二进制。
+        /// </summary>
+        public bool IsBinary => max_digit < BinaryRadix && max_radix >= BinaryRadix;
+
+        /// <summary>
+        /// 获取是否可以为十六进制。
+        /// </summary>
+        public bool IsHex => max_digit < HexRadix && max_radix >= HexRadix;
+
+        /// <summary>
+        /// 获取是否可以为八进制数字。
+        /// </summary>
+        public bool IsOctal => max_digit < OctalRadix && max_radix >= OctalRadix;
 
         /// <summary>
         /// 获取此数字在字符串中的结束位置，数字内容不包含此位置。
         /// </summary>
-        public int End
+        public int End => end;
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private void CopyTo(char* destination)
         {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get
+            if (IsNumber)
             {
-                return end;
+                if (IsNegative)
+                {
+                    *destination = NegativeSign; ++destination;
+                }
+
+                Underlying.CopyBlock(
+                    destination,
+                    chars + integerBegin,
+                    (uint)(IntegerLength * sizeof(char))
+                    );
+
+                destination += IntegerLength;
+
+                if (HaveFractional)
+                {
+                    *destination = DotSign; ++destination;
+
+                    Underlying.CopyBlock(
+                        destination,
+                        chars + fractionalBegin,
+                        (uint)(FractionalLength * sizeof(char))
+                        );
+
+                    destination += FractionalLength;
+                }
+
+                if (HaveExponent)
+                {
+                    *destination = ExponentSign; ++destination;
+
+                    *destination = exponentIsNegative ? NegativeSign : PositiveSign; ++destination;
+
+                    Underlying.CopyBlock(
+                        destination,
+                        chars + exponentBegin,
+                        (uint)(ExponentLength * sizeof(char))
+                        );
+
+                    destination += ExponentLength;
+                }
+            }
+            else
+            {
+                fixed (char* pNaNSign = NaNSign)
+                {
+                    Underlying.CopyBlock(
+                        destination,
+                        pNaNSign,
+                        (uint)(NaNSign.Length * sizeof(char))
+                        );
+                }
             }
         }
 
         /// <summary>
-        /// 获取此数字的进制数。
+        /// 获取此数字的字符串长度。
         /// </summary>
-        public byte Radix => radix;
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private int ToString(char* chars)
-        {
-            if (IsNumber)
-            {
-                int index = 0;
-
-                if (isNegative)
-                {
-                    chars[0] = NumberHelper.NegativeSign;
-
-                    ++index;
-                }
-
-                Copy(this.chars, integerBegin, integerCount + integerSplitCount, chars, ref index);
-
-                if (haveFractional && fractionalCount != 0)
-                {
-                    chars[index] = NumberHelper.DotSign;
-
-                    ++index;
-
-                    Copy(this.chars, fractionalBegin, fractionalCount + fractionalSplitCount, chars, ref index);
-                }
-
-                if (exponentBegin != -1 && exponentCount != 0)
-                {
-                    chars[index] = NumberHelper.ExponentSign;
-
-                    ++index;
-
-                    if (exponentIsNegative)
-                    {
-                        chars[index] = NumberHelper.NegativeSign;
-                    }
-                    else
-                    {
-                        chars[index] = NumberHelper.PositiveSign;
-                    }
-
-                    ++index;
-
-                    Copy(this.chars, exponentBegin, exponentCount + exponentSplitCount, chars, ref index);
-                }
-
-                return index;
-            }
-            else
-            {
-                Copy(NumberHelper.NaNSign, chars, 0);
-
-                return NumberHelper.NaNSign.Length;
-            }
-        }
-        
-        private int StringLength
+        public int StringLength
         {
             [MethodImpl(VersionDifferences.AggressiveInlining)]
             get
             {
                 if (IsNumber)
                 {
-                    return 
-                        (isNegative ? 1 : 0) 
-                        + integerCount + integerSplitCount 
-                        + ((haveFractional && fractionalBegin != -1 && fractionalCount != 0) ? 1 + fractionalCount + fractionalSplitCount : 0) 
-                        + ((exponentBegin != -1 && exponentCount != 0) ? 2 + exponentCount + exponentSplitCount : 0);
+                    return
+                        IntegerLength
+                        + (IsNegative ? 1 : 0)
+                        + (HaveFractional ? 1/*length of '.'*/ + FractionalLength : 0)
+                        + (HaveExponent ? 1/*length of 'e'*/ + 1 /*length of exponent sign*/ + ExponentLength : 0)
+                        ;
                 }
 
-                return NumberHelper.NaNSign.Length;
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static void Copy(char* source, int begin, int count, char* destination, ref int index)
-        {
-            int end = begin + count;
-
-            for (; begin < end; ++begin, ++index)
-            {
-                destination[index] = source[begin];
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static void Copy(string source, char* destination, int index)
-        {
-            for (int i = 0; i < source.Length; ++i, ++index)
-            {
-                destination[index] = source[i];
+                return NaNSign.Length;
             }
         }
 
         /// <summary>
-        /// 获取此数字的信息的字符串表现形式。
+        /// 获取此数字的字符串表现形式。
         /// </summary>
         /// <returns>返回一个 string 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -204,18 +235,18 @@ namespace Swifter.Tools
         {
             if (IsNumber)
             {
-                var result = new string('\0', StringLength);
+                var result = StringHelper.MakeString(StringLength);
 
-                fixed(char* chars = result)
+                fixed (char* chars = result)
                 {
-                    ToString(chars);
+                    CopyTo(chars);
                 }
 
                 return result;
             }
             else
             {
-                return "NaN";
+                return NaNSign;
             }
         }
 
@@ -224,9 +255,9 @@ namespace Swifter.Tools
         /// </summary>
         /// <returns>返回一个 Double</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public double ToDouble()
+        public double ToDouble(byte radix)
         {
-            return NumberHelper.InstanceByRadix(radix).ToDouble(this);
+            return GetOrCreateInstance(radix).ToDouble(this);
         }
 
         /// <summary>
@@ -244,9 +275,9 @@ namespace Swifter.Tools
         /// </summary>
         /// <returns>返回一个 Double</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public ulong ToUInt64()
+        public ulong ToUInt64(byte radix)
         {
-            return NumberHelper.InstanceByRadix(radix).ToUInt64(this);
+            return GetOrCreateInstance(radix).ToUInt64(this);
         }
 
         /// <summary>
@@ -254,9 +285,30 @@ namespace Swifter.Tools
         /// </summary>
         /// <returns>返回一个 Double</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public long ToInt64()
+        public long ToInt64(byte radix)
         {
-            return NumberHelper.InstanceByRadix(radix).ToInt64(this);
+            return GetOrCreateInstance(radix).ToInt64(this);
+        }
+
+        /// <summary>
+        /// 尝试获取常用进制数。
+        /// </summary>
+        /// <param name="radix"></param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool IsCommonRadix(out byte radix)
+        {
+            radix = 0;
+
+            if (max_radix > max_digit && max_digit < HexRadix && max_radix >= BinaryRadix)
+            {
+                if (max_radix >= DecimalRadix && max_digit < DecimalRadix) radix = DecimalRadix;
+                else if (max_radix >= HexRadix && max_digit < HexRadix) radix = HexRadix;
+                else if (max_radix >= BinaryRadix && max_digit < BinaryRadix) radix = BinaryRadix;
+                else if (max_radix >= OctalRadix && max_digit < OctalRadix) radix = OctalRadix;
+            }
+
+            return radix != 0;
         }
     }
 }

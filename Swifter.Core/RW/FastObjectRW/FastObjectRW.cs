@@ -1,10 +1,7 @@
-﻿
-using Swifter.Tools;
-
+﻿using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using static Swifter.RW.FastObjectRW;
 
@@ -15,13 +12,13 @@ namespace Swifter.RW
     /// </summary>
     public static class FastObjectRW
     {
-        internal static readonly TypeCache<FastObjectRWOptions> TypeOptions;
+        internal static readonly Dictionary<Type, FastObjectRWOptions> TypeOptions;
 
         internal static readonly FastObjectRWOptions Initialized = (FastObjectRWOptions)0x10000000;
 
         static FastObjectRW()
         {
-            TypeOptions = new TypeCache<FastObjectRWOptions>();
+            TypeOptions = new Dictionary<Type, FastObjectRWOptions>();
 
             SetCurrentOptions(typeof(ValueType), DefaultOptions | FastObjectRWOptions.Field);
         }
@@ -33,15 +30,30 @@ namespace Swifter.RW
                 return value;
             }
 
-            return TypeOptions.LockGetOrAdd(type, t =>
+            lock (TypeOptions)
             {
-                if ((t.BaseType ?? typeof(object)) == typeof(object))
+                return TypeOptions.GetOrAdd(type, t =>
                 {
-                    return DefaultOptions;
-                }
+                    // 对匿名类型进行 Allocate 和 AutoPropertyDirectRW
+                    if (t.IsDefined(typeof(CompilerGeneratedAttribute), false))
+                    {
+                        return DefaultOptions | FastObjectRWOptions.Allocate | FastObjectRWOptions.AutoPropertyDirectRW;
+                    }
 
-                return GetCurrentOptions(t.BaseType) & ~Initialized;
-            });
+                    // 对元组类型进行 Allocate 和 AutoPropertyDirectRW
+                    if (t.IsClass && t.IsGenericType && t.Name.Contains("Tuple") && t.GetConstructor(Type.EmptyTypes) is null)
+                    {
+                        return DefaultOptions | FastObjectRWOptions.Allocate | FastObjectRWOptions.AutoPropertyDirectRW;
+                    }
+
+                    if ((t.BaseType ?? typeof(object)) == typeof(object))
+                    {
+                        return DefaultOptions;
+                    }
+
+                    return GetCurrentOptions(t.BaseType) & ~Initialized;
+                });
+            }
         }
 
         internal static void SetCurrentOptions(Type type, FastObjectRWOptions options)
@@ -80,12 +92,11 @@ namespace Swifter.RW
         public static
             FastObjectRWOptions DefaultOptions { get; set; } =
             // FastObjectRWOptions.NotFoundException |
-            FastObjectRWOptions.CannotGetException |
-            FastObjectRWOptions.CannotSetException |
+            // FastObjectRWOptions.CannotGetException |
+            // FastObjectRWOptions.CannotSetException |
             FastObjectRWOptions.BasicTypeDirectCallMethod |
             FastObjectRWOptions.Property |
             FastObjectRWOptions.Field |
-            FastObjectRWOptions.IndexId64 |
             FastObjectRWOptions.IgnoreCase |
             FastObjectRWOptions.InheritedMembers;
     }
@@ -94,8 +105,14 @@ namespace Swifter.RW
     /// FastObjectRW 基于 Emit 实现的几乎完美效率的对象读写器。
     /// </summary>
     /// <typeparam name="T">数据源对象的类型</typeparam>
-    public abstract partial class FastObjectRW<T> : IDataRW<string>, IDirectContent, IInitialize<T>, IId64DataRW<char>, IId64DataRW<Utf8Byte>
+    public abstract partial class FastObjectRW<T> : IDataRW<string>, IDataRW<Ps<char>>, IDataRW<Ps<Utf8Byte>>, IDataRW<int>
     {
+        /// <summary>
+        /// 获取当前类型的读写接口是否为 FastObjectInterface。
+        /// </summary>
+        public static bool IsFastObjectInterface => 
+            ValueInterface<T>.Content is IFastObjectRWCreater<T>/* || ValueInterface<T>.Content is FastObjectInterface<T>*/;
+
         /// <summary>
         /// 读取或设置该类型的 FastObjectRWOptions 枚举配置项。
         /// 如果该类型已经初始化完成，则无法设置该值，且发生异常。
@@ -111,6 +128,7 @@ namespace Swifter.RW
         /// 创建 FastObjectRW 实例。
         /// </summary>
         /// <returns>返回 FastObjectRW 实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static FastObjectRW<T> Create()
         {
             return StaticFastObjectRW<T>.Creater.Create();
@@ -122,7 +140,7 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="index">索引</param>
         /// <returns>返回读写接口实例</returns>
-        internal protected static object GetValueInterfaceInstance(int index)
+        protected internal static object GetValueInterfaceInstance(int index)
         {
             return StaticFastObjectRW<T>.Fields[index].InterfaceInstance;
         }
@@ -130,25 +148,12 @@ namespace Swifter.RW
         /// <summary>
         /// 数据源。
         /// </summary>
-        [EditorBrowsable(EditorBrowsableState.Never)]
         public T content;
-
-        /// <summary>
-        /// 获取数据源。
-        /// </summary>
-        public T Content => content;
 
         /// <summary>
         /// 调用默认无参的构造函数初始化数据源。
         /// </summary>
         public abstract void Initialize();
-
-        /// <summary>
-        /// 设置数据源。
-        /// </summary>
-        /// <param name="content">数据源</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void Initialize(T content) => this.content = content;
 
         /// <summary>
         /// 调用默认无参的构造函数初始化数据源。
@@ -184,112 +189,284 @@ namespace Swifter.RW
         public abstract void OnWriteAll(IDataReader<string> dataReader);
 
         /// <summary>
-        /// 对数据源中的所有成员进行筛选，并将满足筛选的结果写入到数据写入器中。
+        /// 获取指定名称的成员的值读写器。
         /// </summary>
-        /// <param name="dataWriter">数据写入器</param>
-        /// <param name="valueFilter">值筛选器</param>
-        public abstract void OnReadAll(IDataWriter<string> dataWriter, IValueFilter<string> valueFilter);
+        /// <param name="key">指定名称</param>
+        /// <returns>返回值读写器</returns>
+        public IValueRW this[string key]
+        {
+            get
+            {
+                var ordinal = GetOrdinal(key);
+
+                if (ordinal == -1)
+                {
+                    if ((StaticFastObjectRW<T>.Options & FastObjectRWOptions.NotFoundException) != 0)
+                    {
+                        throw new MissingMemberException(typeof(T).FullName, key);
+                    }
+                    else
+                    {
+                        return RWHelper.DefaultValueRW;
+                    }
+                }
+
+                return new ValueCopyer<int>(this, ordinal);
+            }
+        }
 
         /// <summary>
         /// 获取指定名称的成员的值读写器。
         /// </summary>
         /// <param name="key">指定名称</param>
         /// <returns>返回值读写器</returns>
-        public FastFieldRW this[string key] => new FastFieldRW(this, this.GetId64Ex(key));
+        public IValueRW this[Ps<char> key]
+        {
+            get
+            {
+                var ordinal = GetOrdinal(key);
+
+                if (ordinal == -1)
+                {
+                    if ((StaticFastObjectRW<T>.Options & FastObjectRWOptions.NotFoundException) != 0)
+                    {
+                        throw new MissingMemberException(typeof(T).FullName, key.ToStringEx());
+                    }
+                    else
+                    {
+                        return RWHelper.DefaultValueRW;
+                    }
+                }
+
+                return new ValueCopyer<int>(this, ordinal);
+            }
+        }
+
+        /// <summary>
+        /// 获取指定名称的成员的值读写器。
+        /// </summary>
+        /// <param name="key">指定名称</param>
+        /// <returns>返回值读写器</returns>
+        public IValueRW this[Ps<Utf8Byte> key]
+        {
+            get
+            {
+                var ordinal = GetOrdinal(key);
+
+                if (ordinal == -1)
+                {
+                    if ((StaticFastObjectRW<T>.Options & FastObjectRWOptions.NotFoundException) != 0)
+                    {
+                        throw new MissingMemberException(typeof(T).FullName, key.ToStringEx());
+                    }
+                    else
+                    {
+                        return RWHelper.DefaultValueRW;
+                    }
+                }
+
+                return new ValueCopyer<int>(this, ordinal);
+            }
+        }
+
+        /// <summary>
+        /// 获取指定索引处的成员的值读写器。
+        /// </summary>
+        /// <param name="index">指定索引</param>
+        /// <returns>返回值读写器</returns>
+        public IValueRW this[int index] => new ValueCopyer<int>(this, index);
 
         /// <summary>
         /// 获取该类型所有的成员。
         /// </summary>
-        public IEnumerable<string> Keys => ArrayHelper.CreateArrayIterator(StaticFastObjectRW<T>.Keys);
+        public IEnumerable<string> Keys => StaticFastObjectRW<T>.StringKeys;
 
         /// <summary>
         /// 获取该类型所有的成员的数量。
         /// </summary>
-        public int Count => StaticFastObjectRW<T>.Keys.Length;
+        public int Count => StaticFastObjectRW<T>.StringKeys.Length;
 
-        object IDirectContent.DirectContent
+        /// <summary>
+        /// 将指定名称的成员的值写入到值写入器中。
+        /// </summary>
+        /// <param name="key">指定名称</param>
+        /// <param name="valueWriter">值写入器</param>
+        public abstract void OnReadValue(Ps<char> key, IValueWriter valueWriter);
+
+        /// <summary>
+        /// 将数据源中的所有成员写入到数据写入器中。
+        /// </summary>
+        /// <param name="dataWriter">数据写入器</param>
+        public abstract void OnReadAll(IDataWriter<Ps<char>> dataWriter);
+
+        /// <summary>
+        /// 将值读取器中的值写入到指定名称的成员中。
+        /// </summary>
+        /// <param name="key">指定名称</param>
+        /// <param name="valueReader">值读取器</param>
+        public abstract void OnWriteValue(Ps<char> key, IValueReader valueReader);
+
+        /// <summary>
+        /// 从数据读取器中读取所有数据源字段到数据源的值
+        /// </summary>
+        /// <param name="dataReader">数据读取器</param>
+        public abstract void OnWriteAll(IDataReader<Ps<char>> dataReader);
+
+        /// <summary>
+        /// 将指定名称的成员的值写入到值写入器中。
+        /// </summary>
+        /// <param name="key">指定名称</param>
+        /// <param name="valueWriter">值写入器</param>
+        public abstract void OnReadValue(Ps<Utf8Byte> key, IValueWriter valueWriter);
+
+        /// <summary>
+        /// 将数据源中的所有成员写入到数据写入器中。
+        /// </summary>
+        /// <param name="dataWriter">数据写入器</param>
+        public abstract void OnReadAll(IDataWriter<Ps<Utf8Byte>> dataWriter);
+
+        /// <summary>
+        /// 将值读取器中的值写入到指定名称的成员中。
+        /// </summary>
+        /// <param name="key">指定名称</param>
+        /// <param name="valueReader">值读取器</param>
+        public abstract void OnWriteValue(Ps<Utf8Byte> key, IValueReader valueReader);
+
+        /// <summary>
+        /// 从数据读取器中读取所有数据源字段到数据源的值
+        /// </summary>
+        /// <param name="dataReader">数据读取器</param>
+        public abstract void OnWriteAll(IDataReader<Ps<Utf8Byte>> dataReader);
+
+        /// <summary>
+        /// 将指定索引处的成员的值写入到值写入器中。
+        /// </summary>
+        /// <param name="key">指定索引处</param>
+        /// <param name="valueWriter">值写入器</param>
+        public abstract void OnReadValue(int key, IValueWriter valueWriter);
+
+        /// <summary>
+        /// 将数据源中的所有成员写入到数据写入器中。
+        /// </summary>
+        /// <param name="dataWriter">数据写入器</param>
+        public abstract void OnReadAll(IDataWriter<int> dataWriter);
+
+        /// <summary>
+        /// 将值读取器中的值写入到指定索引处的成员中。
+        /// </summary>
+        /// <param name="key">指定索引处</param>
+        /// <param name="valueReader">值读取器</param>
+        public abstract void OnWriteValue(int key, IValueReader valueReader);
+
+        /// <summary>
+        /// 从数据读取器中读取所有数据源字段到数据源的值
+        /// </summary>
+        /// <param name="dataReader">数据读取器</param>
+        public abstract void OnWriteAll(IDataReader<int> dataReader);
+
+        /// <summary>
+        /// 获取指定名称的字段的序号。
+        /// </summary>
+        /// <param name="name">指定名称</param>
+        /// <returns>返回序号，如果没有该字段，则返回 -1</returns>
+        public abstract int GetOrdinal(string name);
+
+        /// <summary>
+        /// 获取指定名称的字段的序号。
+        /// </summary>
+        /// <param name="name">指定名称</param>
+        /// <returns>返回序号，如果没有该字段，则返回 -1</returns>
+        public abstract int GetOrdinal(Ps<char> name);
+
+        /// <summary>
+        /// 获取指定名称的字段的序号。
+        /// </summary>
+        /// <param name="name">指定名称</param>
+        /// <returns>返回序号，如果没有该字段，则返回 -1</returns>
+        public abstract int GetOrdinal(Ps<Utf8Byte> name);
+
+        /// <summary>
+        /// 获取指定索引处的字段名称。
+        /// </summary>
+        /// <param name="ordinal">指定索引</param>
+        /// <param name="name">返回字段名称</param>
+        public void GetKey(int ordinal, out string name)
         {
-            get => content;
-            set => content = (T)value;
+            name = StaticFastObjectRW<T>.StringKeys[ordinal];
         }
-        
-        object IDataReader.ReferenceToken => typeof(T).IsValueType ? null : (object)Content;
 
-        IValueRW IDataRW<string>.this[string key] => this[key];
+        /// <summary>
+        /// 获取指定索引处的字段名称。
+        /// </summary>
+        /// <param name="ordinal">指定索引</param>
+        /// <param name="name">返回字段名称</param>
+        public void GetKey(int ordinal, out Ps<char> name)
+        {
+            name = StaticFastObjectRW<T>.UTF16Keys[ordinal];
+        }
 
-        IValueReader IDataReader<string>.this[string key] => this[key];
-
-        IValueWriter IDataWriter<string>.this[string key] => this[key];
+        /// <summary>
+        /// 获取指定索引处的字段名称。
+        /// </summary>
+        /// <param name="ordinal">指定索引</param>
+        /// <param name="name">返回字段名称</param>
+        public void GetKey(int ordinal, out Ps<Utf8Byte> name)
+        {
+            name = StaticFastObjectRW<T>.UTF8Keys[ordinal];
+        }
 
         /// <summary>
         /// 获取该读写器的名称。
         /// </summary>
         /// <returns>返回该读写器的名称</returns>
-        public override string ToString() => $"{nameof(FastObjectRW)}<{typeof(T).FullName}>";
+        public override string ToString() => $"{typeof(FastObjectRW).FullName}<{typeof(T).FullName}>";
 
         /// <summary>
-        /// 获取字段名称的 Id64 值。
+        /// 读取或设置该读写器的数据源。
         /// </summary>
-        /// <param name="firstSymbol">字段名称第一个字符的引用。</param>
-        /// <param name="length">字段名称长度</param>
-        /// <returns>返回 Id64 值</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public abstract long GetId64(ref char firstSymbol, int length);
-
-        /// <summary>
-        /// 获取字段名称的 Id64 值。
-        /// </summary>
-        /// <param name="symbols">字段名称</param>
-        /// <returns>返回 Id64 值</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public long GetId64(IEnumerable<char> symbols)
+        public object Content
         {
-            if ((StaticFastObjectRW<T>.Options & FastObjectRWOptions.IndexId64) != 0)
-            {
-                var chars = symbols.ToArray();
-
-                return GetId64(ref chars[0], chars.Length);
-            }
-
-            return StaticFastObjectRW<T>.ComputeId64(symbols);
+            get => content;
+            set => content = (T)value;
         }
 
         /// <summary>
-        /// 获取 UTF8 字段名称的 Id64 值。
+        /// 获取该读写器数据源的类型。
         /// </summary>
-        /// <param name="firstSymbol">字段名称第一个字符的引用。</param>
-        /// <param name="length">字段名称长度</param>
-        /// <returns>返回 Id64 值</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public abstract long GetId64(ref Utf8Byte firstSymbol, int length);
+        public Type ContentType => typeof(T);
 
-        /// <summary>
-        /// 获取 UTF8 字段名称的 Id64 值。
-        /// </summary>
-        /// <param name="symbols">字段名称</param>
-        /// <returns>返回 Id64 值</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public long GetId64(IEnumerable<Utf8Byte> symbols)
-        {
-            var bytes =  symbols.ToArray();
+        IEnumerable<Ps<char>> IDataRW<Ps<char>>.Keys => StaticFastObjectRW<T>.UTF16Keys;
 
-            return GetId64(ref bytes[0], bytes.Length);
-        }
+        IEnumerable<Ps<char>> IDataReader<Ps<char>>.Keys => StaticFastObjectRW<T>.UTF16Keys;
 
-        /// <summary>
-        /// 获取字段 Id64 值为键的值到值写入器中。
-        /// </summary>
-        /// <param name="id64">Id64 值</param>
-        /// <param name="valueWriter">值写入器</param>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public abstract void OnReadValue(long id64, IValueWriter valueWriter);
+        IEnumerable<Ps<char>> IDataWriter<Ps<char>>.Keys => StaticFastObjectRW<T>.UTF16Keys;
 
-        /// <summary>
-        /// 从值读取器中读取值设置到字段 Id64 值为键的字段中。
-        /// </summary>
-        /// <param name="id64">Id64 值</param>
-        /// <param name="valueReader">值读取器</param>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public abstract void OnWriteValue(long id64, IValueReader valueReader);
+        IEnumerable<Ps<Utf8Byte>> IDataRW<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.UTF8Keys;
+
+        IEnumerable<Ps<Utf8Byte>> IDataReader<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.UTF8Keys;
+
+        IEnumerable<Ps<Utf8Byte>> IDataWriter<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.UTF8Keys;
+
+        IEnumerable<int> IDataRW<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+
+        IEnumerable<int> IDataReader<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+
+        IEnumerable<int> IDataWriter<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+
+        IValueWriter IDataWriter<int>.this[int key] => this[key];
+
+        IValueReader IDataReader<int>.this[int key] => this[key];
+
+        IValueReader IDataReader<string>.this[string key] => this[key];
+
+        IValueWriter IDataWriter<string>.this[string key] => this[key];
+
+        IValueReader IDataReader<Ps<char>>.this[Ps<char> key] => this[key];
+
+        IValueWriter IDataWriter<Ps<char>>.this[Ps<char> key] => this[key];
+
+        IValueReader IDataReader<Ps<Utf8Byte>>.this[Ps<Utf8Byte> key] => this[key];
+
+        IValueWriter IDataWriter<Ps<Utf8Byte>>.this[Ps<Utf8Byte> key] => this[key];
     }
 }

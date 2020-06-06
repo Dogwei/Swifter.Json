@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Swifter.Tools
 {
@@ -6,32 +7,39 @@ namespace Swifter.Tools
     {
         private abstract class ToObjectImpl
         {
-            private static readonly MyCache Impls = new MyCache();
+            private static readonly Dictionary<Type, ToObjectImpl> Impls = new Dictionary<Type, ToObjectImpl>();
 
-            public static object ToObject<TSource>(TSource value, Type outType) => Impls.GetOrCreate(outType).Convert(value);
-            
-            public abstract object Convert<TSource>(TSource value);
-
-            private sealed class MyCache : BaseCache<Type, ToObjectImpl>, BaseCache<Type, ToObjectImpl>.IGetOrCreate<Type>
+            public static object ToObject<TSource>(TSource value, Type outType)
             {
-                public MyCache() : base(0)
-                {
-                }
+                if (outType is null) throw new ArgumentNullException(nameof(outType));
+                if (Impls.TryGetValue(outType, out var impl)) return impl.Convert(value);
 
-                public Type AsKey(Type token) => token;
-
-                public ToObjectImpl AsValue(Type token) => (ToObjectImpl)Activator.CreateInstance(typeof(Internal<>).MakeGenericType(token));
-
-                public ToObjectImpl GetOrCreate(Type token) => GetOrCreate<MyCache>(this, token);
-
-                protected override int ComputeHashCode(Type key) => key.GetHashCode();
-
-                protected override bool Equals(Type key1, Type key2) => key1 == key2;
+                return InternalToObject(value, outType);
             }
 
-            private sealed class Internal<TDestination> : ToObjectImpl
+            public static object InternalToObject<TSource>(TSource value, Type outType)
             {
-                public override object Convert<TSource>(TSource value) => XConvert<TDestination>.Convert(value);
+                lock (Impls)
+                {
+                    if (!Impls.TryGetValue(outType, out var impl))
+                    {
+                        var implType = typeof(Impl<>).MakeGenericType(outType);
+
+                        impl = (ToObjectImpl)Activator.CreateInstance(implType);
+
+                        Impls.Add(outType, impl);
+                    }
+
+                    return impl.Convert(value);
+                }
+            }
+
+            public abstract object Convert<TSource>(TSource value);
+
+
+            private sealed class Impl<TDestination> : ToObjectImpl
+            {
+                public override object Convert<TSource>(TSource value) => Convert<TSource, TDestination>(value);
             }
         }
     }

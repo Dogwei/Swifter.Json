@@ -10,54 +10,26 @@ namespace Swifter.RW
         {
             var dictionaryRW = new DictionaryRW<T, TKey, TValue>();
 
-            if (typeof(TKey) == typeof(string))
-            {
-                valueReader.ReadObject(Unsafe.As<IDataWriter<string>>(dictionaryRW));
-            }
-            else
-            {
-                if (valueReader is IMapValueReader mapReader)
-                {
-                    mapReader.ReadMap(dictionaryRW);
-                }
-                else
-                {
-                    valueReader.ReadObject(dictionaryRW.As<string>());
-                }
-            }
+            valueReader.ReadObject(dictionaryRW.As<string>());
 
-            return dictionaryRW.Content;
+            return dictionaryRW.content;
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
 
                 return;
             }
 
-            var dictionaryRW = new DictionaryRW<T, TKey, TValue>();
-
-            dictionaryRW.Initialize(value);
-
-            if (typeof(TKey) == typeof(string))
+            var dictionaryRW = new DictionaryRW<T, TKey, TValue>
             {
-                valueWriter.WriteObject(Unsafe.As<IDataReader<string>>(dictionaryRW));
-            }
-            else
-            {
-                if (valueWriter is IMapValueWriter mapWriter)
-                {
-                    mapWriter.WriteMap(dictionaryRW);
-                }
-                else
-                {
-                    valueWriter.WriteObject(dictionaryRW.As<string>());
-                }
-            }
+                content = value
+            };
 
+            valueWriter.WriteObject(dictionaryRW.As<string>());
         }
     }
 }

@@ -210,6 +210,17 @@ namespace Swifter.RW
         }
 
         /// <summary>
+        /// 写入一个枚举值。
+        /// </summary>
+        /// <typeparam name="T">枚举类型</typeparam>
+        /// <param name="value">枚举值</param>
+        public void WriteEnum<T>(T value) where T : struct, Enum
+        {
+            valueCopyer.WriteEnum(value);
+            dataWriter.OnWriteValue(key, valueCopyer);
+        }
+
+        /// <summary>
         /// 获取值读写器的名称。
         /// </summary>
         /// <returns>返回一个名称</returns>

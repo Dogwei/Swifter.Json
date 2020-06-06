@@ -1,6 +1,7 @@
-﻿
-
+﻿using Swifter.Tools;
 using System;
+using System.Linq;
+using System.Reflection;
 
 namespace Swifter.RW
 {
@@ -20,48 +21,39 @@ namespace Swifter.RW
 
             var value = valueReader.DirectRead();
 
-            if (value == null)
+            if (value is string typeName && Type.GetType(typeName) is T result)
             {
-                return null;
+                return result;
             }
 
-            if (value is T tValue)
-            {
-                return tValue;
-            }
-
-            if (value is string sValue)
-            {
-                return (T)Type.GetType(sValue);
-            }
-
-            throw new NotSupportedException($"Cannot Read a 'TypeInfo' by '{value}'.");
+            return XConvert<T>.FromObject(value);
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<T> tWriter)
+            else if (valueWriter is IValueWriter<T> tWriter)
             {
                 tWriter.WriteValue(value);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<Type> typeWriter)
+            else if (valueWriter is IValueWriter<Type> typeWriter)
             {
                 typeWriter.WriteValue(value);
-
-                return;
             }
-
-            valueWriter.WriteString(value.AssemblyQualifiedName);
+            else
+            {
+                if (value.Assembly == typeof(object).Assembly)
+                {
+                    valueWriter.WriteString(value.FullName);
+                }
+                else
+                {
+                    valueWriter.WriteString(value.AssemblyQualifiedName);
+                }
+            }
         }
     }
 }

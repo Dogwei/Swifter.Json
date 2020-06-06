@@ -1,0 +1,38 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ Assembly name="$(TargetPath)" #>
+<#@ import namespace="Swifter.Tools" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Reflection" #>
+<#@ import namespace="static Swifter.Tools.BasicConvert" #>
+<#@ output extension=".cs" #>
+
+<# 
+
+var ClassName = "BasicConvert";
+var methods = GetConvertMethods(); 
+
+#>
+
+using System;
+
+namespace Swifter.Tools
+{
+	partial class <#= ClassName #> :
+<# foreach(var method in methods) { #>
+		IXConvert<<#= GetCodeName(method.GetParameters()[0].ParameterType) #>, <#= GetCodeName(method.ReturnType) #>>,
+<# } #>
+		I<#= ClassName #>
+	{
+<# foreach(var method in methods) { #>
+		<#= GetCodeName(method.ReturnType) #> IXConvert<<#= GetCodeName(method.GetParameters()[0].ParameterType) #>, <#= GetCodeName(method.ReturnType) #>>.Convert(<#= GetCodeName(method.GetParameters()[0].ParameterType) #> value)
+			=> <#= GetCodeName(method.DeclaringType) #>.<#= method.Name #>(value);
+
+<# } #>
+	}
+
+	interface I<#= ClassName #> {}
+
+}

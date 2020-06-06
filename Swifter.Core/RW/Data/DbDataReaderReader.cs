@@ -1,36 +1,37 @@
-﻿using Swifter.RW;
-using Swifter.Tools;
+﻿using Swifter.Tools;
 
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
+using DbDataReader = System.Data.IDataReader;
+
 namespace Swifter.RW
 {
     /// <summary>
-    /// 重写数据库读取器，使它成为表格读取器。
+    /// DB 读取器的读取器。
     /// </summary>
     sealed class DbDataReaderReader : IDataReader<int>
     {
         /// <summary>
         /// 数据源。
         /// </summary>
-        public readonly System.Data.IDataReader dbDataReader;
+        readonly DbDataReader dbDataReader;
 
-        public readonly RowReader Reader;
+        readonly RowReader Reader;
 
-        public readonly DataTableRWOptions Options;
+        readonly DataTableRWOptions Options;
 
         /// <summary>
         /// 初始化数据读取器。
         /// </summary>
         /// <param name="dbDataReader">数据源</param>
         /// <param name="options">配置项</param>
-        public DbDataReaderReader(System.Data.IDataReader dbDataReader, DataTableRWOptions options = DataTableRWOptions.None)
+        public DbDataReaderReader(DbDataReader dbDataReader, DataTableRWOptions options = DataTableRWOptions.None)
         {
-            this.dbDataReader = dbDataReader;
-
             Options = options;
+
+            this.dbDataReader = dbDataReader;
 
             Reader = new RowReader(dbDataReader);
         }
@@ -40,22 +41,31 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="key">指定索引</param>
         /// <returns>返回值读取器</returns>
-        public IValueReader this[int key] => new ReadCopyer<int>(this, key);
+        public IValueReader this[int key] => throw new NotSupportedException();
 
         /// <summary>
         /// 获取表格列的数量。
         /// </summary>
-        public int Count => 0;
+        public int Count => -1;
 
         /// <summary>
         /// 获取表格列的名称集合。
         /// </summary>
-        public IEnumerable<int> Keys => null;
+        public IEnumerable<int> Keys => throw new NotSupportedException();
 
         /// <summary>
-        /// 获取数据源的 Id。
+        /// 获取数据源的类型。
         /// </summary>
-        public object ReferenceToken => null;
+        public Type ContentType => null;
+
+        /// <summary>
+        /// 获取或设置数据源。
+        /// </summary>
+        public object Content
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
 
         /// <summary>
         /// 读取所有值当前行的所有值，然后写入到数据写入器中。
@@ -82,37 +92,16 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="key">指定位置</param>
         /// <param name="valueWriter">值写入器</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void OnReadValue(int key, IValueWriter valueWriter)
-        {
-            if (dbDataReader.Read())
-            {
-                valueWriter.WriteObject(Reader);
-            }
-            else
-            {
-                valueWriter.DirectWrite(null);
-            }
-        }
+        public void OnReadValue(int key, IValueWriter valueWriter) => throw new NotSupportedException();
 
-        /// <summary>
-        /// 读取当前行的所有数据并进行筛选，然后将筛选结果写入器数据写入器中。
-        /// </summary>
-        /// <param name="dataWriter">数据写入器</param>
-        /// <param name="valueFilter">值筛选器</param>
-        public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
-        {
-            OnReadAll(new DataFilterWriter<int>(dataWriter, valueFilter));
-        }
-
-        public sealed class RowReader : IDataReader<string>, IDataReader<int>
+        sealed class RowReader : IDataReader<string>, IDataReader<int>
         {
             /// <summary>
             /// 数据源。
             /// </summary>
-            public readonly System.Data.IDataReader dbDataReader;
+            public DbDataReader dbDataReader;
 
-            public RowReader(System.Data.IDataReader dbDataReader)
+            public RowReader(DbDataReader dbDataReader)
             {
                 this.dbDataReader = dbDataReader;
             }
@@ -121,13 +110,19 @@ namespace Swifter.RW
 
             public IValueReader this[int key] => new ValueReader(dbDataReader, key);
 
-            public IEnumerable<string> Keys => ArrayHelper.CreateNamesIterator(dbDataReader);
+            IEnumerable<string> IDataReader<string>.Keys => ArrayHelper.CreateNamesIterator(dbDataReader);
 
-            IEnumerable<int> IDataReader<int>.Keys => null;
+            IEnumerable<int> IDataReader<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
 
             public int Count => dbDataReader.FieldCount;
 
-            public object ReferenceToken => dbDataReader;
+            public Type ContentType => null;
+
+            public object Content
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
 
             public void OnReadAll(IDataWriter<string> dataWriter)
             {
@@ -137,22 +132,12 @@ namespace Swifter.RW
                 }
             }
 
-            public void OnReadAll(IDataWriter<string> dataWriter, IValueFilter<string> valueFilter)
-            {
-                OnReadAll(new DataFilterWriter<string>(dataWriter, valueFilter));
-            }
-
             public void OnReadAll(IDataWriter<int> dataWriter)
             {
                 for (int i = 0; i < dbDataReader.FieldCount; i++)
                 {
                     ValueInterface.WriteValue(dataWriter[i], dbDataReader[i]);
                 }
-            }
-
-            public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
-            {
-                OnReadAll(new DataFilterWriter<int>(dataWriter, valueFilter));
             }
 
             public void OnReadValue(string key, IValueWriter valueWriter)
@@ -166,32 +151,30 @@ namespace Swifter.RW
             }
         }
 
-        public sealed class ValueReader : IValueReader
+        sealed class ValueReader : IValueReader
         {
-            public readonly System.Data.IDataReader dbDataReader;
+            public readonly DbDataReader dbDataReader;
             public readonly int ordinal;
 
-            public ValueReader(System.Data.IDataReader dbDataReader, int ordinal)
+            public ValueReader(DbDataReader dbDataReader, int ordinal)
             {
                 this.dbDataReader = dbDataReader;
                 this.ordinal = ordinal;
             }
 
-            public void ReadArray(IDataWriter<int> valueWriter)
-            {
-                throw new NotSupportedException($"Type '{nameof(DbDataReaderReader)}' not support '{nameof(ReadArray)}'.");
-            }
+            public void ReadArray(IDataWriter<int> valueWriter) => ValueCopyer.ValueOf(DirectRead()).ReadArray(valueWriter);
 
-            public bool ReadBoolean() => Convert.ToBoolean(dbDataReader[ordinal]);
+            public bool ReadBoolean() => Convert.ToBoolean(DirectRead());
 
-            public byte ReadByte() => Convert.ToByte(dbDataReader[ordinal]);
+            public byte ReadByte() => Convert.ToByte(DirectRead());
 
-            public char ReadChar() => Convert.ToChar(dbDataReader[ordinal]);
+            public char ReadChar() => Convert.ToChar(DirectRead());
 
-            public DateTime ReadDateTime() => Convert.ToDateTime(dbDataReader[ordinal]);
+            public DateTime ReadDateTime() => Convert.ToDateTime(DirectRead());
 
-            public decimal ReadDecimal() => Convert.ToDecimal(dbDataReader[ordinal]);
+            public decimal ReadDecimal() => Convert.ToDecimal(DirectRead());
 
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
             public object DirectRead()
             {
                 var value = dbDataReader[ordinal];
@@ -204,32 +187,31 @@ namespace Swifter.RW
                 return value;
             }
 
-            public double ReadDouble() => Convert.ToDouble(dbDataReader[ordinal]);
+            public double ReadDouble() => Convert.ToDouble(DirectRead());
 
-            public short ReadInt16() => Convert.ToInt16(dbDataReader[ordinal]);
+            public short ReadInt16() => Convert.ToInt16(DirectRead());
 
-            public int ReadInt32() => Convert.ToInt32(dbDataReader[ordinal]);
+            public int ReadInt32() => Convert.ToInt32(DirectRead());
 
-            public long ReadInt64() => Convert.ToInt64(dbDataReader[ordinal]);
+            public long ReadInt64() => Convert.ToInt64(DirectRead());
 
-            public void ReadObject(IDataWriter<string> valueWriter)
-            {
-                throw new NotSupportedException($"Type '{nameof(DbDataReaderReader)}' not support '{nameof(ReadObject)}'.");
-            }
+            public void ReadObject(IDataWriter<string> valueWriter) => ValueCopyer.ValueOf(DirectRead()).ReadObject(valueWriter);
 
-            public sbyte ReadSByte() => Convert.ToSByte(dbDataReader[ordinal]);
+            public sbyte ReadSByte() => Convert.ToSByte(DirectRead());
 
-            public float ReadSingle() => Convert.ToSingle(dbDataReader[ordinal]);
+            public float ReadSingle() => Convert.ToSingle(DirectRead());
 
-            public string ReadString() => Convert.ToString(dbDataReader[ordinal]);
+            public string ReadString() => Convert.ToString(DirectRead());
 
-            public ushort ReadUInt16() => Convert.ToUInt16(dbDataReader[ordinal]);
+            public ushort ReadUInt16() => Convert.ToUInt16(DirectRead());
 
-            public uint ReadUInt32() => Convert.ToUInt32(dbDataReader[ordinal]);
+            public uint ReadUInt32() => Convert.ToUInt32(DirectRead());
 
-            public ulong ReadUInt64() => Convert.ToUInt64(dbDataReader[ordinal]);
+            public ulong ReadUInt64() => Convert.ToUInt64(DirectRead());
 
-            public T? ReadNullable<T>() where T : struct => XConvert.FromObject<T>(DirectRead());
+            public TValue? ReadNullable<TValue>() where TValue : struct => XConvert.FromObject<TValue?>(DirectRead());
+
+            public TValue ReadEnum<TValue>() where TValue : struct, Enum => XConvert.FromObject<TValue>(DirectRead());
         }
     }
 }

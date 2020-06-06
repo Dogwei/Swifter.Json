@@ -4,14 +4,24 @@ using System.Runtime.CompilerServices;
 
 namespace Swifter.Reflection
 {
-    internal sealed class XCache
+    sealed class XCache
     {
-        static readonly XTypeInfo[] empty = new XTypeInfo[0];
-        static readonly TypeCache<XCache> cache = new TypeCache<XCache>();
-        
-        public static XCache Get<T>() => Generic<T>.instance;
-        
-        public static XCache Get(Type type) => cache.GetValue(type) ?? TypeHelper.SlowGetValue<XCache>(typeof(Generic<>).MakeGenericType(type), nameof(Generic<object>.instance));
+        static readonly XTypeInfo[] EmptyXTypeInfos = new XTypeInfo[0];
+        static readonly Cache<Type, XCache> TypeCache = new Cache<Type, XCache>();
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static XCache Get<T>() => Generic<T>.Instance;
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static XCache Get(Type type)
+        {
+            if (TypeCache.TryGetValue(type, out var xCache))
+            {
+                return xCache;
+            }
+
+            return TypeHelper.SlowGetValue<XCache>(typeof(Generic<>).MakeGenericType(type), nameof(Generic<object>.Instance));
+        }
 
         Type type;
         XTypeInfo[] xTypeInfos;
@@ -52,13 +62,19 @@ namespace Swifter.Reflection
 
         sealed class Generic<T>
         {
-            public static readonly XCache instance;
+            public static readonly XCache Instance;
 
             static Generic()
             {
-                instance = new XCache() { type = typeof(T), xTypeInfos = empty };
+                lock (typeof(Generic<T>))
+                {
+                    if (Instance == null)
+                    {
+                        Instance = new XCache() { type = typeof(T), xTypeInfos = EmptyXTypeInfos };
 
-                cache.DirectAdd(typeof(T), instance);
+                        TypeCache.Add(typeof(T), Instance);
+                    }
+                }
             }
         }
     }

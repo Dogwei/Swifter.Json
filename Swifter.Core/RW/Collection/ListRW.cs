@@ -8,13 +8,13 @@ using System.Collections.Generic;
 namespace Swifter.RW
 {
 
-    internal sealed class ListRW<T> : IDataRW<int>, IDirectContent where T : IList
+    internal sealed class ListRW<T> : IDataRW<int> where T : IList
     {
         public const int DefaultCapacity = 3;
 
-        internal T content;
+        static readonly bool IsAssignableFromArrayList = typeof(T).IsAssignableFrom(typeof(ArrayList));
 
-        public T Content => content;
+        internal T content;
 
         public ValueCopyer<int> this[int key] => new ValueCopyer<int>(this, key);
 
@@ -26,9 +26,13 @@ namespace Swifter.RW
 
         public int Count => content.Count;
 
-        object IDirectContent.DirectContent { get => content; set => content = (T)value; }
+        public object Content
+        {
+            get => content;
+            set => content = (T)value;
+        }
 
-        public object ReferenceToken => content;
+        public Type ContentType => typeof(T);
 
         IValueRW IDataRW<int>.this[int key] => this[key];
 
@@ -37,16 +41,11 @@ namespace Swifter.RW
             Initialize(DefaultCapacity);
         }
 
-        public void Initialize(T content)
-        {
-            this.content = content;
-        }
-
         public void Initialize(int capacity)
         {
-            if (typeof(T) == typeof(ArrayList) || typeof(T).IsAssignableFrom(typeof(ArrayList)))
+            if (IsAssignableFromArrayList)
             {
-                content = (T)(object)new ArrayList(capacity);
+                Underlying.As<T, ArrayList>(ref content) = new ArrayList(capacity);
             }
             else
             {
@@ -72,35 +71,13 @@ namespace Swifter.RW
 
         public void OnWriteValue(int key, IValueReader valueReader)
         {
-            if (key >= content.Count)
+            if (key == Count)
             {
                 content.Add(ValueInterface<object>.ReadValue(valueReader));
             }
             else
             {
                 content[key] = ValueInterface<object>.ReadValue(valueReader);
-            }
-        }
-
-        public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
-        {
-            int length = content.Count;
-
-            var valueInfo = new ValueFilterInfo<int>();
-
-            for (int i = 0; i < length; i++)
-            {
-                var value = content[i];
-
-                ValueInterface.WriteValue(valueInfo.ValueCopyer, value);
-
-                valueInfo.Key = i;
-                valueInfo.Type = typeof(object);
-
-                if (valueFilter.Filter(valueInfo))
-                {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
-                }
             }
         }
 

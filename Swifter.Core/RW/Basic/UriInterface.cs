@@ -18,7 +18,7 @@ namespace Swifter.RW
 
         public void WriteValue(IValueWriter valueWriter, Uri value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
 

@@ -1,10 +1,9 @@
-﻿
-
-using System;
+﻿using Swifter.Tools;
+using System.Reflection;
 
 namespace Swifter.RW
 {
-    internal sealed class AssemblyInterface<T> : IValueInterface<T> where T : System.Reflection.Assembly
+    internal sealed class AssemblyInterface<T> : IValueInterface<T> where T : Assembly
     {
         public T ReadValue(IValueReader valueReader)
         {
@@ -13,55 +12,39 @@ namespace Swifter.RW
                 return tReader.ReadValue();
             }
 
-            if (valueReader is IValueReader<System.Reflection.Assembly> assemblyReader)
+            if (valueReader is IValueReader<Assembly> assemblyReader)
             {
                 return (T)assemblyReader.ReadValue();
             }
 
             var value = valueReader.DirectRead();
 
-            if (value == null)
+            if (value is string sssemblyString && Assembly.Load(sssemblyString) is T result)
             {
-                return null;
+                return result;
             }
 
-            if (value is T tValue)
-            {
-                return tValue;
-            }
-
-            if (value is string sValue)
-            {
-                return (T)System.Reflection.Assembly.Load(sValue);
-            }
-
-            throw new NotSupportedException($"Cannot Read a 'Assembly' by '{value}'.");
+            return XConvert<T>.FromObject(value);
         }
 
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<T> tWriter)
+            else if (valueWriter is IValueWriter<T> tWriter)
             {
                 tWriter.WriteValue(value);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<System.Reflection.Assembly> assemblyWriter)
+            else if (valueWriter is IValueWriter<Assembly> assemblyWriter)
             {
                 assemblyWriter.WriteValue(value);
-
-                return;
             }
-
-            valueWriter.WriteString(value.FullName);
+            else
+            {
+                valueWriter.WriteString(value.FullName);
+            }
         }
     }
 }

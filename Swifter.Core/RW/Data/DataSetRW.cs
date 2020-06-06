@@ -10,26 +10,28 @@ namespace Swifter.RW
     /// <summary>
     /// System.Data.DataSet Reader impl.
     /// </summary>
-    internal sealed class DataSetRW<T> : IDataRW<int>, IInitialize<T>where T:DataSet
+    internal sealed class DataSetRW<T> : IDataRW<int> where T:DataSet
     {
-        IValueRW IDataRW<int>.this[int key] => new ValueCopyer<int>(this, key);
+        public IValueRW this[int key] => new ValueCopyer<int>(this, key);
 
-        IValueReader IDataReader<int>.this[int key] => new ValueCopyer<int>(this, key);
+        IValueReader IDataReader<int>.this[int key] => this[key];
 
-        IValueWriter IDataWriter<int>.this[int key]=> throw new NotSupportedException();
+        IValueWriter IDataWriter<int>.this[int key]=> this[key];
 
         public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
 
-        public int Count => Content.Tables.Count;
+        public int Count => dataset.Tables.Count;
 
-        public object ReferenceToken => Content;
-
-        public T Content { get; private set; }
-
-        public void Initialize(T obj)
+        public object Content
         {
-            Content = obj;
+            get => dataset;
+            set => dataset = (T)value;
         }
+
+        public Type ContentType => typeof(T);
+
+        public T dataset;
+
 
         public void Initialize()
         {
@@ -38,66 +40,52 @@ namespace Swifter.RW
 
         public void Initialize(int capacity)
         {
-            if (Content == null)
+            if (typeof(T) == typeof(DataSet))
             {
-                if (typeof(T) == typeof(DataSet))
-                {
-                    Content = (T)new DataSet();
-                }
-                else
-                {
-                    Content = Activator.CreateInstance<T>();
-                }
+                Underlying.As<T, DataSet>(ref dataset) = new DataSet();
+            }
+            else
+            {
+                dataset = Activator.CreateInstance<T>();
             }
         }
 
         public void OnReadAll(IDataWriter<int> dataWriter)
         {
-            var length = Content.Tables.Count;
+            var length = dataset.Tables.Count;
 
             for (int i = 0; i < length; i++)
             {
-                OnReadValue(i, dataWriter[i]);
-            }
-        }
-
-        public void OnReadAll(IDataWriter<int> dataWriter, IValueFilter<int> valueFilter)
-        {
-            var valueInfo = new ValueFilterInfo<int>();
-
-            for (int i = 0; i < Content.Tables.Count; i++)
-            {
-                OnReadValue(i, valueInfo.ValueCopyer);
-
-                valueInfo.Key = i;
-                valueInfo.Type = typeof(DataTable);
-
-                if (valueFilter.Filter(valueInfo))
-                {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
-                }
+                ValueInterface<DataTable>.WriteValue(dataWriter[i], dataset.Tables[i]);
             }
         }
 
         public void OnReadValue(int key, IValueWriter valueWriter)
         {
-            ValueInterface<DataTable>.WriteValue(valueWriter, Content.Tables[key]);
+            ValueInterface<DataTable>.WriteValue(valueWriter, dataset.Tables[key]);
         }
 
         public void OnWriteAll(IDataReader<int> dataReader)
         {
-            throw new NotSupportedException($"'{typeof(T)}' not supported set tables.");
+            var length = dataset.Tables.Count;
+
+            dataset.Clear();
+
+            for (int i = 0; i < length; i++)
+            {
+                dataset.Tables.Add(ValueInterface<DataTable>.ReadValue(dataReader[i]));
+            }
         }
 
         public void OnWriteValue(int key, IValueReader valueReader)
         {
-            if (key == Content.Tables.Count)
+            if (key == Count)
             {
-                Content.Tables.Add(ValueInterface<DataTable>.ReadValue(valueReader));
+                dataset.Tables.Add(ValueInterface<DataTable>.ReadValue(valueReader));
             }
             else
             {
-                throw new NotSupportedException($"'{typeof(T)}' not supported set tables.");
+                throw new NotSupportedException();
             }
         }
     }

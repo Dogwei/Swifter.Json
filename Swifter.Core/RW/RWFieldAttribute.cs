@@ -1,8 +1,8 @@
 ﻿
 using Swifter.Tools;
-
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 namespace Swifter.RW
@@ -52,7 +52,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (targetType == null)
+            if (targetType is null)
             {
                 foreach (var item in interfaces)
                 {
@@ -65,7 +65,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (targetType == null)
+            if (targetType is null)
             {
                 foreach (var item in interfaces)
                 {
@@ -78,7 +78,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (targetType == null)
+            if (targetType is null)
             {
                 GetBestMatchRWMethod(interfaceType, fieldType, out readValueMethod, out writeValueMethod);
 
@@ -89,7 +89,7 @@ namespace Swifter.RW
 
             var methods = interfaceMap.TargetMethods;
 
-            if (!interfaceType.IsVisible)
+            if (!interfaceType.IsExternalVisible())
             {
                 methods = interfaceMap.InterfaceMethods;
             }
@@ -115,7 +115,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (readValueMethod == null || writeValueMethod == null)
+            if (readValueMethod is null || writeValueMethod is null)
             {
                 readValueMethod = null;
                 writeValueMethod = null;
@@ -136,21 +136,17 @@ namespace Swifter.RW
 
             var methods = interfaceType.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance);
 
-            var readers = ArrayHelper.Filter(
-                methods, 
-                item => item.Name == nameof(IValueInterface<object>.ReadValue) 
+            var readers = methods.Where(
+                item => item.Name == nameof(IValueInterface<object>.ReadValue)
                     && item.GetParameters().Length == 1
-                    && item.ReturnType != typeof(void) 
-                    && item.GetParameters()[0].ParameterType == typeof(IValueReader), 
-                item => item);
+                    && item.ReturnType != typeof(void)
+                    && item.GetParameters()[0].ParameterType == typeof(IValueReader));
 
-            var writers = ArrayHelper.Filter(
-                methods,
-                item => item.Name == nameof(IValueInterface<object>.WriteValue) 
-                    && item.GetParameters().Length == 2 
-                    && item.ReturnType == typeof(void) 
-                    && item.GetParameters()[0].ParameterType == typeof(IValueWriter),
-                item => item);
+            var writers = methods.Where(
+                item => item.Name == nameof(IValueInterface<object>.WriteValue)
+                    && item.GetParameters().Length == 2
+                    && item.ReturnType == typeof(void)
+                    && item.GetParameters()[0].ParameterType == typeof(IValueWriter));
 
             foreach (var item in readers)
             {
@@ -168,7 +164,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (readValueMethod == null)
+            if (readValueMethod is null)
             {
                 foreach (var item in readers)
                 {
@@ -184,7 +180,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (writeValueMethod == null)
+            if (writeValueMethod is null)
             {
                 foreach (var item in writers)
                 {
@@ -200,7 +196,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (readValueMethod == null)
+            if (readValueMethod is null)
             {
                 foreach (var item in readers)
                 {
@@ -211,7 +207,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (writeValueMethod == null)
+            if (writeValueMethod is null)
             {
                 foreach (var item in writers)
                 {
@@ -222,7 +218,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (readValueMethod == null)
+            if (readValueMethod is null)
             {
                 foreach (var item in readers)
                 {
@@ -233,7 +229,7 @@ namespace Swifter.RW
                 }
             }
 
-            if (writeValueMethod == null)
+            if (writeValueMethod is null)
             {
                 foreach (var item in writers)
                 {
@@ -289,7 +285,10 @@ namespace Swifter.RW
             throw new NotSupportedException("Unsupported The InterfaceType.");
         }
 
-
+        /// <summary>
+        /// 获取或设置字段的值读写接口类型。
+        /// </summary>
+        public virtual Type InterfaceType { get; set; }
 
         /// <summary>
         /// 初始化对象读取器的一个字段的特性。
@@ -324,8 +323,18 @@ namespace Swifter.RW
         public virtual RWFieldAccess Access { get; set; } = RWFieldAccess.RW;
 
         /// <summary>
-        /// 获取或设置字段的值读写接口类型。
+        /// 是否在 OnReadAll 中跳过当前成员的默认值。
         /// </summary>
-        public virtual Type InterfaceType { get; set; }
+        public virtual RWBoolean SkipDefaultValue { get; set; }
+
+        /// <summary>
+        /// 是否字段不能读取值时发生异常。
+        /// </summary>
+        public  virtual RWBoolean CannotGetException { get; set; }
+
+        /// <summary>
+        /// 是否字段不能写入值时发生异常。
+        /// </summary>
+        public virtual RWBoolean CannotSetException { get; set; }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Swifter.Tools;
 using System;
+using System.Buffers;
 using System.Reflection;
 
 namespace Swifter.Reflection
@@ -10,7 +11,7 @@ namespace Swifter.Reflection
     /// </summary>
     public sealed class XMethodInfo
     {
-        /// <summary>T
+        /// <summary>
         /// 创建 XMethodInfo 方法信息。
         /// </summary>
         /// <param name="methodInfo">.Net 自带 MethodInfo 方法信息</param>
@@ -44,9 +45,9 @@ namespace Swifter.Reflection
         public Delegate Delegate { get; private set; }
 
         /// <summary>
-        /// 动态执行该方法。
+        /// 以实例方式动态执行方法。
         /// </summary>
-        /// <param name="obj">类型的实例。如果是静态方法，则指定为 Null</param>
+        /// <param name="obj">调用实例</param>
         /// <param name="parameters">方法的参数</param>
         /// <returns>返回该方法的返回值。如果返回值类型为 Void，则返回 Null</returns>
         public object Invoke(object obj, object[] parameters)
@@ -60,7 +61,7 @@ namespace Swifter.Reflection
         }
 
         /// <summary>
-        /// 动态执行该静态方法。
+        /// 以静态方式动态执行方法。
         /// </summary>
         /// <param name="parameters">方法的参数</param>
         /// <returns>返回该方法的返回值。如果返回值类型为 Void，则返回 Null</returns>

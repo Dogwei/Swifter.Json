@@ -11,6 +11,11 @@ namespace Swifter.Json
     public interface IJsonWriter : IValueWriter
     {
         /// <summary>
+        /// 获取当前已写入的字符数。
+        /// </summary>
+        int Offset { get; }
+
+        /// <summary>
         /// 设置已写入的 JSON 内容长度到 HGCache 的内容数量中。
         /// </summary>
         void Flush();
@@ -57,5 +62,11 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="name">字段名称</param>
         void WritePropertyName(string name);
+
+        /// <summary>
+        /// 将当前内容转换为字符串。
+        /// </summary>
+        /// <returns>返回一个字符串</returns>
+        string ToString();
     }
 }

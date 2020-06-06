@@ -15,7 +15,7 @@ namespace Swifter.RW
 
             var versionText = valueReader.ReadString();
 
-            if (versionText == null)
+            if (versionText is null)
             {
                 return null;
             }
@@ -25,7 +25,7 @@ namespace Swifter.RW
 
         public void WriteValue(IValueWriter valueWriter, Version value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
 

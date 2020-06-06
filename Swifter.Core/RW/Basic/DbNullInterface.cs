@@ -10,7 +10,7 @@ namespace Swifter.RW
         {
             var value = valueReader.DirectRead();
 
-            if (value == null || value == DBNull.Value)
+            if (value is null || value == DBNull.Value)
             {
                 return DBNull.Value;
             }

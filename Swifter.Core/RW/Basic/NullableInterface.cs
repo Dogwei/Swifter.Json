@@ -12,7 +12,7 @@ namespace Swifter.RW
 
         public void WriteValue(IValueWriter valueWriter, T? value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
             }

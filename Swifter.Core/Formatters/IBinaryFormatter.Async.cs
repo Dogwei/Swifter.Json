@@ -1,10 +1,16 @@
-﻿#if NET45 || NET451 || NET47 || NET471 || NETSTANDARD || NETCOREAPP
+﻿#if Async
 
 
 using Swifter.RW;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+
+#if ValueTask
+
+using Task = System.Threading.Tasks.ValueTask;
+
+#endif
 
 namespace Swifter.Formatters
 {
@@ -16,7 +22,12 @@ namespace Swifter.Formatters
         /// <typeparam name="T">指定类型</typeparam>
         /// <param name="stream">字节数据源读取流</param>
         /// <returns>指定类型的值</returns>
-        Task<T> DeserializeAsync<T>(Stream stream);
+#if ValueTask
+        ValueTask<T>
+#else
+        Task<T>
+#endif
+        DeserializeAsync<T>(Stream stream);
 
 
         /// <summary>
@@ -25,7 +36,12 @@ namespace Swifter.Formatters
         /// <param name="stream">字节码数据源读取流</param>
         /// <param name="type">指定类型</param>
         /// <returns>指定类型的值</returns>
-        Task<object> DeserializeAsync(Stream stream, Type type);
+#if ValueTask
+        ValueTask<object>
+#else
+        Task<object>
+#endif
+        DeserializeAsync(Stream stream, Type type);
 
         /// <summary>
         /// 异步将字节数据源反序列化到指定的数据写入器中。

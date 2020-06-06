@@ -14,7 +14,7 @@ namespace Swifter.RW
         /// <summary>
         /// 原始数据写入器。
         /// </summary>
-        IDataWriter Content { get; }
+        IDataWriter Original { get; }
 
         /// <summary>
         /// 执行输入类型。
@@ -34,7 +34,7 @@ namespace Swifter.RW
     /// </summary>
     /// <typeparam name="TIn">输入类型</typeparam>
     /// <typeparam name="TOut">输出类型</typeparam>
-    public sealed class AsDataWriter<TIn, TOut> : IDataWriter<TOut>, IAsDataWriter, IDirectContent
+    public sealed class AsDataWriter<TIn, TOut> : IDataWriter<TOut>, IAsDataWriter
     {
         /// <summary>
         /// 原始数据写入器。
@@ -60,38 +60,31 @@ namespace Swifter.RW
         /// <summary>
         /// 获取转换后的键集合。
         /// </summary>
-        public IEnumerable<TOut> Keys => ArrayHelper.CreateAsIterator<TIn, TOut>(dataWriter.Keys);
+        public IEnumerable<TOut> Keys => ArrayHelper.CreateConvertIterator<TIn, TOut>(dataWriter.Keys);
 
         /// <summary>
         /// 获取数据源键的数量。
         /// </summary>
         public int Count => dataWriter.Count;
 
-        IDataWriter IAsDataWriter.Content => dataWriter;
+        /// <summary>
+        /// 获取原数据写入器。
+        /// </summary>
+        public IDataWriter Original => dataWriter;
 
-        object IDirectContent.DirectContent
+        /// <summary>
+        /// 获取或设置原数据写入器的数据源。
+        /// </summary>
+        public object Content
         {
-            get
-            {
-                if (dataWriter is IDirectContent directContent)
-                {
-                    return directContent.DirectContent;
-                }
-
-                throw new NotSupportedException($"This data {"writer"} does not support direct {"get"} content.");
-            }
-            set
-            {
-                if (dataWriter is IDirectContent directContent)
-                {
-                    directContent.DirectContent = value;
-
-                    return;
-                }
-
-                throw new NotSupportedException($"This data {"writer"} does not support direct {"set"} content.");
-            }
+            get => dataWriter.Content;
+            set => dataWriter.Content = value;
         }
+
+        /// <summary>
+        /// 获取原数据写入器的数据源类型。
+        /// </summary>
+        public Type ContentType => dataWriter.ContentType;
 
         /// <summary>
         /// 初始化数据源。

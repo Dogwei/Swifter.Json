@@ -1,5 +1,4 @@
-﻿
-#if NET45 || NET451 || NET47 || NET471 || NETSTANDARD || NETCOREAPP
+﻿#if Async
 
 
 using System;
@@ -7,6 +6,20 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+
+#if ValueTask
+
+using Task = System.Threading.Tasks.ValueTask;
+using ReadToEndTask = System.Threading.Tasks.ValueTask<System.ArraySegment<byte>>;
+using ReadToEndCharsTask = System.Threading.Tasks.ValueTask<System.ArraySegment<char>>;
+
+#else
+
+using Task = System.Threading.Tasks.Task;
+using ReadToEndTask = System.Threading.Tasks.Task<System.ArraySegment<byte>>;
+using ReadToEndCharsTask = System.Threading.Tasks.Task<System.ArraySegment<char>>;
+
+#endif
 
 namespace Swifter.Tools
 {
@@ -19,7 +32,7 @@ namespace Swifter.Tools
         /// <param name="textWriter">文本写入器</param>
         public static async Task WriteToAsync(this HGlobalCache<char> hGCache, TextWriter textWriter)
         {
-            await textWriter.WriteAsync(hGCache.Context, 0, hGCache.Count);
+            await textWriter.WriteAsync(hGCache.Context, hGCache.Offset, hGCache.Count);
         }
 
         /// <summary>
@@ -29,7 +42,7 @@ namespace Swifter.Tools
         /// <param name="stream">流</param>
         public static async Task WriteToAsync(this HGlobalCache<byte> hGCache, Stream stream)
         {
-            await stream.WriteAsync(hGCache.Context, 0, hGCache.Count);
+            await stream.WriteAsync(hGCache.Context, hGCache.Offset, hGCache.Count);
         }
 
         /// <summary>
@@ -41,28 +54,21 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static async Task ReadFromAsync(this HGlobalCache<char> hGCache, TextReader textReader)
         {
-            int offset = 0;
-
         Loop:
 
-            if (offset >= hGCache.Capacity)
-            {
-                hGCache.Expand(1218);
-            }
+            hGCache.Grow(1218);
 
-            int readCount = await textReader.ReadAsync(
+            var readCount = await textReader.ReadAsync(
                 hGCache.Context,
-                offset,
-                hGCache.Capacity - offset);
+                hGCache.Offset + hGCache.Count,
+                hGCache.Rest);
 
-            offset += readCount;
+            hGCache.Count += readCount;
 
-            if (offset == hGCache.Capacity)
+            if (readCount != 0)
             {
                 goto Loop;
             }
-
-            hGCache.Count = offset;
         }
 
         /// <summary>
@@ -74,30 +80,22 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static async Task ReadFromAsync(this HGlobalCache<byte> hGCache, Stream stream)
         {
-            int offset = 0;
-
         Loop:
 
-            if (offset >= hGCache.Capacity)
-            {
-                hGCache.Expand(1218);
-            }
+            hGCache.Grow(1218);
 
-            int readCount = await stream.ReadAsync(
+            var readCount = await stream.ReadAsync(
                 hGCache.Context,
-                offset,
-                hGCache.Capacity - offset);
+                hGCache.Offset + hGCache.Count,
+                hGCache.Rest);
 
-            offset += readCount;
+            hGCache.Count += readCount;
 
-            if (offset == hGCache.Capacity)
+            if (readCount != 0)
             {
                 goto Loop;
             }
-
-            hGCache.Count = offset;
         }
-
 
         /// <summary>
         /// 异步将 HGlobalCache 中的内容写入到流中。
@@ -107,27 +105,11 @@ namespace Swifter.Tools
         /// <param name="encoding">编码</param>
         public static async Task WriteToAsync(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
         {
-            var hGBytes = BytesPool.Rent();
+            var writer = new StreamWriter(stream, encoding);
 
-            var maxBytesCount = encoding.GetMaxByteCount(hGCache.Count);
+            await hGCache.WriteToAsync(writer);
 
-            if (maxBytesCount > hGBytes.Capacity)
-            {
-                hGBytes.Expand(maxBytesCount - hGBytes.Capacity);
-            }
-
-            unsafe
-            {
-                hGBytes.Count = encoding.GetBytes(
-                    hGCache.GetPointer(),
-                    hGCache.Count,
-                    hGBytes.GetPointer(),
-                    hGBytes.Capacity);
-            }
-
-            await hGBytes.WriteToAsync(stream);
-
-            BytesPool.Return(hGBytes);
+            writer.Flush();
         }
 
         /// <summary>
@@ -139,28 +121,110 @@ namespace Swifter.Tools
         /// <returns>返回缓冲的长度</returns>
         public static async Task ReadFromAsync(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
         {
-            var hGBytes = BytesPool.Rent();
-
-            await hGBytes.ReadFromAsync(stream);
-
-            var maxCharsCount = encoding.GetMaxCharCount(hGBytes.Count);
-
-            if (maxCharsCount > hGCache.Capacity)
-            {
-                hGCache.Expand(maxCharsCount - hGCache.Capacity);
-            }
-
-            unsafe
-            {
-                hGCache.Count = encoding.GetChars(
-                    hGBytes.GetPointer(),
-                    hGBytes.Count,
-                    hGCache.GetPointer(),
-                    hGCache.Capacity);
-            }
-
-            BytesPool.Return(hGBytes);
+            await hGCache.ReadFromAsync(new StreamReader(stream, encoding));
         }
+
+
+        static ArrayAppendingInfo BytesAppendingInfo = new ArrayAppendingInfo { MostClosestMeanCommonlyUsedLength = 4096 };
+
+        /// <summary>
+        /// 异步读取流到结尾。
+        /// </summary>
+        /// <param name="stream">流</param>
+        /// <returns>返回一个数组段</returns>
+        public static async ReadToEndTask ReadToEndAsync(this Stream stream)
+        {
+            if (stream is MemoryStream ms)
+            {
+                return InternalReadToEnd(ms);
+            }
+
+            if (stream.CanSeek)
+            {
+                return await InternalReadToEndAsync(stream);
+            }
+
+            try
+            {
+                return await InternalReadToEndAsync(stream);
+            }
+            catch
+            {
+            }
+
+            return await SteadyReadToEndAsync(stream);
+        }
+
+        private static async ReadToEndTask InternalReadToEndAsync(Stream stream)
+        {
+            var length = stream.GetCheckedLength();
+
+            var bytes = new byte[length];
+
+            for (int i = 0; i < length;)
+            {
+                i += await stream.ReadAsync(bytes, i, length - i);
+            }
+
+            return new ArraySegment<byte>(bytes);
+        }
+
+        private static async ReadToEndTask SteadyReadToEndAsync(Stream stream)
+        {
+            const int extra = 512;
+            const int expand = 4096;
+
+            var bytes = new byte[BytesAppendingInfo.MostClosestMeanCommonlyUsedLength + extra];
+
+            var offset = 0;
+            var count = bytes.Length;
+
+            Loop:
+
+            var readCount = await stream.ReadAsync(bytes, offset, count);
+
+            offset += readCount;
+            count -= readCount;
+
+            if (readCount <= 0)
+            {
+                BytesAppendingInfo.AddUsedLength(offset);
+
+                if (bytes.Length > offset * 2)
+                {
+                    Array.Resize(ref bytes, offset);
+                }
+
+                return new ArraySegment<byte>(bytes, 0, offset);
+            }
+
+            if (count == 0)
+            {
+                var newSize = checked((int)(unchecked((bytes.Length + expand) * 9L) / 5));
+
+                if (BytesAppendingInfo.FirstCommonlyUsedLength < newSize && BytesAppendingInfo.FirstCommonlyUsedLength > bytes.Length)
+                {
+                    newSize = BytesAppendingInfo.FirstCommonlyUsedLength + extra;
+                }
+
+                if (BytesAppendingInfo.SecondCommonlyUsedLength < newSize && BytesAppendingInfo.SecondCommonlyUsedLength > bytes.Length)
+                {
+                    newSize = BytesAppendingInfo.SecondCommonlyUsedLength + extra;
+                }
+
+                if (BytesAppendingInfo.ThirdCommonlyUsedLength < newSize && BytesAppendingInfo.ThirdCommonlyUsedLength > bytes.Length)
+                {
+                    newSize = BytesAppendingInfo.ThirdCommonlyUsedLength + extra;
+                }
+
+                count += newSize - bytes.Length;
+
+                Array.Resize(ref bytes, newSize);
+            }
+
+            goto Loop;
+        }
+
     }
 }
 

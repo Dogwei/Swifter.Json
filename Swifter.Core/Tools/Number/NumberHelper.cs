@@ -22,11 +22,26 @@ namespace Swifter.Tools
         /// 忽略大小写的前提下支持的最大进制。
         /// </summary>
         public const byte IgnoreCaseMaxRadix = 36;
-        private const byte DecimalRadix = 10;
-        private const byte DecimalMaxScale = 29;
+        /// <summary>
+        /// 十进制优先并自动匹配进制数。
+        /// </summary>
+        public const byte DecimalFirstRadix = unchecked((byte)-10);
+
+        /// <summary>
+        /// 最大进制优先，自动匹配进制数。
+        /// </summary>
+        public const byte MaxFirstRadix = unchecked((byte)-MaxRadix);
+
+        internal const byte HexRadix = 16;
+        internal const byte BinaryRadix = 2;
+        internal const byte OctalRadix = 8;
+
+
+        internal const byte DecimalRadix = 10;
+        private const byte DecimalMaxScale = 28;
+        private const byte DecimalMaxExponent = 29;
 
         private const char DigitalsMaxValue = '~';
-        private const char DigitalsMinValue = '!';
         private const char DigitalsZeroValue = '0';
 
         /// <summary>
@@ -73,11 +88,25 @@ namespace Swifter.Tools
         /// <summary>
         /// 非数字符号。
         /// </summary>
-        public const string NaNSign = "NaN";
+        public static readonly string NaNSign = double.NaN.ToString();
+
+        /// <summary>
+        /// 正无限大符号。
+        /// </summary>
+        public static readonly string PositiveInfinitySign = double.PositiveInfinity.ToString();
+
+        /// <summary>
+        /// 负无限大符号。
+        /// </summary>
+        public static readonly string NegativeInfinitySign = double.NegativeInfinity.ToString();
         /// <summary>
         /// 非数字符号的首字符。
         /// </summary>
         public const char NSign = 'N';
+        /// <summary>
+        /// 非数字符号的首字符。
+        /// </summary>
+        public const char nSign = 'n';
         /// <summary>
         /// 数字之间的分隔符。
         /// </summary>
@@ -85,37 +114,26 @@ namespace Swifter.Tools
 
         private const char ErrorDigital = (char)999;
         private const byte ErrorRadix = 99;
-        private const byte SplitRadix = 255;
+        private const byte SplitRadix = 100;
+        private const byte ExponentRadix = 14;
 
         private const double DoubleMinPositive = 4.94065645841246544E-324;
         private const double DoubleMaxPositive = 1.79769313486231570E+308;
         private const double SingleMinPositive = 1.401298E-45;
         private const double SingleMaxPositive = 3.40282347E+38;
 
-        private const ulong PositiveInt64MinValue = 0x8000000000000000;
-        private const long NegativeInt64MaxValue = -0x7FFFFFFFFFFFFFFF;
-        private const long Int64MinValue = -0x8000000000000000;
-        private const long Int64MaxValue = 0x7FFFFFFFFFFFFFFF;
-        private const ulong UInt64MaxValue = 0xFFFFFFFFFFFFFFFF;
+        private const uint DecimalDivisor = 1000000000;
 
-        private const uint UInt32MaxValue = 0xFFFFFFFF;
-        private const ulong UInt32MaxValueAddOne = ((ulong)UInt32MaxValue) + 1;
-
-        private const uint SignMask = 0x80000000;
-
-        private const uint DecimalBaseDivisor = 1000000000;
-
-        private const byte DecimalBaseDivisorLength = 9;
-
-        private const byte DecimalMaxParseLength = 36;
+        private const byte DecimalDivisorLength = 9;
 
 
 
 
+        /// <summary>
+        /// 表示当前实例的进制数。
+        /// </summary>
         /* 10 */
-        private readonly byte radix;
-        /* 5 */
-        private readonly byte rounded;
+        public readonly byte radix;
 
         /* ['0': 0, '1': 1, '2': 2,... '9': 9, 'a': 10, 'b':11,... 'A': 10, 'B': 11,... 'Z': 35, Other: ErrorRadix] */
         private readonly byte* radixes;
@@ -140,25 +158,20 @@ namespace Swifter.Tools
 
         /* 309 */
         private readonly int positiveExponentsLength;
-        /* 308 */
-        private readonly int positiveExponentsRight;
         /* 324 */
         private readonly int negativeExponentsLength;
-        /* 323 */
-        private readonly int negativeExponentsRight;
-        /* 0 */
-        private const int exponentsLeft = 0;
+
         /* 1, 10, 100, 1000, 1e4, 1e5, 1e6,... 1e308 */
         private readonly double[] positiveExponents;
         /* 1, 0.1, 0.01, 0.001, 1e-4, 1e-5, 1e-6,... 1e-324 */
         private readonly double[] negativeExponents;
 
         /* 5 */
-        private const int maxFractionalLength = 5;
+        private const int maxFloatingZeroLength = 5;
         /* 16 */
-        private readonly int maxDoubleLength;
+        private readonly int maxDoubleDigitalsLength;
         /* 7 */
-        private readonly int maxSingleLength;
+        private readonly int maxSingleDigitalsLength;
 
         /* 1000000000 */
         private readonly uint divisor;
@@ -166,22 +179,52 @@ namespace Swifter.Tools
         /* 9 */
         private readonly byte divisorLength;
 
-        /* 0.00000000000000022 */
-        private const double CeilingApproximateValueOfZero = 0.00000000000000022;
-        /* 0.99999999999999978 */
-        private const double FloorApproximateValueOfOne = 0.99999999999999978;
+        /// <summary>
+        /// 当前进制下 Double 的最大字符串长度。
+        /// </summary>
+        public readonly int MaxDoubleStringLength;
 
+        /// <summary>
+        /// 当前进制下 Single 的最大字符串长度。
+        /// </summary>
+        public readonly int MaxSingleStringLength;
 
+        /// <summary>
+        /// 十进制下 Double 的最大字符串长度。
+        /// </summary>
+        public const int DecimalMaxDoubleStringLength = 32;
 
+        /// <summary>
+        /// 十进制下 Single 的最大字符串长度。
+        /// </summary>
+        public const int DecimalMaxSingleStringLength = 24;
 
+        /// <summary>
+        /// 当前进制下 UInt64 的最大字符串长度。
+        /// </summary>
+        public int MaxUInt64NumbersLength => uInt64NumbersLength + 1;
 
+        /// <summary>
+        /// 当前进制下 Int64 的最大字符串长度。
+        /// </summary>
+        public int MaxInt64NumbersLength => uInt64NumbersLength + 2;
+
+        /// <summary>
+        /// 十进制下 UInt64 的最大字符串长度。
+        /// </summary>
+        public const int DecimalMaxUInt64NumbersLength = 21;
+
+        /// <summary>
+        /// 十进制下 Int64 的最大字符串长度。
+        /// </summary>
+        public const int DecimalMaxInt64NumbersLength = 21;
 
 
         /// <summary>
         /// 初始化实例。
         /// </summary>
         /// <param name="radix">指定进制</param>
-        public NumberHelper(byte radix)
+        NumberHelper(byte radix)
         {
             if (radix > MaxRadix || radix < MinRadix)
             {
@@ -189,9 +232,6 @@ namespace Swifter.Tools
             }
 
             this.radix = radix;
-
-            /* binary no rounded. */
-            rounded = (byte)(radix == 2 ? 2 : (radix + 1) / 2);
 
             if (radix <= IgnoreCaseMaxRadix)
             {
@@ -229,7 +269,6 @@ namespace Swifter.Tools
             }
 
             positiveExponentsLength = SlowGetLength(DoubleMaxPositive);
-            positiveExponentsRight = positiveExponentsLength - 1;
 
             positiveExponents = new double[positiveExponentsLength];
 
@@ -241,7 +280,6 @@ namespace Swifter.Tools
 
 
             negativeExponentsLength = SlowGetFractionalLength(DoubleMinPositive);
-            negativeExponentsRight = negativeExponentsLength - 1;
 
             negativeExponents = new double[negativeExponentsLength];
 
@@ -250,33 +288,23 @@ namespace Swifter.Tools
                 negativeExponents[i] = Math.Pow(radix, -i);
             }
 
-            maxDoubleLength = SlowGetLength(0xFFFFFFFFFFFFF);
-            maxSingleLength = SlowGetLength(0x7FFFFFFF);
+            maxDoubleDigitalsLength = SlowGetLength(0xFFFFFFFFFFFFF) + 1 /* Integer: 1 */;
+            maxSingleDigitalsLength = SlowGetLength(0x7FFFFF) + 1 /* Integer: 1 */;
+
+            MaxDoubleStringLength = maxDoubleDigitalsLength + 4 /* Sign + Dot + Exp + ExpSign */ + SlowGetLength(0x200);
+            MaxSingleStringLength = maxSingleDigitalsLength + 4 /* Sign + Dot + Exp + ExpSign */ + SlowGetLength(0x80);
 
             divisorLength = (byte)(uInt32NumbersLength - 1);
             divisor = uInt32Numbers[divisorLength];
         }
-
-        /// <summary>
-        /// 释放内存。
-        /// </summary>
-        ~NumberHelper()
-        {
-            Marshal.FreeHGlobal((IntPtr)threeDigitals);
-        }
-
-
-
-
-
 
 
         private ThreeChar SlowToThreeChar(uint value)
         {
             ThreeChar t;
 
-            t.char1 = Digitals[(value / radix / radix) % radix];
-            t.char2 = Digitals[(value / radix) % radix];
+            t.char1 = Digitals[value / radix / radix % radix];
+            t.char2 = Digitals[value / radix % radix];
             t.char3 = Digitals[value % radix];
 
             return t;
@@ -348,54 +376,109 @@ namespace Swifter.Tools
 
 
 
-
-
-
-
-
+        /// <summary>
+        /// 拼接一位数字。
+        /// </summary>
+        /// <param name="chars">字符串</param>
+        /// <param name="value">数字，不可大于三位数</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        internal void AppendD1(char* chars, ulong value)
+        public void AppendD1(ref char chars, ulong value)
+        {
+            chars = ((char*)(threeDigitals + value))[2];
+        }
+
+        /// <summary>
+        /// 拼接两位数字。
+        /// </summary>
+        /// <param name="chars">字符串</param>
+        /// <param name="value">数字，不可大于三位数</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendD2(ref char chars, ulong value)
+        {
+            Underlying.As<char, int>(ref chars) = *(int*)(((char*)(threeDigitals + value)) + 1); ;
+        }
+
+        /// <summary>
+        /// 拼接三位数字。
+        /// </summary>
+        /// <param name="chars">字符串</param>
+        /// <param name="value">数字，不可大于三位数</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendD3(ref char chars, ulong value)
+        {
+            Underlying.As<char, long>(ref chars) = *(long*)(threeDigitals + value);
+        }
+
+        /// <summary>
+        /// 拼接一位数字。
+        /// </summary>
+        /// <param name="chars">字符串</param>
+        /// <param name="value">数字，不可大于三位数</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void AppendD1(char* chars, ulong value)
         {
             *chars = ((char*)(threeDigitals + value))[2];
         }
 
+        /// <summary>
+        /// 拼接两位数字。
+        /// </summary>
+        /// <param name="chars">字符串</param>
+        /// <param name="value">数字，不可大于三位数</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        internal void AppendD2(char* chars, ulong value)
+        public void AppendD2(char* chars, ulong value)
         {
-            *((TwoChar*)chars) = *(TwoChar*)((char*)(threeDigitals + value) + 1);
+            *(int*)chars = *(int*)(((char*)(threeDigitals + value)) + 1);
         }
 
+        /// <summary>
+        /// 拼接三位数字。
+        /// </summary>
+        /// <param name="chars">字符串</param>
+        /// <param name="value">数字，不可大于三位数</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        internal void AppendD3(char* chars, ulong value)
+        public void AppendD3(char* chars, ulong value)
         {
-            *((ThreeChar*)chars) = threeDigitals[value];
+            *(long*)chars = *(long*)(threeDigitals + value);
+            // *(ThreeChar*)chars = threeDigitals[value];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal void AppendD6(char* chars, ulong value)
         {
             var l = threeDigitalsLength;
+
             var v = value;
+
             var a = v / l;
 
-            *((ThreeChar*)chars) = threeDigitals[a];
-            *((ThreeChar*)(chars + 3)) = threeDigitals[v - a * l];
+            v -= a * l;
+
+            *(long*)(chars + 0) = *(long*)(threeDigitals + a);
+            *(long*)(chars + 3) = *(long*)(threeDigitals + v);
+            //*(ThreeChar*)(chars + 0) = threeDigitals[a];
+            //*(ThreeChar*)(chars + 3) = threeDigitals[v];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal void AppendD9(char* chars, ulong value)
         {
             var l = threeDigitalsLength;
+
             var v = value;
+
             var b = v / l;
             var a = b / l;
 
             v -= b * l;
             b -= a * l;
 
-            *((ThreeChar*)chars) = threeDigitals[a];
-            *((ThreeChar*)(chars + 3)) = threeDigitals[b];
-            *((ThreeChar*)(chars + 6)) = threeDigitals[v];
+            *(long*)(chars + 0) = *(long*)(threeDigitals + a);
+            *(long*)(chars + 3) = *(long*)(threeDigitals + b);
+            *(long*)(chars + 6) = *(long*)(threeDigitals + v);
+            //*(ThreeChar*)(chars + 0) = threeDigitals[a];
+            //*(ThreeChar*)(chars + 3) = threeDigitals[b];
+            //*(ThreeChar*)(chars + 6) = threeDigitals[v];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -411,17 +494,23 @@ namespace Swifter.Tools
             c -= b * l;
             b -= a * l;
 
-            *((ThreeChar*)chars) = threeDigitals[a];
-            *((ThreeChar*)(chars + 3)) = threeDigitals[b];
-            *((ThreeChar*)(chars + 6)) = threeDigitals[c];
-            *((ThreeChar*)(chars + 9)) = threeDigitals[v];
+            *(long*)(chars + 0) = *(long*)(threeDigitals + a);
+            *(long*)(chars + 3) = *(long*)(threeDigitals + b);
+            *(long*)(chars + 6) = *(long*)(threeDigitals + c);
+            *(long*)(chars + 9) = *(long*)(threeDigitals + v);
+            //*(ThreeChar*)(chars + 0) = threeDigitals[a];
+            //*(ThreeChar*)(chars + 3) = threeDigitals[b];
+            //*(ThreeChar*)(chars + 6) = threeDigitals[c];
+            //*(ThreeChar*)(chars + 9) = threeDigitals[v];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal void AppendD15(char* chars, ulong value)
         {
             var l = threeDigitalsLength;
+
             var v = value;
+
             var d = v / l;
             var c = d / l;
             var b = c / l;
@@ -432,18 +521,25 @@ namespace Swifter.Tools
             c -= b * l;
             b -= a * l;
 
-            *((ThreeChar*)chars) = threeDigitals[a];
-            *((ThreeChar*)(chars + 3)) = threeDigitals[b];
-            *((ThreeChar*)(chars + 6)) = threeDigitals[c];
-            *((ThreeChar*)(chars + 9)) = threeDigitals[d];
-            *((ThreeChar*)(chars + 12)) = threeDigitals[v];
+            *(long*)(chars +  0) = *(long*)(threeDigitals + a);
+            *(long*)(chars +  3) = *(long*)(threeDigitals + b);
+            *(long*)(chars +  6) = *(long*)(threeDigitals + c);
+            *(long*)(chars +  9) = *(long*)(threeDigitals + d);
+            *(long*)(chars + 12) = *(long*)(threeDigitals + v);
+            //*(ThreeChar*)(chars +  0) = threeDigitals[a];
+            //*(ThreeChar*)(chars +  3) = threeDigitals[b];
+            //*(ThreeChar*)(chars +  6) = threeDigitals[c];
+            //*(ThreeChar*)(chars +  9) = threeDigitals[d];
+            //*(ThreeChar*)(chars + 12) = threeDigitals[v];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal void AppendD18(char* chars, ulong value)
         {
             var l = threeDigitalsLength;
+
             var v = value;
+
             var e = v / l;
             var d = e / l;
             var c = d / l;
@@ -456,12 +552,18 @@ namespace Swifter.Tools
             c -= b * l;
             b -= a * l;
 
-            *((ThreeChar*)chars) = threeDigitals[a];
-            *((ThreeChar*)(chars + 3)) = threeDigitals[b];
-            *((ThreeChar*)(chars + 6)) = threeDigitals[c];
-            *((ThreeChar*)(chars + 9)) = threeDigitals[d];
-            *((ThreeChar*)(chars + 12)) = threeDigitals[e];
-            *((ThreeChar*)(chars + 15)) = threeDigitals[v];
+            *(long*)(chars +  0) = *(long*)(threeDigitals + a);
+            *(long*)(chars +  3) = *(long*)(threeDigitals + b);
+            *(long*)(chars +  6) = *(long*)(threeDigitals + c);
+            *(long*)(chars +  9) = *(long*)(threeDigitals + d);
+            *(long*)(chars + 12) = *(long*)(threeDigitals + e);
+            *(long*)(chars + 15) = *(long*)(threeDigitals + v);
+            //*(ThreeChar*)(chars + 0) = threeDigitals[a];
+            //*(ThreeChar*)(chars + 3) = threeDigitals[b];
+            //*(ThreeChar*)(chars + 6) = threeDigitals[c];
+            //*(ThreeChar*)(chars + 9) = threeDigitals[d];
+            //*(ThreeChar*)(chars + 12) = threeDigitals[e];
+            //*(ThreeChar*)(chars + 15) = threeDigitals[v];
         }
 
 
@@ -484,46 +586,58 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal static void DecimalAppendD3(char* chars, ulong value)
         {
-            var digitals = Decimal.threeDigitals;
+            var digitals = DecimalThreeDigitals;
 
-            *((ThreeChar*)chars) = digitals[value];
+            *(long*)chars = *(long*)(digitals + value);
+            // *(ThreeChar*)chars = digitals[value];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal static void DecimalAppendD6(char* chars, ulong value)
         {
-            var digitals = Decimal.threeDigitals;
+            var digitals = DecimalThreeDigitals;
 
             var v = value;
+
             var a = v / 1000;
 
-            *((ThreeChar*)chars) = digitals[a];
-            *((ThreeChar*)(chars + 3)) = digitals[v - a * 1000];
+            v -= a * 1000;
+
+            *(long*)(chars + 0) = *(long*)(digitals + a);
+            *(long*)(chars + 3) = *(long*)(digitals + v);
+            //*((ThreeChar*)chars) = digitals[a];
+            //*((ThreeChar*)(chars + 3)) = digitals[v - a * 1000];
+
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal static void DecimalAppendD9(char* chars, ulong value)
         {
-            var digitals = Decimal.threeDigitals;
+            var digitals = DecimalThreeDigitals;
 
             var v = value;
+
             var b = v / 1000;
             var a = b / 1000;
 
             v -= b * 1000;
             b -= a * 1000;
 
-            *((ThreeChar*)chars) = digitals[a];
-            *((ThreeChar*)(chars + 3)) = digitals[b];
-            *((ThreeChar*)(chars + 6)) = digitals[v];
+            *(long*)(chars + 0) = *(long*)(digitals + a);
+            *(long*)(chars + 3) = *(long*)(digitals + b);
+            *(long*)(chars + 6) = *(long*)(digitals + v);
+            //*(ThreeChar*)(chars + 0) = digitals[a];
+            //*(ThreeChar*)(chars + 3) = digitals[b];
+            //*(ThreeChar*)(chars + 6) = digitals[v];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal static void DecimalAppendD12(char* chars, ulong value)
         {
-            var digitals = Decimal.threeDigitals;
+            var digitals = DecimalThreeDigitals;
 
             var v = value;
+
             var c = v / 1000;
             var b = c / 1000;
             var a = b / 1000;
@@ -532,16 +646,20 @@ namespace Swifter.Tools
             c -= b * 1000;
             b -= a * 1000;
 
-            *((ThreeChar*)chars) = digitals[a];
-            *((ThreeChar*)(chars + 3)) = digitals[b];
-            *((ThreeChar*)(chars + 6)) = digitals[c];
-            *((ThreeChar*)(chars + 9)) = digitals[v];
+            *(long*)(chars + 0) = *(long*)(digitals + a);
+            *(long*)(chars + 3) = *(long*)(digitals + b);
+            *(long*)(chars + 6) = *(long*)(digitals + c);
+            *(long*)(chars + 9) = *(long*)(digitals + v);
+            //*(ThreeChar*)(chars + 0) = digitals[a];
+            //*(ThreeChar*)(chars + 3) = digitals[b];
+            //*(ThreeChar*)(chars + 6) = digitals[c];
+            //*(ThreeChar*)(chars + 9) = digitals[v];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal static void DecimalAppendD15(char* chars, ulong value)
         {
-            var digitals = Decimal.threeDigitals;
+            var digitals = DecimalThreeDigitals;
 
             var v = value;
             var d = v / 1000;
@@ -554,19 +672,25 @@ namespace Swifter.Tools
             c -= b * 1000;
             b -= a * 1000;
 
-            *((ThreeChar*)chars) = digitals[a];
-            *((ThreeChar*)(chars + 3)) = digitals[b];
-            *((ThreeChar*)(chars + 6)) = digitals[c];
-            *((ThreeChar*)(chars + 9)) = digitals[d];
-            *((ThreeChar*)(chars + 12)) = digitals[v];
+            *(long*)(chars +  0) = *(long*)(digitals + a);
+            *(long*)(chars +  3) = *(long*)(digitals + b);
+            *(long*)(chars +  6) = *(long*)(digitals + c);
+            *(long*)(chars +  9) = *(long*)(digitals + d);
+            *(long*)(chars + 12) = *(long*)(digitals + v);
+            //*(ThreeChar*)(chars +  0) = digitals[a];
+            //*(ThreeChar*)(chars +  3) = digitals[b];
+            //*(ThreeChar*)(chars +  6) = digitals[c];
+            //*(ThreeChar*)(chars +  9) = digitals[d];
+            //*(ThreeChar*)(chars + 12) = digitals[v];
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         internal static void DecimalAppendD18(char* chars, ulong value)
         {
-            var digitals = Decimal.threeDigitals;
+            var digitals = DecimalThreeDigitals;
 
             var v = value;
+
             var e = v / 1000;
             var d = e / 1000;
             var c = d / 1000;
@@ -579,12 +703,18 @@ namespace Swifter.Tools
             c -= b * 1000;
             b -= a * 1000;
 
-            *((ThreeChar*)chars) = digitals[a];
-            *((ThreeChar*)(chars + 3)) = digitals[b];
-            *((ThreeChar*)(chars + 6)) = digitals[c];
-            *((ThreeChar*)(chars + 9)) = digitals[d];
-            *((ThreeChar*)(chars + 12)) = digitals[e];
-            *((ThreeChar*)(chars + 15)) = digitals[v];
+            *(long*)(chars +  0) = *(long*)(digitals + a);
+            *(long*)(chars +  3) = *(long*)(digitals + b);
+            *(long*)(chars +  6) = *(long*)(digitals + c);
+            *(long*)(chars +  9) = *(long*)(digitals + d);
+            *(long*)(chars + 12) = *(long*)(digitals + e);
+            *(long*)(chars + 15) = *(long*)(digitals + v);
+            //*(ThreeChar*)(chars +  0) = digitals[a];
+            //*(ThreeChar*)(chars +  3) = digitals[b];
+            //*(ThreeChar*)(chars +  6) = digitals[c];
+            //*(ThreeChar*)(chars +  9) = digitals[d];
+            //*(ThreeChar*)(chars + 12) = digitals[e];
+            //*(ThreeChar*)(chars + 15) = digitals[v];
         }
 
 
@@ -603,33 +733,6 @@ namespace Swifter.Tools
             }
 
             return ErrorRadix;
-        }
-
-
-        /// <summary>
-        /// 从字符串中强制解析出一个 Int64 值。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="count">字符串长度</param>
-        /// <returns>返回一个 Int64 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public int UncheckedParse(char* chars, int count)
-        {
-            int r = 0;
-
-            for (int i = 0, j = 0; i < count; j++)
-            {
-                var digit = ToRadix(chars[j]);
-
-                if (digit < radix)
-                {
-                    r = r * radix + digit;
-
-                    i++;
-                }
-            }
-
-            return r;
         }
     }
 }

@@ -1,0 +1,2 @@
+ilmerge /t:library /v4 /xmlDocs /out:Swifter.Merged.dll Swifter.Json.dll Swifter.Core.dll Swifter.Unsafe.dll
+ilasm /dll /optimize /output:Swifter.Unsafe.dll Swifter.Unsafe.il

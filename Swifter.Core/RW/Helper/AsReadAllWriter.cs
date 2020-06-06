@@ -1,5 +1,6 @@
 ﻿
 using Swifter.Tools;
+using System;
 using System.Collections.Generic;
 
 namespace Swifter.RW
@@ -15,7 +16,7 @@ namespace Swifter.RW
 
         public IValueWriter this[TIn key] => dataWriter[XConvert<TOut>.Convert(key)];
 
-        public IEnumerable<TIn> Keys => ArrayHelper.CreateAsIterator<TOut, TIn>(dataWriter.Keys);
+        public IEnumerable<TIn> Keys => ArrayHelper.CreateConvertIterator<TOut, TIn>(dataWriter.Keys);
 
         public int Count => dataWriter.Count;
 
@@ -23,8 +24,18 @@ namespace Swifter.RW
 
         public void Initialize(int capacity) => dataWriter.Initialize(capacity);
 
-        public void OnWriteAll(IDataReader<TIn> dataReader) => dataWriter.OnWriteAll(new AsWriteAllReader<TOut, TIn>(dataReader));
+        public void OnWriteAll(IDataReader<TIn> dataReader) =>
+            dataWriter.OnWriteAll(new AsWriteAllReader<TOut, TIn>(dataReader));
 
-        public void OnWriteValue(TIn key, IValueReader valueReader)=> dataWriter.OnWriteValue(XConvert<TOut>.Convert(key), valueReader);
+        public void OnWriteValue(TIn key, IValueReader valueReader)=>
+            dataWriter.OnWriteValue(XConvert<TOut>.Convert(key), valueReader);
+
+        public object Content
+        {
+            get => dataWriter.Content;
+            set => dataWriter.Content = value;
+        }
+
+        public Type ContentType => dataWriter.ContentType;
     }
 }

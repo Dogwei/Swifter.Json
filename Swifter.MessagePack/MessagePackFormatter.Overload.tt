@@ -1,0 +1,345 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ Assembly name="$(TargetDir)\Swifter.Core.dll" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="Swifter.Tools" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.IO" #>
+<#@ output extension=".cs" #>
+
+<#
+
+	var serializes = new []
+	{
+		new { ReturnType = "byte[]", ReturnDescription = "MessagePack 字节数组", ParameterType = "", ParameterName = "", ParameterDescription = "", IsAsync = false, IsOptions = false, IsStatic = true },
+
+		new { ReturnType = "byte[]", ReturnDescription = "MessagePack 字节数组", ParameterType ="", ParameterName = "", ParameterDescription = "", IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ReturnType = "void", ReturnDescription = "", ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ReturnType = "void", ReturnDescription = "", ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输出流", IsAsync = false, IsOptions = true, IsStatic = true },
+
+		new { ReturnType = "void", ReturnDescription = "", ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输出流", IsAsync = true, IsOptions = false, IsStatic = true },
+		new { ReturnType = "void", ReturnDescription = "", ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输出流", IsAsync = true, IsOptions = true, IsStatic = true },
+
+
+		new { ReturnType = "byte[]", ReturnDescription = "MessagePack 字节数组", ParameterType = "", ParameterName = "", ParameterDescription = "", IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ReturnType = "void", ReturnDescription = "", ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ReturnType = "void", ReturnDescription = "", ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输出流", IsAsync = false, IsOptions = false, IsStatic = false },
+
+		new { ReturnType = "void", ReturnDescription = "", ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输出流", IsAsync = true, IsOptions = false, IsStatic = false },
+		
+	};
+
+	var deserializes = new []
+	{
+
+		
+		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = true, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = true, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = true, IsAsync = true, IsOptions = false, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = true, IsOptions = false, IsStatic = true },
+
+		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = true, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = true, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = true, IsAsync = true, IsOptions = true, IsStatic = true },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = true, IsOptions = true, IsStatic = true },
+
+		
+		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = true, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = true, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = true, IsAsync = true, IsOptions = false, IsStatic = false },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = true, IsOptions = false, IsStatic = false },
+	};
+
+	var deserializetos = new []
+	{
+		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "MessagePack 字节缓存", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "MessagePack 字节数组", IsCore = true, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false },
+		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "MessagePack 输入流", IsCore = false, IsGeneric = false, IsAsync = true, IsOptions = false, IsStatic = false },
+	};
+#>
+
+
+using Swifter.RW;
+using Swifter.Tools;
+using System;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Text;
+
+#if Async
+
+using System.Threading.Tasks;
+
+#endif
+
+namespace Swifter.MessagePack
+{
+
+	partial class MessagePackFormatter
+	{
+<# { #>
+<# foreach(var serialize in serializes) { #>
+<#= serialize.IsAsync ? "#if Async" : "" #>
+
+<# var parameter_list = "T value"; #>
+<# var method_name = "Serialize"; #>
+<# var result = serialize.ReturnType; #>
+<# var options_parameter = ""; #>
+<# if (serialize.IsOptions) { options_parameter = ", options"; } #>
+<# if (serialize.IsAsync) { result = result == "void" ? @"async
+#if ValueTask
+        ValueTask
+#else
+        Task
+#endif
+       " : @$"async
+#if ValueTask
+        ValueTask<{result}>
+#else
+        Task<{result}>
+#endif
+	   "; } #>
+<# if (serialize.IsStatic) { result = $"static {result}"; method_name += "Object"; } #>
+<# if (!string.IsNullOrEmpty(serialize.ParameterType) && !string.IsNullOrEmpty(serialize.ParameterName)) { parameter_list += $", {serialize.ParameterType} {serialize.ParameterName}"; } #>
+<# if (serialize.IsOptions) { parameter_list += ", MessagePackFormatterOptions options"; } #>
+
+        /// <summary>
+<# if (!string.IsNullOrEmpty(serialize.ReturnDescription)) { #>
+        /// 将指定类型的实例序列化为 <#= serialize.ReturnDescription #>。
+<# } else { #>
+        /// 将指定类型的实例序列化到 <#= serialize.ParameterDescription #>中。
+<# } #>
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+<# if (!string.IsNullOrEmpty(serialize.ParameterDescription)) { #>
+		/// <param name="<#= serialize.ParameterName #>"><#= serialize.ParameterDescription #></param>
+<# } #>
+<# if (serialize.IsOptions) { #>
+		/// <param name="options">指定配置项</param>
+<# } #>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public <#= result #> <#= method_name #><#= serialize.IsAsync ? "Async" : "" #><T>(<#= parameter_list #>)
+        {
+<# if (serialize.ReturnType == "byte[]") { #>
+			var hGBytes = BytesPool.Rent();
+
+			<#= method_name #>(value, hGBytes<#= options_parameter#>);
+			
+			var ret = hGBytes.ToArray();
+
+			BytesPool.Return(hGBytes);
+
+			return ret;
+<# } else if (serialize.ParameterType == "Stream" && serialize.IsAsync) { #>
+			
+			var hGBytes = BytesPool.Rent();
+
+			<#= method_name #>(value, hGBytes<#= options_parameter #>);
+
+			var bytes = hGBytes.ToArray();
+			
+			BytesPool.Return(hGBytes);
+
+			await <#= serialize.ParameterName #>.WriteAsync(bytes, 0, bytes.Length);
+<# } else if (serialize.ParameterType == "Stream") { #>
+
+<#if (!serialize.IsStatic) { #>
+			var options = Options;
+<#}#>
+
+			var hGBytes = BytesPool.Rent();
+
+            if ((options & ReferenceSerializerOptions) != 0)
+            {
+                <#= method_name #><T, MessagePackSerializeModes.ReferenceMode>(value, hGBytes, options);
+            }
+            else
+            {
+                <#= method_name #><T, MessagePackSerializeModes.StandardMode>(value, hGBytes, options);
+            }
+
+			hGBytes.WriteTo(<#= serialize.ParameterName #>);
+
+			BytesPool.Return(hGBytes);
+
+<# } else { #>
+
+<#if (!serialize.IsStatic) { #>
+			var options = Options;
+<#}#>
+
+            if ((options & ReferenceSerializerOptions) != 0)
+            {
+                <#= method_name #><T, MessagePackSerializeModes.ReferenceMode>(value, <#= serialize.ParameterName #>, options);
+            }
+            else
+            {
+                <#= method_name #><T, MessagePackSerializeModes.StandardMode>(value, <#= serialize.ParameterName #>, options);
+            }
+<# } #>
+        }
+
+<#= serialize.IsAsync ? "#endif" : "" #>
+<# } #>
+<# } #>
+
+
+<# { #>
+
+<# foreach(var deserialize in deserializes) { #>
+<#= deserialize.IsCore ? "#if Span" : "" #>
+<#= deserialize.IsAsync ? "#if Async" : "" #>
+<# var result_type = deserialize.IsGeneric ? "T" : "object"; #>
+<# var generic_parameter = deserialize.IsGeneric ? "<T>" : ""; #>
+<# var non_generic_parameter = deserialize.IsGeneric ? "" : ", type"; #>
+<# var parameter_list = $"{deserialize.ParameterType} {deserialize.ParameterName}"; #>
+<# var method_name = "Deserialize"; #>
+<# if (!deserialize.IsGeneric) { parameter_list += ", Type type"; }#>
+<# if (deserialize.IsOptions) { parameter_list += ", MessagePackFormatterOptions options"; non_generic_parameter += ", options"; }#>
+<# if (deserialize.IsAsync) { result_type = @$"async
+#if ValueTask
+        ValueTask<{result_type}>
+#else
+        Task<{result_type}>
+#endif
+       "; } #>
+<# if (deserialize.IsStatic) { result_type = $"static {result_type}"; method_name += "Object"; }#>
+        /// <summary>
+        /// 将 <#= deserialize.ParameterDescription #>反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="<#= deserialize.ParameterName #>"><#= deserialize.ParameterDescription #></param>
+<# if (deserialize.IsGeneric) { #>
+		/// <typeparam name="T">指定类型</typeparam>
+<# } #>
+<# if (!deserialize.IsGeneric) { #>
+		/// <param name="type">指定类型</param>
+<# } #>
+<# if (deserialize.IsOptions) { #>
+		/// <param name="options">指定配置项</param>
+<# } #>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+		public <#= result_type #> <#= method_name #><#= deserialize.IsAsync ? "Async" : "" #><#= deserialize.IsGeneric ? "<T>" : "" #>(<#= parameter_list #>)
+		{
+<# if (deserialize.ParameterType == "ArraySegment<byte>") { #>
+			unsafe
+			{
+				fixed (byte* pBytes = &<#= deserialize.ParameterName #>.Array[<#= deserialize.ParameterName #>.Offset])
+				{
+					return <#= method_name #><#= generic_parameter #>(pBytes, <#= deserialize.ParameterName #>.Count<#= non_generic_parameter #>);
+				}
+			}
+<# } else if (deserialize.ParameterType == "ReadOnlySpan<byte>" || deserialize.ParameterType == "byte[]") { #>
+			unsafe
+			{
+				fixed (byte* pBytes = <#= deserialize.ParameterName #>)
+				{
+					return <#= method_name #><#= generic_parameter #>(pBytes, <#= deserialize.ParameterName #>.Length<#= non_generic_parameter #>);
+				}
+			}
+<# } else if (deserialize.ParameterType == "HGlobalCache<byte>") { #>
+			unsafe
+			{
+				return <#= method_name #><#= generic_parameter #>(<#= deserialize.ParameterName #>.First, <#= deserialize.ParameterName #>.Count<#= non_generic_parameter #>);
+			}
+<# } else if (deserialize.ParameterType == "Stream") { #>
+			return <#= method_name #><#= generic_parameter #>(<#= deserialize.IsAsync ? "await " : "" #><#= deserialize.ParameterName #>.<#= deserialize.IsAsync ? "ReadToEndAsync" : "ReadToEnd" #>()<#= non_generic_parameter #>);
+<# } #>
+
+		}
+		
+<#= deserialize.IsAsync ? "#endif" : "" #>
+<#= deserialize.IsCore ? "#endif" : "" #>
+<# } #>
+<# } #>
+	
+
+
+
+
+
+<# { #>
+
+<# foreach(var deserializeto in deserializetos) { #>
+<#= deserializeto.IsCore ? "#if Span" : "" #>
+<#= deserializeto.IsAsync ? "#if Async" : "" #>
+
+<# var parameters_list = $"{deserializeto.ParameterType} {deserializeto.ParameterName}"; #>
+<# var method_name = "DeserializeTo"; #>
+
+        /// <summary>
+        /// 将 <#= deserializeto.ParameterDescription #>反序列化到指定的数据写入器中。
+        /// </summary>
+        /// <param name="<#= deserializeto.ParameterName #>"><#= deserializeto.ParameterDescription #></param>
+        /// <param name="dataWriter">数据写入器</param>
+<# parameters_list += ", IDataWriter dataWriter"; #>
+        public <#= deserializeto.IsAsync ? @"async
+#if ValueTask
+        ValueTask
+#else
+        Task
+#endif
+	   " : "void" #> <#= method_name #><#= deserializeto.IsAsync ? "Async" : "" #>(<#= parameters_list #>)
+        {
+<# if (deserializeto.ParameterType == "ArraySegment<byte>") { #>
+			unsafe
+			{
+				fixed (byte* pBytes = &<#= deserializeto.ParameterName #>.Array[<#= deserializeto.ParameterName #>.Offset])
+				{
+					<#= method_name #>(pBytes, <#= deserializeto.ParameterName #>.Count, dataWriter);
+				}
+			}
+<# } else if (deserializeto.ParameterType == "ReadOnlySpan<byte>" || deserializeto.ParameterType == "byte[]") { #>
+			unsafe
+			{
+				fixed (byte* pBytes = <#= deserializeto.ParameterName #>)
+				{
+					<#= method_name #>(pBytes, <#= deserializeto.ParameterName #>.Length, dataWriter);
+				}
+			}
+<# } else if (deserializeto.ParameterType == "HGlobalCache<byte>") { #>
+			unsafe
+			{
+				<#= method_name #>(<#= deserializeto.ParameterName #>.First, <#= deserializeto.ParameterName #>.Count, dataWriter);
+			}
+<# } else if (deserializeto.ParameterType == "Stream") { #>
+			<#= method_name #>(<#= deserializeto.IsAsync ? "await " : "" #><#= deserializeto.ParameterName #>.<#= deserializeto.IsAsync ? "ReadToEndAsync" : "ReadToEnd" #>(), dataWriter);
+<# } #>
+        }
+		
+<#= deserializeto.IsAsync ? "#endif" : "" #>
+<#= deserializeto.IsCore ? "#endif" : "" #>
+<# } #>
+<# } #>
+	}
+}

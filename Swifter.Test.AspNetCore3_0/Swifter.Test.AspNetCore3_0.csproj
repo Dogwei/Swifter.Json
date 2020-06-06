@@ -4,9 +4,4 @@
     <TargetFramework>netcoreapp3.0</TargetFramework>
   </PropertyGroup>
 
-
-  <ItemGroup>
-    <ProjectReference Include="..\Swifter.Extensions.AspNetCore\Swifter.Extensions.AspNetCore.csproj" />
-  </ItemGroup>
-
 </Project>

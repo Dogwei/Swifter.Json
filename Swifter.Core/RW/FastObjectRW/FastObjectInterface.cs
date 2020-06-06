@@ -5,7 +5,11 @@ using System;
 
 namespace Swifter.RW
 {
-    internal sealed class FastObjectInterface<T> : IValueInterface<T>
+    /// <summary>
+    /// FastObjectRW 基于 Emit 实现的几乎完美效率的对象读写接口。
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public sealed class FastObjectInterface<T> : IValueInterface<T>
     {
         /// <summary>
         /// 表示是否需要进行派生类检查。
@@ -13,18 +17,28 @@ namespace Swifter.RW
         static readonly bool CheckDerivedInstance = !(typeof(T).IsSealed || typeof(T).IsValueType);
         static readonly IntPtr TypeHandle = TypeHelper.GetTypeHandle(typeof(T));
 
+        /// <summary>
+        /// 读取一个对象。
+        /// </summary>
+        /// <param name="valueReader">值读取器</param>
+        /// <returns>返回一个对象</returns>
         public T ReadValue(IValueReader valueReader)
         {
             var writer = FastObjectRW<T>.Create();
 
             valueReader.ReadObject(writer);
 
-            return writer.Content;
+            return writer.content;
         }
         
+        /// <summary>
+        /// 写入一个对象。
+        /// </summary>
+        /// <param name="valueWriter">值写入器</param>
+        /// <param name="value">对象</param>
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
 
@@ -41,7 +55,7 @@ namespace Swifter.RW
 
             var reader = FastObjectRW<T>.Create();
 
-            reader.Initialize(value);
+            reader.content = value;
 
             valueWriter.WriteObject(reader);
         }

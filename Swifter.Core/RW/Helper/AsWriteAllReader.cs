@@ -1,5 +1,5 @@
 ﻿using Swifter.Tools;
-
+using System;
 using System.Collections.Generic;
 
 namespace Swifter.RW
@@ -15,17 +15,20 @@ namespace Swifter.RW
 
         public IValueReader this[TIn key] => dataReader[XConvert<TOut>.Convert(key)];
 
-        public IEnumerable<TIn> Keys => ArrayHelper.CreateAsIterator<TOut, TIn>(dataReader.Keys);
+        public IEnumerable<TIn> Keys => ArrayHelper.CreateConvertIterator<TOut, TIn>(dataReader.Keys);
 
         public int Count => dataReader.Count;
 
-        public object ReferenceToken => dataReader.ReferenceToken;
+        public object Content
+        {
+            get => dataReader.Content;
+            set => dataReader.Content = value;
+        }
+
+        public Type ContentType => dataReader.ContentType;
 
         public void OnReadAll(IDataWriter<TIn> dataWriter) =>
             dataReader.OnReadAll(new AsReadAllWriter<TOut, TIn>(dataWriter));
-
-        public void OnReadAll(IDataWriter<TIn> dataWriter, IValueFilter<TIn> valueFilter) => 
-            dataReader.OnReadAll(new AsReadAllWriter<TOut, TIn>(dataWriter), new AsReadAllFilter<TOut, TIn>(valueFilter));
 
         public void OnReadValue(TIn key, IValueWriter valueWriter) =>
             dataReader.OnReadValue(XConvert<TOut>.Convert(key), valueWriter);

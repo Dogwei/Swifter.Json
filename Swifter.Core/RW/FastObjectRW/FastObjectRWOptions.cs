@@ -29,7 +29,7 @@ namespace Swifter.RW
         CannotSetException = 0x8,
 
         /// <summary>
-        /// 基础类型直接调用方法读写，不经过 ValueInterface。
+        /// 基础类型直接调用方法读写，不经过 <see cref="ValueInterface{T}"/>。
         /// </summary>
         BasicTypeDirectCallMethod = 0x10,
 
@@ -54,7 +54,7 @@ namespace Swifter.RW
         SkipDefaultValue = 0x100,
 
         /// <summary>
-        /// 在 OnReadAll 时只读取已定义 RWField(包括继承的类) 特性的成员。
+        /// 在 OnReadAll 时只读取已定义 <see cref="RWFieldAttribute"/> 特性的成员（包括继承的类）。
         /// </summary>
         MembersOptIn = 0x200,
 
@@ -64,8 +64,8 @@ namespace Swifter.RW
         Allocate = 0x400,
 
         /// <summary>
-        /// 表示 Id64 是一个索引，而不是 Hash64 值。
+        /// 当属性为自动属性时，直接对该属性对应的字段进行读写。
         /// </summary>
-        IndexId64 = 0x800
+        AutoPropertyDirectRW = 0x800,
     }
 }

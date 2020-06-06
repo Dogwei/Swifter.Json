@@ -4,19 +4,14 @@ using Swifter.Tools;
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 
 namespace Swifter.Json
 {
-    sealed class JsonReferenceWriter : BaseCache<object, RWPathInfo>, IValueWriter, IDataWriter<string>, IDataWriter<int>
+    sealed class JsonReferenceWriter : Dictionary<object, RWPathInfo>, IValueWriter, IDataWriter<string>, IDataWriter<int>
     {
         public RWPathInfo Reference;
 
-        string Name;
-
-        int Index;
-
-        public JsonReferenceWriter() : base(0)
+        public JsonReferenceWriter() : base(TypeHelper.ReferenceComparer)
         {
             Reference = RWPathInfo.Root;
         }
@@ -25,7 +20,7 @@ namespace Swifter.Json
         {
             get
             {
-                Name = key;
+                RWPathInfo.SetPath(Reference, key);
 
                 return this;
             }
@@ -35,7 +30,7 @@ namespace Swifter.Json
         {
             get
             {
-                Index = key;
+                RWPathInfo.SetPath(Reference, key);
 
                 return this;
             }
@@ -44,6 +39,14 @@ namespace Swifter.Json
         IEnumerable<string> IDataWriter<string>.Keys => null;
 
         IEnumerable<int> IDataWriter<int>.Keys => null;
+
+        public Type ContentType => throw new NotSupportedException();
+
+        public object Content
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
 
         public void Initialize()
         {
@@ -131,6 +134,10 @@ namespace Swifter.Json
         {
         }
 
+        public void WriteEnum<T>(T value) where T : struct, Enum
+        {
+        }
+
         public void WriteObject(IDataReader<string> dataReader)
         {
             SaveReference(dataReader);
@@ -138,22 +145,9 @@ namespace Swifter.Json
 
         public void SaveReference(IDataReader dataReader)
         {
-            RWPathInfo reference;
-
-            var token = dataReader.ReferenceToken;
-
-            if (Name != null)
+            if (dataReader.ContentType?.IsValueType == false)
             {
-                reference = RWPathInfo.Create(Name, Reference);
-            }
-            else
-            {
-                reference = RWPathInfo.Create(Index, Reference);
-            }
-
-            if (token != null)
-            {
-                TryAdd(token, reference);
+                this.TryAdd(dataReader.Content, Reference.Clone());
             }
         }
 
@@ -164,16 +158,6 @@ namespace Swifter.Json
 
         public void DirectWrite(object value)
         {
-        }
-
-        protected override int ComputeHashCode(object key)
-        {
-            return RuntimeHelpers.GetHashCode(key);
-        }
-
-        protected override bool Equals(object key1, object key2)
-        {
-            return key1 == key2;
         }
     }
 }

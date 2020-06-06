@@ -21,10 +21,10 @@ namespace Swifter.RW
         {
             Impl<T>.DefaultInterface = valueInterface;
         }
-        
+
         public static void Set<T>(ITargetedBind targeted, IValueInterface<T> valueInterface)
         {
-            if (valueInterface == null)
+            if (valueInterface is null)
             {
                 throw new ArgumentNullException(nameof(valueInterface));
             }
@@ -48,7 +48,7 @@ namespace Swifter.RW
         {
             return Impl<T>.Instance.Get(targeted);
         }
-        
+
         public static void Remove(ITargetedBind targeted)
         {
             lock (Impls)
@@ -71,11 +71,11 @@ namespace Swifter.RW
 
             public static IValueInterface<T> DefaultInterface;
 
-            public static IdCache<IValueInterface<T>> Interfaces;
+            public static Dictionary<long, IValueInterface<T>> Interfaces;
 
             static Impl()
             {
-                Interfaces = new IdCache<IValueInterface<T>>();
+                Interfaces = new Dictionary<long, IValueInterface<T>>();
 
                 Instance = new Impl<T>();
 

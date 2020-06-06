@@ -1,13 +1,12 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
-using System.Text.RegularExpressions;
+
 
 namespace Swifter.Tools
 {
@@ -17,6 +16,11 @@ namespace Swifter.Tools
     public static class TypeHelper
     {
         /// <summary>
+        /// 引用比较器。
+        /// </summary>
+        public static IEqualityComparer<object> ReferenceComparer => Tools.ReferenceComparer.Instance;
+
+        /// <summary>
         /// 获取一个字段的偏移量。如果是 Class 的字段则不包括 ObjectHandle 的大小。
         /// </summary>
         /// <param name="fieldInfo">字段信息</param>
@@ -24,7 +28,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int OffsetOf(FieldInfo fieldInfo)
         {
-            if (fieldInfo == null)
+            if (fieldInfo is null)
             {
                 throw new ArgumentNullException(nameof(fieldInfo));
             }
@@ -34,111 +38,216 @@ namespace Swifter.Tools
                 throw new ArgumentException("Unable get offset of a const field.", nameof(fieldInfo));
             }
 
-            if (OffsetHelper.OffsetOfByHandleIsAvailable)
+            if (VersionDifferences.UseInternalMethod && OffsetHelper.OffsetOfByFieldDescIsAvailable)
             {
-                return OffsetHelper.OffsetOfByHandle(fieldInfo);
+                return OffsetHelper.GetOffsetByFieldDesc(fieldInfo);
             }
 
-            return OffsetHelper.GetOffsetByDynamic(fieldInfo);
+            if (!fieldInfo.IsStatic && OffsetHelper.GetOffsetByIndexOfInstance(fieldInfo) is int offset && offset >= 0)
+            {
+                return offset;
+            }
+
+            if (VersionDifferences.IsSupportEmit)
+            {
+                return OffsetHelper.GetOffsetByEmit(fieldInfo);
+            }
+
+            throw new PlatformNotSupportedException();
         }
 
         /// <summary>
-        /// 获取一个类型占用的内存大小。如果是 Class 则不包括 ObjectHandle 的大小。
+        /// 获取对象中的值的偏移量。
+        /// </summary>
+        /// <returns>返回一个 <see cref="int"/> 值</returns>
+        public static unsafe int GetObjectValueByteOffset()
+        {
+            return AllocateHelper.ObjectValueByteOffset;
+        }
+
+        /// <summary>
+        /// 获取一个类型值的大小。
         /// </summary>
         /// <param name="type">类型信息</param>
         /// <returns>返回内存大小。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public unsafe static int SizeOf(Type type)
         {
-            if (type == null)
+            if (type is null)
             {
                 throw new ArgumentNullException(nameof(type));
             }
 
             if (type is TypeBuilder)
             {
-                throw new ArgumentException("Unable get size of a TypeBuilder.", nameof(type));
+                throw new NotSupportedException(nameof(type));
             }
 
             if (type.IsGenericTypeDefinition)
             {
-                throw new ArgumentException("Unable get size of a generic definition type.", nameof(type));
+                throw new NotSupportedException(nameof(type));
             }
 
-            switch (Type.GetTypeCode(type))
+            if (type.IsByRefLike())
             {
-                case TypeCode.Boolean:
-                    return sizeof(bool);
-                case TypeCode.Char:
-                    return sizeof(char);
-                case TypeCode.SByte:
-                    return sizeof(sbyte);
-                case TypeCode.Byte:
-                    return sizeof(byte);
-                case TypeCode.Int16:
-                    return sizeof(short);
-                case TypeCode.UInt16:
-                    return sizeof(ushort);
-                case TypeCode.Int32:
-                    return sizeof(int);
-                case TypeCode.UInt32:
-                    return sizeof(uint);
-                case TypeCode.Int64:
-                    return sizeof(long);
-                case TypeCode.UInt64:
-                    return sizeof(ulong);
-                case TypeCode.Single:
-                    return sizeof(float);
-                case TypeCode.Double:
-                    return sizeof(double);
-                case TypeCode.Decimal:
-                    return sizeof(decimal);
-                case TypeCode.DateTime:
-                    return sizeof(DateTime);
+                // TODO: ref struct 的大小是所有字段大小的和。
+                throw new NotSupportedException(nameof(type));
             }
 
-            if (type.IsPointer ||
-                type.IsInterface ||
-                type.IsByRef ||
-                typeof(object) == type ||
-                typeof(IntPtr) == type)
+            if (type.IsByRef || type.IsPointer || !type.IsValueType || type.IsClass || type.IsInterface || type.IsArray)
             {
                 return IntPtr.Size;
             }
 
-            return GenericInvokerHelper.SizeOf(type);
+            return (Type.GetTypeCode(type)) switch
+            {
+                TypeCode.Boolean => sizeof(bool),
+                TypeCode.Char => sizeof(char),
+                TypeCode.SByte => sizeof(sbyte),
+                TypeCode.Byte => sizeof(byte),
+                TypeCode.Int16 => sizeof(short),
+                TypeCode.UInt16 => sizeof(ushort),
+                TypeCode.Int32 => sizeof(int),
+                TypeCode.UInt32 => sizeof(uint),
+                TypeCode.Int64 => sizeof(long),
+                TypeCode.UInt64 => sizeof(ulong),
+                TypeCode.Single => sizeof(float),
+                TypeCode.Double => sizeof(double),
+                TypeCode.Decimal => sizeof(decimal),
+                TypeCode.DateTime => sizeof(DateTime),
+                _ => GenericInvokerHelper.SizeOf(type),
+            };
         }
 
         /// <summary>
-        /// 克隆一个值或对象。
+        /// 获取指定类型已对齐的实例字段 Bytes 数。
         /// </summary>
-        /// <typeparam name="T">值或对象的类型</typeparam>
-        /// <param name="obj">值或对象</param>
-        /// <returns>返回一个新的值或对象</returns>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回一个 int 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static T Clone<T>(T obj)
+        public unsafe static int GetAlignedNumInstanceFieldBytes(Type type)
         {
-            if (typeof(T).IsValueType)
+            if (type is null)
             {
-                return obj;
+                throw new ArgumentNullException(nameof(type));
             }
 
-            if (obj == null)
+            if (type is TypeBuilder)
             {
-                return default;
+                throw new NotSupportedException(nameof(type));
             }
 
-            if (obj is string str)
+            if (type.IsGenericTypeDefinition)
             {
-                return Unsafe.As<string, T>(ref str);
+                throw new NotSupportedException(nameof(type));
             }
 
-            if (obj is ICloneable)
+            if (GenericInvokerHelper.GetBaseSizeIsAvailable && VersionDifferences.UseInternalMethod)
             {
-                return (T)((ICloneable)obj).Clone();
+                return GenericInvokerHelper.GetBaseSize(type) - GenericInvokerHelper.GetBaseSizePadding(type);
             }
 
-            return (T)CloneHelper.FuncMemberwiseClone(obj);
+            return GenericInvokerHelper.GetAlignedNumInstanceFieldBytes(type);
+        }
+
+        /// <summary>
+        /// 获取指定类型的实例字段 Bytes 数。
+        /// </summary>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回一个 int 值。</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static int GetNumInstanceFieldBytes(Type type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentNullException(nameof(type));
+            }
+
+            if (type is TypeBuilder)
+            {
+                throw new NotSupportedException(nameof(type));
+            }
+
+            if (type.IsGenericTypeDefinition)
+            {
+                throw new NotSupportedException(nameof(type));
+            }
+
+            return GenericInvokerHelper.GetNumInstanceFieldBytes(type);
+        }
+
+        /// <summary>
+        /// 获取托管引用的值引用。
+        /// </summary>
+        /// <typeparam name="T">需要获取的引用类型</typeparam>
+        /// <param name="reference">托管引用</param>
+        /// <returns>返回值引用</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe ref T RefValue<T>(TypedReference reference)
+        {
+            return ref Underlying.AsRef<T>(*(byte**)&reference);
+        }
+
+        /// <summary>
+        /// 获取指定类型的默认值。
+        /// </summary>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回该类型的默认值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object GetDefaultValue(Type type)
+        {
+            if (type.IsValueType)
+            {
+                return GenericInvokerHelper.GetDefaultValue(type);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 获取一个指定类型的实例需要分配的堆大小。
+        /// </summary>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回一个 int 值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe int GetBaseSize(Type type)
+        {
+            if (type is null)
+            {
+                throw new ArgumentNullException(nameof(type));
+            }
+
+            if (type is TypeBuilder)
+            {
+                throw new NotSupportedException(nameof(type));
+            }
+
+            if (type.IsGenericTypeDefinition)
+            {
+                throw new NotSupportedException(nameof(type));
+            }
+
+            if (GenericInvokerHelper.GetBaseSizeIsAvailable && VersionDifferences.UseInternalMethod)
+            {
+                return GenericInvokerHelper.GetBaseSize(type);
+            }
+
+            return Math.Max(GenericInvokerHelper.GetAlignedNumInstanceFieldBytes(type), GetObjectValueByteOffset()) + IntPtr.Size + GetObjectValueByteOffset();
+        }
+
+        /// <summary>
+        /// 浅表克隆一个对象。
+        /// </summary>
+        /// <param name="obj">对象实例</param>
+        /// <returns>返回一个新的对象实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object MemberwiseClone(object obj)
+        {
+            if (obj is null) return null;
+            if (obj is string str) return CloneHelper.CloneString(str);
+            if (obj is Array array) return CloneHelper.CloneArray(array);
+
+            return CloneHelper.MemberwiseClone(obj);
         }
 
         /// <summary>
@@ -149,21 +258,57 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static object Allocate(Type type)
         {
-            if (type == null)
-            {
-                throw new ArgumentNullException(nameof(type));
-            }
+            //if (type.IsArray)
+            //{
+            //    var elementType = type.GetElementType();
 
-            if (type.IsArray)
-            {
-                var lengths = new int[type.GetArrayRank()];
+            //    if (type.GetArrayRank() == 1)
+            //    {
+            //        return Array.CreateInstance(elementType, 0);
+            //    }
 
-                return Array.CreateInstance(type.GetElementType(), lengths);
-            }
+            //    return Array.CreateInstance(elementType, new int[type.GetArrayRank()]);
+            //}
 
-            if (type == typeof(string))
+            //if (type == typeof(string))
+            //{
+            //    return StringHelper.MakeString(0);
+            //}
+
+            //if (VersionDifferences.TypeHandleEqualMethodTablePointer && VersionDifferences.UseInternalMethod)
+            //{
+            //    var m_BaseSize = GetBaseSize(type) - GenericInvokerHelper.ObjectBaseSize;
+            //    var r_Obj = default(object);
+
+            //    if (m_BaseSize == 0)
+            //    {
+            //        r_Obj = new object();
+            //    }
+
+            //    if (m_BaseSize > 0)
+            //    {
+            //        r_Obj = new byte[m_BaseSize];
+            //    }
+
+            //    if (r_Obj != null)
+            //    {
+            //        Underlying.GetMethodTablePointer(r_Obj) = type.TypeHandle.Value;
+
+            //        Underlying.As<StructBox<IntPtr>>(r_Obj).Value = IntPtr.Zero;
+
+            //        return r_Obj;
+            //    }
+            //}
+
+            foreach (var allocate in AllocateHelper.AllocateMethods)
             {
-                return "";
+                try
+                {
+                    return allocate(type);
+                }
+                catch
+                {
+                }
             }
 
             return FormatterServices.GetUninitializedObject(type);
@@ -176,7 +321,12 @@ namespace Swifter.Tools
         /// <returns>返回一个 bool 值</returns>
         public static bool CanBeGenericParameter(this Type type)
         {
-            return !(type.IsByRef || type.IsByRefLike() || type.IsPointer || type == typeof(void));
+            return !type.IsByRef // 引用不能为泛型
+                && !type.IsByRefLike()  // 仅栈类型不能为泛型
+                && !type.IsPointer  // 指针类型不能为泛型
+                && !(type.IsSealed && type.IsAbstract) // 静态类型不能为泛型
+                && type != typeof(void) // void 不能为泛型
+                ;
         }
 
         /// <summary>
@@ -185,9 +335,9 @@ namespace Swifter.Tools
         /// <param name="obj">实例</param>
         /// <returns>返回 ObjectHandle 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IntPtr GetObjectTypeHandle(object obj)
+        public static IntPtr GetMethodTablePointer(object obj)
         {
-            return Unsafe.GetObjectTypeHandle(obj);
+            return Underlying.GetMethodTablePointer(obj);
         }
 
         /// <summary>
@@ -218,32 +368,112 @@ namespace Swifter.Tools
         /// <param name="type">类型信息</param>
         /// <returns>返回 ObjectHandle 值。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IntPtr GetObjectTypeHandle(Type type)
+        public static IntPtr GetMethodTablePointer(Type type)
         {
-            if (VersionDifferences.ObjectTypeHandleEqualsTypeHandle && !type.IsArray)
+            if (VersionDifferences.TypeHandleEqualMethodTablePointer && !type.IsArray)
             {
                 return type.TypeHandle.Value;
             }
 
-            var obj = Allocate(type);
-
-            if (obj == null)
-            {
-                VersionNotSupport(nameof(GetObjectTypeHandle));
-            }
-
-            return GetObjectTypeHandle(obj);
+            return GetMethodTablePointer(Allocate(type));
         }
-        
+
         /// <summary>
-        /// 获取类型的静态字段存储内存的地址。
+        /// 获取类型的托管静态字段存储内存的地址。
         /// </summary>
         /// <param name="type">类型信息</param>
         /// <returns>返回内存地址。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IntPtr GetTypeStaticMemoryAddress(Type type)
+        public static IntPtr GetGCStaticsBasePointer(Type type)
         {
-            return GenericInvokerHelper.GetTypeStaticMemoryAddress(type);
+            return GenericInvokerHelper.GetStaticsBasePointer(type, StaticsBaseBlock.GC);
+        }
+
+        /// <summary>
+        /// 获取类型的非托管静态字段存储内存的地址。
+        /// </summary>
+        /// <param name="type">类型信息</param>
+        /// <returns>返回内存地址。</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static IntPtr GetNonGCStaticsBasePointer(Type type)
+        {
+            return GenericInvokerHelper.GetStaticsBasePointer(type, StaticsBaseBlock.NonGC);
+        }
+
+        /// <summary>
+        /// 获取类型的非托管静态字段存储内存的地址。
+        /// </summary>
+        /// <param name="type">类型信息</param>
+        /// <returns>返回内存地址。</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static IntPtr GetThreadGCStaticsBasePointer(Type type)
+        {
+            return GenericInvokerHelper.GetStaticsBasePointer(type, StaticsBaseBlock.ThreadGC);
+        }
+
+        /// <summary>
+        /// 获取类型的非托管静态字段存储内存的地址。
+        /// </summary>
+        /// <param name="type">类型信息</param>
+        /// <returns>返回内存地址。</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static IntPtr GetThreadNonGCStaticsBasePointer(Type type)
+        {
+            return GenericInvokerHelper.GetStaticsBasePointer(type, StaticsBaseBlock.ThreadNonGC);
+        }
+
+
+        /// <summary>
+        /// 获取静态字段所在堆内存的地址。
+        /// </summary>
+        /// <param name="fieldInfo">静态字段信息</param>
+        /// <returns>返回内存地址。</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static IntPtr GetStaticsBasePointer(FieldInfo fieldInfo)
+        {
+            return GenericInvokerHelper.GetStaticsBasePointer(fieldInfo.DeclaringType, GetStaticBaseBlock(fieldInfo));
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        internal static StaticsBaseBlock GetStaticBaseBlock(FieldInfo fieldInfo)
+        {
+            StaticsBaseBlock ret = default;
+
+            if (!fieldInfo.FieldType.IsValueType)
+            {
+                ret |= (StaticsBaseBlock)0x1;
+            }
+
+            if (fieldInfo.IsThreadStatic())
+            {
+                ret |= (StaticsBaseBlock)0x2;
+            }
+
+            return ret;
+        }
+
+        /// <summary>
+        /// 判断一个字段是否为线程静态字段。
+        /// </summary>
+        /// <param name="fieldInfo">静态字段信息</param>
+        /// <returns>返回一个不二值</returns>
+        public static bool IsThreadStatic(this FieldInfo fieldInfo)
+        {
+            if (VersionDifferences.IsSupportEmit && OffsetHelper.OffsetOfByFieldDescIsAvailable)
+            {
+                // TODO: 支持 OffsetOf 不代表也支持 IsThreadStatic。
+
+                return OffsetHelper.IsThreadStaticOfByFieldDesc(fieldInfo);
+            }
+
+            if (fieldInfo.IsDefined(typeof(ThreadStaticAttribute), false))
+            {
+                return true;
+            }
+
+            // TODO: 尝试其他方案获取。
+
+            return false;
         }
 
         /// <summary>
@@ -255,29 +485,29 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool IsEmptyValue<T>(T value)
         {
-            var size = Unsafe.SizeOf<T>();
+            var size = Underlying.SizeOf<T>();
 
             switch (size)
             {
                 case 0:
                     return true;
                 case 1:
-                    return Unsafe.As<T, byte>(ref value) == 0;
+                    return Underlying.As<T, byte>(ref value) == 0;
                 case 2:
-                    return Unsafe.As<T, short>(ref value) == 0;
+                    return Underlying.As<T, short>(ref value) == 0;
                 case 4:
-                    return Unsafe.As<T, int>(ref value) == 0;
+                    return Underlying.As<T, int>(ref value) == 0;
                 case 8:
-                    return Unsafe.As<T, long>(ref value) == 0;
+                    return Underlying.As<T, long>(ref value) == 0;
             }
 
-            ref var first = ref Unsafe.As<T, byte>(ref value);
+            ref var first = ref Underlying.As<T, byte>(ref value);
 
             while (size >= 8)
             {
                 size -= 8;
 
-                if (Unsafe.As<byte, long>(ref Unsafe.Add(ref first, size)) != 0)
+                if (Underlying.As<byte, long>(ref Underlying.Add(ref first, size)) != 0)
                 {
                     return false;
                 }
@@ -287,7 +517,7 @@ namespace Swifter.Tools
             {
                 size -= 4;
 
-                if (Unsafe.As<byte, int>(ref Unsafe.Add(ref first, size)) != 0)
+                if (Underlying.As<byte, int>(ref Underlying.Add(ref first, size)) != 0)
                 {
                     return false;
                 }
@@ -297,7 +527,7 @@ namespace Swifter.Tools
             {
                 size -= 2;
 
-                if (Unsafe.As<byte, short>(ref Unsafe.Add(ref first, size)) != 0)
+                if (Underlying.As<byte, short>(ref Underlying.Add(ref first, size)) != 0)
                 {
                     return false;
                 }
@@ -305,7 +535,7 @@ namespace Swifter.Tools
 
             if (size >= 1)
             {
-                if (Unsafe.As<byte, byte>(ref first) != 0)
+                if (Underlying.As<byte, byte>(ref first) != 0)
                 {
                     return false;
                 }
@@ -322,18 +552,19 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool IsEmptyValue(object value)
         {
-            if (value == null)
+            if (value is null)
             {
                 return true;
             }
 
-            return GenericInvokerHelper.IsEmptyValue(value);
-        }
+            var isValueType = value.GetType().IsValueType;
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void VersionNotSupport(string methodName)
-        {
-            throw new PlatformNotSupportedException($"current .net version not support '{methodName}' method.");
+            if (isValueType)
+            {
+                return GenericInvokerHelper.IsEmptyValue(value);
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -365,7 +596,7 @@ namespace Swifter.Tools
                     return item;
                 }
 
-            Continue:
+                Continue:
                 continue;
             }
 
@@ -480,7 +711,13 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static ref T Unbox<T>(object value)
         {
-            return ref Unsafe.As<StructBox<T>>(value).Value;
+            return ref Underlying.As<StructBox<T>>(value).Value;
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        internal static unsafe object CamouflageBox<T>(void* ptr)
+        {
+            return Underlying.As<IntPtr, StructBox<T>>(ref Underlying.AsRef((IntPtr)((byte*)ptr - GetObjectValueByteOffset())));
         }
 
         /// <summary>
@@ -511,24 +748,365 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 获取指定完全名称的类型信息集合。
+        /// 判断一个属性（实例或静态）是否为自动属性（无特殊处理，直接对一个字段读写的属性）。
         /// </summary>
-        /// <param name="fullName">指定类型名称</param>
-        /// <returns>返回一个类型集合</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static IEnumerable<Type> GetTypes(string fullName)
+        /// <param name="propertyInfo">属性信息</param>
+        /// <param name="fieldInfo">返回一个字段信息</param>
+        /// <returns>返回一个 bool 值。</returns>
+        public static bool IsAutoProperty(PropertyInfo propertyInfo, out FieldInfo fieldInfo)
         {
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            fieldInfo = default;
 
-            foreach (var item in assemblies)
+            if (propertyInfo is null)
             {
-                var result = item.GetType(fullName);
+                return false;
+            }
 
-                if (result != null)
+            var getMethod = propertyInfo.GetGetMethod(true);
+            var setMethod = propertyInfo.GetSetMethod(true);
+
+            if (getMethod is null)
+            {
+                if (IsAutoSetMethod(setMethod, out var fieldMetadataToken))
                 {
-                    yield return result;
+                    fieldInfo = GetMemberByMetadataToken<FieldInfo>(propertyInfo.DeclaringType, fieldMetadataToken);
+
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (setMethod is null)
+            {
+                if (IsAutoGetMethod(getMethod, out var fieldMetadataToken))
+                {
+                    fieldInfo = GetMemberByMetadataToken<FieldInfo>(propertyInfo.DeclaringType, fieldMetadataToken);
+
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (IsAutoGetMethod(getMethod, out var getFieldMetadataToken) && IsAutoSetMethod(setMethod, out var setFieldMetadataToken))
+            {
+                if (getFieldMetadataToken == setFieldMetadataToken)
+                {
+                    fieldInfo = GetMemberByMetadataToken<FieldInfo>(propertyInfo.DeclaringType, getFieldMetadataToken);
+
+                    return true;
                 }
             }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 判断一个方法（实例或静态）是否为直接返回一个字段值的方法。
+        /// </summary>
+        /// <param name="methodInfo">方法信息</param>
+        /// <param name="fieldMetadataToken">返回字段的元数据标识</param>
+        /// <returns>返回一个 bool 值。</returns>
+        public static bool IsAutoGetMethod(MethodInfo methodInfo, out int fieldMetadataToken)
+        {
+            fieldMetadataToken = default;
+
+            if (methodInfo is null)
+            {
+                return false;
+            }
+
+            if (methodInfo.GetParameters().Length != 0)
+            {
+                return false;
+            }
+
+            var ilBytes = methodInfo.GetMethodBody()?.GetILAsByteArray();
+
+            if (ilBytes is null)
+            {
+                return false;
+            }
+
+            if (methodInfo.IsStatic)
+            {
+                if (!(ilBytes.Length == 6 &&
+                    ilBytes[0] == OpCodes.Ldsfld.Value &&
+                    ilBytes[5] == OpCodes.Ret.Value
+                    ))
+                {
+                    return false;
+                }
+
+                fieldMetadataToken = ReadMetadataToken(ref ilBytes[1]);
+            }
+            else
+            {
+                if (!(ilBytes.Length == 7 &&
+                    ilBytes[0] == OpCodes.Ldarg_0.Value &&
+                    ilBytes[1] == OpCodes.Ldfld.Value &&
+                    ilBytes[6] == OpCodes.Ret.Value
+                    ))
+                {
+                    return false;
+                }
+
+                fieldMetadataToken = ReadMetadataToken(ref ilBytes[2]);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 判断一个方法（实例或静态）是否为直接设置一个字段值的方法。
+        /// </summary>
+        /// <param name="methodInfo">方法信息</param>
+        /// <param name="fieldMetadataToken">返回字段的元数据标识</param>
+        /// <returns>返回一个 bool 值。</returns>
+        public static bool IsAutoSetMethod(MethodInfo methodInfo, out int fieldMetadataToken)
+        {
+            fieldMetadataToken = default;
+
+            if (methodInfo is null)
+            {
+                return false;
+            }
+
+            if (methodInfo.GetParameters().Length != 1)
+            {
+                return false;
+            }
+
+            var ilBytes = methodInfo.GetMethodBody()?.GetILAsByteArray();
+
+            if (ilBytes is null)
+            {
+                return false;
+            }
+
+            if (methodInfo.IsStatic)
+            {
+                if (!(ilBytes.Length == 6 &&
+                    ilBytes[0] == OpCodes.Ldarg_0.Value &&
+                    ilBytes[1] == OpCodes.Stsfld.Value &&
+                    ilBytes[6] == OpCodes.Ret.Value
+                    ))
+                {
+                    return false;
+                }
+
+                fieldMetadataToken = ReadMetadataToken(ref ilBytes[2]);
+            }
+            else
+            {
+                if (!(ilBytes.Length == 8 &&
+                    ilBytes[0] == OpCodes.Ldarg_0.Value &&
+                    ilBytes[1] == OpCodes.Ldarg_1.Value &&
+                    ilBytes[2] == OpCodes.Stfld.Value &&
+                    ilBytes[7] == OpCodes.Ret.Value
+                    ))
+                {
+                    return false;
+                }
+
+                fieldMetadataToken = ReadMetadataToken(ref ilBytes[3]);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 通过元数据根获取成员信息。
+        /// </summary>
+        /// <typeparam name="TMemberInfo">期望获取的成员类型</typeparam>
+        /// <param name="declaringType">成员的定义类</param>
+        /// <param name="metadataToken">元数据根</param>
+        /// <returns>返回一个成员信息或 null。</returns>
+        public static TMemberInfo GetMemberByMetadataToken<TMemberInfo>(Type declaringType, int metadataToken) where TMemberInfo : MemberInfo
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+            try
+            {
+                if (declaringType.IsGenericType)
+                {
+                    if (declaringType.Module.ResolveMember(metadataToken, declaringType.GetGenericArguments(), default) is TMemberInfo ret)
+                    {
+                        return ret;
+                    }
+                }
+                else
+                {
+                    if (declaringType.Module.ResolveMember(metadataToken) is TMemberInfo ret)
+                    {
+                        return ret;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return Loop(declaringType);
+
+            TMemberInfo Loop(Type type)
+            {
+                if (type is null)
+                {
+                    return default;
+                }
+
+                foreach (var item in type.GetMembers(flags))
+                {
+                    if (item.MetadataToken == metadataToken && item is TMemberInfo ret)
+                    {
+                        return ret;
+                    }
+                }
+
+                return Loop(type.BaseType);
+            }
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private static int ReadMetadataToken(ref byte firstByte)
+        {
+            var value = Underlying.As<byte, int>(ref firstByte);
+
+            return BitConverter.IsLittleEndian
+                ? value
+                : unchecked((int)BinaryPrimitives.ReverseEndianness((uint)value));
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="TFrom"></typeparam>
+        /// <typeparam name="TTo"></typeparam>
+        /// <param name="source"></param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static TTo As<TFrom, TTo>(TFrom source) => Underlying.As<TFrom, TTo>(ref source);
+
+        /// <summary>
+        /// 尝试在所有程序集中通过类型名称获取类型。
+        /// </summary>
+        /// <param name="typeName">类型名称</param>
+        /// <returns>返回类型信息</returns>
+        public static Type GetTypeForAllAssembly(string typeName)
+        {
+            if (Type.GetType(typeName) is Type result)
+            {
+                return result;
+            }
+
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly.GetType(typeName) is Type type)
+                {
+                    return type;
+                }
+            }
+
+            return null;
+        }
+
+        internal static IEnumerable<Type> GetTypesForAllAssembly()
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                foreach (var type in assembly.GetTypes())
+                {
+                    yield return type;
+                }
+            }
+        }
+
+        internal static IEnumerable<FieldInfo> GetFields(Type type, BindingFlags bindingFlags)
+        {
+            if (type.BaseType != null)
+            {
+                foreach (var fieldInfo in GetFields(type.BaseType, bindingFlags))
+                {
+                    yield return fieldInfo;
+                }
+            }
+
+            foreach (var field in type.GetFields(bindingFlags))
+            {
+                yield return field;
+            }
+        }
+
+        /// <summary>
+        /// 判断一个成员是否为共有的。
+        /// </summary>
+        /// <param name="memberInfo"></param>
+        /// <returns></returns>
+        public static bool IsPublic(this MemberInfo memberInfo)
+        {
+            return memberInfo.MemberType switch
+            {
+                MemberTypes.Constructor => ((ConstructorInfo)memberInfo).IsPublic,
+                MemberTypes.Method => ((MethodInfo)memberInfo).IsPublic,
+                MemberTypes.Event => ((EventInfo)memberInfo).IsPublic(),
+                MemberTypes.Field => ((FieldInfo)memberInfo).IsPublic,
+                MemberTypes.Property => ((PropertyInfo)memberInfo).IsPublic(),
+                MemberTypes.TypeInfo => ((Type)memberInfo).IsPublic,
+                MemberTypes.NestedType => ((Type)memberInfo).IsPublic,
+                _ => /* TODO:  */false,
+            };
+        }
+
+        /// <summary>
+        /// 判断一个事件是否为静态的。
+        /// </summary>
+        /// <param name="eventInfo"></param>
+        /// <returns></returns>
+        public static bool IsStatic(this EventInfo eventInfo)
+        {
+            return (eventInfo.GetAddMethod(true)?.IsStatic ?? eventInfo.GetRemoveMethod(true)?.IsStatic) == true;
+        }
+
+        /// <summary>
+        /// 判断一个事件是否为共有的。
+        /// </summary>
+        /// <param name="eventInfo"></param>
+        /// <returns></returns>
+        public static bool IsPublic(this EventInfo eventInfo)
+        {
+            return (eventInfo.GetAddMethod(true)?.IsPublic ?? eventInfo.GetRemoveMethod(true)?.IsPublic) == true;
+        }
+
+        /// <summary>
+        /// 判断一个属性是否为静态的。
+        /// </summary>
+        /// <param name="propertyInfo"></param>
+        /// <returns></returns>
+        public static bool IsStatic(this PropertyInfo propertyInfo)
+        {
+            return (propertyInfo.GetGetMethod(true)?.IsStatic ?? propertyInfo.GetSetMethod(true)?.IsStatic) == true;
+        }
+
+        /// <summary>
+        /// 判断一个属性是否为共有的。
+        /// </summary>
+        /// <param name="propertyInfo"></param>
+        /// <returns></returns>
+        public static bool IsPublic(this PropertyInfo propertyInfo)
+        {
+            return (propertyInfo.GetGetMethod(true)?.IsPublic ?? propertyInfo.GetSetMethod(true)?.IsPublic) == true;
+        }
+
+        /// <summary>
+        /// 判断一个成员是否外部可见。
+        /// </summary>
+        /// <param name="memberInfo">成员信息</param>
+        /// <returns>返回一个 <see cref="bool"/> 值</returns>
+        public static bool IsExternalVisible(this MemberInfo memberInfo)
+        {
+            return memberInfo.IsPublic() && (memberInfo.DeclaringType?.IsExternalVisible() != false);
         }
     }
 }

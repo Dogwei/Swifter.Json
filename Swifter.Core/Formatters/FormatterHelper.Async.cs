@@ -1,4 +1,4 @@
-﻿#if NET45 || NET451 || NET47 || NET471 || NETSTANDARD || NETCOREAPP
+﻿#if Async
 
 using Swifter.RW;
 using Swifter.Tools;
@@ -6,6 +6,12 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+
+#if ValueTask
+
+using Task = System.Threading.Tasks.ValueTask;
+
+#endif
 
 namespace Swifter.Formatters
 {

@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Swifter.Tools
@@ -9,52 +10,13 @@ namespace Swifter.Tools
     /// <typeparam name="T">对象类型</typeparam>
     public abstract class BaseObjectPool<T> where T : class
     {
-        /*核心思想：拖延租借，尽早归还。*/
+        [ThreadStatic]
+        private protected static T ThreadStatic;
+
+
+        /* 核心思想：拖延租借，尽早归还。*/
 
         volatile Node first;
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private T RentNull()
-        {
-            Node node = null;
-
-            if (node == null)
-            {
-                Yield();
-
-                node = first;
-            }
-
-            if (node == null)
-            {
-                return CreateInstance();
-            }
-
-            if (Interlocked.CompareExchange(ref first, node.Next, node) == node)
-            {
-                return node.Value;
-            }
-
-            return RentLoop();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private T RentLoop()
-        {
-            Yield();
-
-            return Rent();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private void Yield()
-        {
-#if NET20 || NET30 || NET35
-            lock (this) Thread.Sleep(1);
-#else
-            lock (this) Thread.Yield();
-#endif
-        }
 
         /// <summary>
         /// 借出一个实例。（借出的实例不一定要归还，平衡选择，如果归还成本大于实例本身，可以选择不归还实例。）
@@ -63,16 +25,18 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public T Rent()
         {
-            var node = first;
+            ref var thread_static = ref ThreadStatic;
 
-            if (node == null) return RentNull();
-            
-            if (Interlocked.CompareExchange(ref first, node.Next, node) == node)
+            if (thread_static != null)
             {
-                return node.Value;
+                var r = thread_static;
+
+                thread_static = null;
+
+                return r;
             }
 
-            return RentLoop();
+            return LockedRent();
         }
 
         /// <summary>
@@ -82,9 +46,38 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void Return(T obj)
         {
+            ref var thread_static = ref ThreadStatic;
+
+            if (thread_static is null)
+            {
+                thread_static = obj;
+            }
+            else
+            {
+                LockedReturn(obj);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void LockedReturn(T obj)
+        {
             var node = new Node(obj, first);
 
             while (Interlocked.CompareExchange(ref first, node, node.Next) != node.Next) node.Next = first;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private T LockedRent()
+        {
+            if (first is Node node)
+            {
+                if (Interlocked.CompareExchange(ref first, node.Next, node) == node)
+                {
+                    return node.Value;
+                }
+            }
+
+            return CreateInstance();
         }
 
         /// <summary>
@@ -105,22 +98,6 @@ namespace Swifter.Tools
                 Value = value;
                 Next = next;
             }
-        }
-    }
-
-    /// <summary>
-    /// 全局缓存的对象池。
-    /// </summary>
-    /// <typeparam name="T">缓存类型</typeparam>
-    public sealed class HGlobalCachePool<T> : BaseObjectPool<HGlobalCache<T>> where T : struct
-    {
-        /// <summary>
-        /// 创建全局缓存实例。
-        /// </summary>
-        /// <returns>返回一个实例</returns>
-        protected override HGlobalCache<T> CreateInstance()
-        {
-            return new HGlobalCache<T>();
         }
     }
 }

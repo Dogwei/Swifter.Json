@@ -3,22 +3,20 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net45;netcoreapp3.0;</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.2.9.5</Version>
+    <Version>1.3.0</Version>
     <Authors>Dogwei</Authors>
     <OutputType>Library</OutputType>
-    <DocumentationFile>bin\Debug\$(TargetFramework)\Swifter.Extensions.AspNetCore.xml</DocumentationFile>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Swifter.Extensions.AspNetCore.xml</DocumentationFile>
     <Description>Swifter AspNetCore Extensions.</Description>
     <LangVersion>preview</LangVersion>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageIconUrl>https://raw.githubusercontent.com/Dogwei/Swifter.Json/master/ICON.PNG</PackageIconUrl>
+    <PackageIcon>icon.png</PackageIcon>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net45'">
@@ -32,13 +30,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Formatters.Json" Version="2.1.0" />
   </ItemGroup>
 
-
   <ItemGroup>
-    <PackageReference Include="Swifter.Json" Version="$(Version)" />
+    <PackageReference Include="Swifter.Json" Version="1.3.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Swifter.Json\Swifter.Json.csproj" />
-  </ItemGroup>
 
 </Project>

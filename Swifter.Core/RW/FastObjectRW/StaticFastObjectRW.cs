@@ -1,13 +1,13 @@
-﻿
-using Swifter.Tools;
-
+﻿using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.InteropServices;
 
 using static Swifter.RW.StaticFastObjectRW;
+using static Swifter.Tools.MethodHelper;
 
 namespace Swifter.RW
 {
@@ -15,46 +15,21 @@ namespace Swifter.RW
     {
         public const BindingFlags StaticDeclaredOnly = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
-        public static readonly FieldInfo ValueFilterInfoValueCopyerField = typeof(ValueFilterInfo<string>).GetField(nameof(ValueFilterInfo<string>.ValueCopyer));
-        public static readonly FieldInfo ValueFilterInfoKeyField = typeof(ValueFilterInfo<string>).GetField(nameof(ValueFilterInfo<string>.Key));
-        public static readonly FieldInfo ValueFilterInfoTypeField = typeof(ValueFilterInfo<string>).GetField(nameof(ValueFilterInfo<string>.Type));
-
-        public static readonly MethodInfo CreateInstanceFromTypeMethod = typeof(Activator).GetMethod(nameof(Activator.CreateInstance), new Type[] { typeof(Type) });
-
         public static readonly MethodInfo IValueFilterFilterMethod = typeof(IValueFilter<string>).GetMethod(nameof(IValueFilter<string>.Filter));
         public static readonly MethodInfo ValueCopyerWriteToMethod = typeof(ValueCopyer).GetMethod(nameof(ValueCopyer.WriteTo));
-        public static readonly MethodInfo IDataReaderIndexerGetMethod = typeof(IDataReader<string>).GetProperty(new Type[] { typeof(string) }).GetGetMethod(true);
-        public static readonly MethodInfo IDataWriterIndexerGetMethod = typeof(IDataWriter<string>).GetProperty(new Type[] { typeof(string) }).GetGetMethod(true);
-
-        public static readonly MethodInfo CharToUpperMethod = typeof(StringHelper).GetMethod(nameof(StringHelper.ToUpper), new Type[] { typeof(char) });
-
-        public static readonly MethodInfo CharsGetHashCode = typeof(StringHelper).GetMethod(nameof(StringHelper.GetHashCode), new Type[] { typeof(char*), typeof(int) });
-        public static readonly MethodInfo BytesGetHashCode = typeof(StringHelper).GetMethod(nameof(StringHelper.GetHashCode), new Type[] { typeof(byte*), typeof(int) });
-        public static readonly MethodInfo CharsGetUpperedHashCode = typeof(StringHelper).GetMethod(nameof(StringHelper.GetUpperedHashCode), new Type[] { typeof(char*), typeof(int) });
-        public static readonly MethodInfo CharsGetLoweredHashCode = typeof(StringHelper).GetMethod(nameof(StringHelper.GetLoweredHashCode), new Type[] { typeof(char*), typeof(int) });
-        public static readonly MethodInfo BytesGetUpperedHashCode = typeof(StringHelper).GetMethod(nameof(StringHelper.GetUpperedHashCode), new Type[] { typeof(byte*), typeof(int) });
-        public static readonly MethodInfo BytesGetLoweredHashCode = typeof(StringHelper).GetMethod(nameof(StringHelper.GetLoweredHashCode), new Type[] { typeof(byte*), typeof(int) });
-
-        public static readonly MethodInfo CharsVsStringEquals = typeof(StringHelper).GetMethod(nameof(StringHelper.Equals), new Type[] { typeof(char*), typeof(int), typeof(string) });
-        public static readonly MethodInfo BytesVsStringEquals = typeof(StringHelper).GetMethod(nameof(StringHelper.Equals), new Type[] { typeof(byte*), typeof(int), typeof(string) });
-        public static readonly MethodInfo CharsVsStringIgnoreCaseEqualsByUpper = typeof(StringHelper).GetMethod(nameof(StringHelper.IgnoreCaseEqualsByUpper), new Type[] { typeof(char*), typeof(int), typeof(string) });
-        public static readonly MethodInfo CharsVsStringIgnoreCaseEqualsByLower = typeof(StringHelper).GetMethod(nameof(StringHelper.IgnoreCaseEqualsByLower), new Type[] { typeof(char*), typeof(int), typeof(string) });
-        public static readonly MethodInfo BytesVsStringIgnoreCaseEqualsByUpper = typeof(StringHelper).GetMethod(nameof(StringHelper.IgnoreCaseEqualsByUpper), new Type[] { typeof(byte*), typeof(int), typeof(string) });
-        public static readonly MethodInfo BytesVsStringIgnoreCaseEqualsByLower = typeof(StringHelper).GetMethod(nameof(StringHelper.IgnoreCaseEqualsByLower), new Type[] { typeof(byte*), typeof(int), typeof(string) });
-
-        public static readonly MethodInfo AllocateMethod = typeof(TypeHelper).GetMethod(nameof(TypeHelper.Allocate), new Type[] { typeof(Type) });
+        //public static readonly MethodInfo IDataReaderIndexerGetMethod = typeof(IDataReader<string>).GetProperty(new Type[] { typeof(string) }).GetGetMethod(true);
+        //public static readonly MethodInfo IDataWriterIndexerGetMethod = typeof(IDataWriter<string>).GetProperty(new Type[] { typeof(string) }).GetGetMethod(true);
 
         public static readonly MethodInfo GetTypeHandle_Object = typeof(TypeHelper).GetMethod(nameof(TypeHelper.GetTypeHandle), new Type[] { typeof(object) });
         public static readonly MethodInfo GetInterface_Object = typeof(ValueInterface).GetMethod(nameof(ValueInterface.GetInterface), new Type[] { typeof(object) });
         public static readonly MethodInfo Write_IValueWriter_Object = typeof(ValueInterface).GetMethod(nameof(ValueInterface.Write), new Type[] { typeof(IValueWriter), typeof(object) });
 
-        public static readonly MethodInfo GetUtf8CharMethod = typeof(StringHelper).GetMethod(nameof(StringHelper.GetUtf8Char), new Type[] { typeof(byte*), typeof(int).MakeByRefType() });
-        public static readonly MethodInfo GetUtf8StringMethod = typeof(StringHelper).GetMethod(nameof(StringHelper.GetUtf8String), new Type[] { typeof(byte*), typeof(int) });
-
         public static readonly ConstructorInfo MemberAccessException_String_Constructor = typeof(MemberAccessException).GetConstructor(new Type[] { typeof(string) });
         public static readonly ConstructorInfo MissingMemberException_String_String_Constructor = typeof(MissingMemberException).GetConstructor(new Type[] { typeof(string), typeof(string) });
         public static readonly ConstructorInfo MissingMemberException_Constructor = typeof(MissingMemberException).GetConstructor(new Type[] { });
-        public static readonly ConstructorInfo String_PChar_Length_Constructor = typeof(string).GetConstructor(new Type[] { typeof(char*), typeof(int), typeof(int) });
+
+
+
 
         public static readonly bool DynamicAssemblyCanAccessNonPublicTypes;
         public static readonly bool DynamicAssemblyCanAccessNonPublicMembers;
@@ -113,9 +88,12 @@ namespace Swifter.RW
         }
     }
 
-    internal sealed partial class StaticFastObjectRW<T>
+    internal sealed unsafe partial class StaticFastObjectRW<T>
     {
-        public static readonly string[] Keys;
+        public static readonly string[] StringKeys;
+        public static readonly Ps<char>[] UTF16Keys;
+        public static readonly Ps<Utf8Byte>[] UTF8Keys;
+
 
         public static readonly BaseField[] Fields;
 
@@ -123,18 +101,52 @@ namespace Swifter.RW
 
         public static readonly FastObjectRWOptions Options;
 
-        public static readonly int LongestKeyLength;
-
-        public static readonly long Mult;
-
-        public static readonly FieldInfo ContentField;
-
         public static bool HaveNonPublicReadMember;
         public static bool HaveNonPublicWriteMember;
 
-        public static MethodInfo GetValueInterfaceInstanceMethod =>
-            typeof(FastObjectRW<T>).GetMethod(nameof(FastObjectRW<T>.GetValueInterfaceInstance), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
 
+        public static FieldInfo StringKeysField => typeof(StaticFastObjectRW<T>).GetField(nameof(StringKeys));
+
+        public static FieldInfo UTF16KeysField => typeof(StaticFastObjectRW<T>).GetField(nameof(UTF16Keys));
+
+        public static FieldInfo UTF8KeysField => typeof(StaticFastObjectRW<T>).GetField(nameof(UTF8Keys));
+
+        public static MethodInfo GetValueInterfaceInstanceMethod => typeof(FastObjectRW<T>).GetMethod(nameof(FastObjectRW<T>.GetValueInterfaceInstance), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+        public static FieldInfo ContentField
+        {
+            get
+            {
+                return typeof(T).IsExternalVisible() || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers)
+                    ? typeof(FastObjectRW<T>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    : TypeBuilder.GetField(TypeBuilder.BaseType, typeof(FastObjectRW<>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic));
+            }
+        }
+
+        public static Type ContentType
+        {
+            get
+            {
+                if (typeof(T).IsExternalVisible() || DynamicAssemblyCanAccessNonPublicTypes)
+                {
+                    return typeof(T);
+                }
+                else if (TypeBuilder.IsGenericTypeDefinition && TypeBuilder.GetGenericArguments() is Type[] genericArgs && genericArgs.Length == 1)
+                {
+                    return genericArgs[0];
+                }
+
+                return typeof(T);
+            }
+        }
+
+        public static FieldInfo RTContentField
+        {
+            get
+            {
+                return typeof(FastObjectRW<T>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            }
+        }
 
         public static BaseField ChooseField(BaseField field1, BaseField field2)
         {
@@ -169,7 +181,7 @@ namespace Swifter.RW
             }
         }
 
-        private static void GetFields(Type type, Dictionary<string, BaseField> dicFields)
+        private static void GetFields(Type type, Dictionary<string, BaseField> dicFields, RWObjectAttribute[] objectAttributes)
         {
             if ((Options & FastObjectRWOptions.InheritedMembers) != 0)
             {
@@ -177,7 +189,7 @@ namespace Swifter.RW
 
                 if (baseType != null && baseType != typeof(object))
                 {
-                    GetFields(baseType, dicFields);
+                    GetFields(baseType, dicFields, objectAttributes);
                 }
             }
 
@@ -188,9 +200,20 @@ namespace Swifter.RW
             {
                 foreach (var item in fields)
                 {
-                    var attributes = item.GetCustomAttributes(typeof(RWFieldAttribute), true);
+                    var attributes = item
+                        .GetCustomAttributes(typeof(RWFieldAttribute), true)
+                        ?.OfType<RWFieldAttribute>()
+                        ?.ToList();
 
-                    if (attributes != null && attributes.Length != 0)
+                    if (objectAttributes !=null && objectAttributes.Length != 0)
+                    {
+                        foreach (var objectAttribute in objectAttributes)
+                        {
+                            objectAttribute.OnLoadMember(typeof(T), item, ref attributes);
+                        }
+                    }
+
+                    if (attributes != null && attributes.Count != 0)
                     {
                         foreach (var attribute in attributes)
                         {
@@ -200,11 +223,12 @@ namespace Swifter.RW
                             {
                                 SaveField(attributedField);
 
-                                if (attributedField.CanRead && !item.IsPublic)
+                                if (attributedField.CanRead && !attributedField.IsPublicGet)
                                 {
                                     HaveNonPublicReadMember = true;
                                 }
-                                if (attributedField.CanWrite && !item.IsPublic)
+
+                                if (attributedField.CanWrite && !attributedField.IsPublicSet)
                                 {
                                     HaveNonPublicWriteMember = true;
                                 }
@@ -213,7 +237,22 @@ namespace Swifter.RW
                     }
                     else if ((Options & FastObjectRWOptions.Field) != 0 && item.IsPublic)
                     {
-                        SaveField(new FastField(item, null));
+                        var field = new FastField(item, null);
+
+                        if (field.CanRead || field.CanWrite)
+                        {
+                            SaveField(field);
+
+                            if (field.CanRead && !field.IsPublicGet)
+                            {
+                                HaveNonPublicReadMember = true;
+                            }
+
+                            if (field.CanWrite && !field.IsPublicSet)
+                            {
+                                HaveNonPublicWriteMember = true;
+                            }
+                        }
                     }
                 }
             }
@@ -233,9 +272,20 @@ namespace Swifter.RW
                         continue;
                     }
 
-                    var attributes = item.GetCustomAttributes(typeof(RWFieldAttribute), true);
+                    var attributes = item
+                        .GetCustomAttributes(typeof(RWFieldAttribute), true)
+                        ?.OfType<RWFieldAttribute>()
+                        ?.ToList();
 
-                    if (attributes != null && attributes.Length != 0)
+                    if (objectAttributes != null && objectAttributes.Length != 0)
+                    {
+                        foreach (var objectAttribute in objectAttributes)
+                        {
+                            objectAttribute.OnLoadMember(typeof(T), item, ref attributes);
+                        }
+                    }
+
+                    if (attributes != null && attributes.Count != 0)
                     {
                         foreach (var attribute in attributes)
                         {
@@ -245,11 +295,12 @@ namespace Swifter.RW
                             {
                                 SaveField(attributedField);
 
-                                if (attributedField.CanRead && !item.GetGetMethod(true).IsPublic)
+                                if (attributedField.CanRead && !attributedField.IsPublicGet)
                                 {
                                     HaveNonPublicReadMember = true;
                                 }
-                                if (attributedField.CanWrite && !item.GetSetMethod(true).IsPublic)
+
+                                if (attributedField.CanWrite && !attributedField.IsPublicSet)
                                 {
                                     HaveNonPublicWriteMember = true;
                                 }
@@ -263,6 +314,16 @@ namespace Swifter.RW
                         if (field.CanRead || field.CanWrite)
                         {
                             SaveField(field);
+
+                            if (field.CanRead && !field.IsPublicGet)
+                            {
+                                HaveNonPublicReadMember = true;
+                            }
+
+                            if (field.CanWrite && !field.IsPublicSet)
+                            {
+                                HaveNonPublicWriteMember = true;
+                            }
                         }
                     }
                 }
@@ -297,118 +358,50 @@ namespace Swifter.RW
             }
         }
 
-        private static bool CheckMult()
+        public static void SetUTF16Keys()
         {
-            var cache = new IdCache<bool>(Keys.Length);
+            var total_length = 0;
 
-            foreach (var key in Keys)
+            foreach (var item in StringKeys)
             {
-                if (!cache.TryAdd(ComputeId64(key), true))
-                {
-                    return false;
-                }
+                total_length += item.Length;
             }
 
-            return true;
+            var hGChars = (char*)Marshal.AllocHGlobal(sizeof(char) * total_length);
+
+            for (int i = 0; i < UTF16Keys.Length; i++)
+            {
+                var item = StringKeys[i];
+
+                for (int j = 0; j < item.Length; j++)
+                {
+                    hGChars[j] = item[j];
+                }
+
+                UTF16Keys[i] = new Ps<char>(hGChars, item.Length);
+
+                hGChars += item.Length;
+            }
         }
 
-        public static StringComparer GetStringComparer()
+        public static void SetUTF8Keys()
         {
-            if ((Options & FastObjectRWOptions.IgnoreCase)!= 0)
+            var total_length = 0;
+
+            for (int i = 0; i < UTF8Keys.Length; i++)
             {
-                return StringComparer.OrdinalIgnoreCase;
+                total_length += StringHelper.GetUtf8BytesLength(ref StringHelper.GetRawStringData(StringKeys[i]), StringKeys[i].Length);
             }
-            else
+
+            var hGChars = (Utf8Byte*)Marshal.AllocHGlobal(sizeof(Utf8Byte) * total_length);
+
+            for (int i = 0; i < UTF8Keys.Length; i++)
             {
-                return StringComparer.Ordinal;
-            }
-        }
+                int length = StringHelper.GetUtf8Bytes(ref StringHelper.GetRawStringData(StringKeys[i]), StringKeys[i].Length, (byte*)hGChars);
 
-        static StaticFastObjectRW()
-        {
-            try
-            {
-                var type = typeof(T);
+                UTF8Keys[i] = new Ps<Utf8Byte>(hGChars, length);
 
-                var attributes = type.GetDefinedAttributes<RWObjectAttribute>(true);
-
-                #region -- Attribute Options --
-
-                if (attributes.Length != 0)
-                {
-                    var options = FastObjectRW<T>.CurrentOptions;
-
-                    foreach (var item in attributes)
-                    {
-                        Switch(ref options, FastObjectRWOptions.IgnoreCase, item.IgnoreCace);
-
-                        Switch(ref options, FastObjectRWOptions.NotFoundException, item.NotFoundException);
-
-                        Switch(ref options, FastObjectRWOptions.CannotGetException, item.CannotGetException);
-
-                        Switch(ref options, FastObjectRWOptions.CannotSetException, item.CannotSetException);
-
-                        Switch(ref options, FastObjectRWOptions.Property, item.IncludeProperties);
-
-                        Switch(ref options, FastObjectRWOptions.Field, item.IncludeFields);
-
-                        Switch(ref options, FastObjectRWOptions.SkipDefaultValue, item.SkipDefaultValue);
-
-                        Switch(ref options, FastObjectRWOptions.MembersOptIn, item.MembersOptIn);
-                    }
-
-                    FastObjectRW<T>.CurrentOptions = options;
-                }
-
-                #endregion
-
-                Options = FastObjectRW.SetToInitialized(type);
-
-                var fieldsMap = new Dictionary<string, BaseField>(GetStringComparer());
-
-                GetFields(type, fieldsMap);
-
-                var fields = fieldsMap.Values.ToList();
-
-                fields.Sort((x, y) =>
-                {
-                    var com = x.Order.CompareTo(y.Order);
-
-                    if (com != 0)
-                    {
-                        return com;
-                    }
-
-                    return x.Name.CompareTo(y.Name);
-                });
-
-                if (attributes.Length != 0)
-                {
-                    var temp = fields.Cast<IObjectField>().ToList();
-
-                    foreach (var item in attributes)
-                    {
-                        item.OnCreate(type, ref temp);
-                    }
-
-                    fields = temp.Cast<BaseField>().ToList();
-                }
-
-                Fields = fields.ToArray();
-
-                Keys = ArrayHelper.Filter(Fields, (Item) => { return true; }, (Item) => { return Item.Name; });
-
-                foreach (var item in Keys) LongestKeyLength = Math.Max(LongestKeyLength, item.Length);
-
-                do Mult = RandomInstance.Next(int.MinValue, int.MaxValue) & long.MaxValue; while (!CheckMult());
-
-                ContentField = typeof(FastObjectRW<T>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-                Creater = new StaticFastObjectRW<T>().CreateCreater();
-            }
-            catch (Exception e)
-            {
-                Creater = new ErrorFastObjectRWCreater<T>(e);
+                hGChars += length;
             }
         }
 
@@ -418,35 +411,234 @@ namespace Swifter.RW
 
             if (typeof(T).IsValueType)
             {
-                ilGen.LoadFieldAddress(ContentField);
+                ilGen.LoadFieldAddress(RTContentField);
             }
             else
             {
-                ilGen.LoadField(ContentField);
+                ilGen.LoadField(RTContentField);
             }
         }
 
-        public static long ComputeId64(IEnumerable<char> symbols)
+        public static TKey GetKeyByIndex<TKey>(int index)
         {
-            long r = 0;
-
-            if ((Options & FastObjectRWOptions.IgnoreCase) != 0)
+            if (typeof(TKey) == typeof(Ps<char>))
             {
-                foreach (var item in symbols)
-                {
-                    r = (StringHelper.ToUpper(item) * Mult) ^ (r << 1);
-                }
+                return Underlying.As<TKey[]>(UTF16Keys)[index];
+            }
+            else if (typeof(TKey) == typeof(Ps<Utf8Byte>))
+            {
+                return Underlying.As<TKey[]>(UTF8Keys)[index];
+            }
+            else if (typeof(TKey) == typeof(string))
+            {
+                return Underlying.As<TKey[]>(StringKeys)[index];
+            }
+            else if (typeof(TKey) == typeof(int))
+            {
+                return Underlying.As<int, TKey>(ref index);
             }
             else
             {
-                foreach (var item in symbols)
+                throw new NotSupportedException();
+            }
+        }
+
+        public static int GetIndexByKey<TKey>(TKey key)
+        {
+            if (typeof(TKey) == typeof(Ps<char>))
+            {
+                return Array.IndexOf(UTF16Keys, Underlying.As<TKey, Ps<char>>(ref key));
+            }
+            else if (typeof(TKey) == typeof(Ps<Utf8Byte>))
+            {
+                return Array.IndexOf(UTF8Keys, Underlying.As<TKey, Ps<Utf8Byte>>(ref key));
+            }
+            else if (typeof(TKey) == typeof(string))
+            {
+                return Array.IndexOf(StringKeys, Underlying.As<TKey, string>(ref key));
+            }
+            else if (typeof(TKey) == typeof(int))
+            {
+                return Underlying.As<TKey, int>(ref key);
+            }
+            else
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        public static void EmitToString<TKey>(ILGenerator ilGen)
+        {
+            if (typeof(TKey) == typeof(Ps<char>))
+            {
+                ilGen.Call(MethodOf<Ps<char>, string>(StringHelper.ToStringEx));
+            }
+            else if (typeof(TKey) == typeof(Ps<Utf8Byte>))
+            {
+                ilGen.Call(MethodOf<Ps<Utf8Byte>, string>(StringHelper.ToStringEx));
+            }
+            else if (typeof(TKey) == typeof(int))
+            {
+                ilGen.Call(MethodOf<int, string>(Convert.ToString));
+            }
+            else if (typeof(TKey) == typeof(string))
+            {
+            }
+            else
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        public static void EmitLoadKey<TKey>(ILGenerator ilGen, int index)
+        {
+            if (typeof(TKey) == typeof(Ps<char>))
+            {
+                ilGen.LoadConstant((IntPtr)Underlying.AsPointer(ref UTF16Keys[index]));
+                ilGen.LoadValue(typeof(Ps<char>));
+            }
+            else if (typeof(TKey) == typeof(Ps<Utf8Byte>))
+            {
+                ilGen.LoadConstant((IntPtr)Underlying.AsPointer(ref UTF8Keys[index]));
+                ilGen.LoadValue(typeof(Ps<Utf8Byte>));
+            }
+            else if (typeof(TKey) == typeof(string))
+            {
+                ilGen.LoadString(StringKeys[index]);
+            }
+            else if (typeof(TKey) == typeof(int))
+            {
+                ilGen.LoadConstant(index);
+            }
+            else
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        public static void EmitSwitch<TKey>(ILGenerator ilGen, Action<ILGenerator> emitLdValue, CaseInfo<TKey>[] cases, Label defaultLabel)
+        {
+            if (typeof(TKey) == typeof(int))
+            {
+                ilGen.Switch(emitLdValue, Underlying.As<CaseInfo<int>[]>(cases), defaultLabel);
+            }
+            else if (typeof(TKey) == typeof(string))
+            {
+                ilGen.Switch(emitLdValue, (il, item) => il.LoadString(item), Underlying.As<CaseInfo<string>[]>(cases), defaultLabel, (Options & FastObjectRWOptions.IgnoreCase) != 0);
+            }
+            else if (typeof(TKey) == typeof(Ps<char>))
+            {
+                ilGen.Switch(emitLdValue, (il, item) => EmitLoadKey<TKey>(il, GetIndexByKey(item)), Underlying.As<CaseInfo<Ps<char>>[]>(cases), defaultLabel, (Options & FastObjectRWOptions.IgnoreCase) != 0);
+            }
+            else if (typeof(TKey) == typeof(Ps<Utf8Byte>))
+            {
+                ilGen.Switch(emitLdValue, (il, item) => EmitLoadKey<TKey>(il, GetIndexByKey(item)), Underlying.As<CaseInfo<Ps<Utf8Byte>>[]>(cases), defaultLabel, (Options & FastObjectRWOptions.IgnoreCase) != 0);
+            }
+            else
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        static StaticFastObjectRW()
+        {
+            lock (typeof(FastObjectRW<T>))
+            {
+                try
                 {
-                    r = (item * Mult) ^ (r << 1);
+                    var type = typeof(T);
+
+                    var attributes = type.GetDefinedAttributes<RWObjectAttribute>(true);
+
+                    #region -- Attribute Options --
+
+                    if (attributes.Length != 0)
+                    {
+                        var options = FastObjectRW<T>.CurrentOptions;
+
+                        foreach (var item in attributes)
+                        {
+                            Switch(ref options, FastObjectRWOptions.IgnoreCase, item.IgnoreCace);
+
+                            Switch(ref options, FastObjectRWOptions.NotFoundException, item.NotFoundException);
+
+                            Switch(ref options, FastObjectRWOptions.CannotGetException, item.CannotGetException);
+
+                            Switch(ref options, FastObjectRWOptions.CannotSetException, item.CannotSetException);
+
+                            Switch(ref options, FastObjectRWOptions.Property, item.IncludeProperties);
+
+                            Switch(ref options, FastObjectRWOptions.Field, item.IncludeFields);
+
+                            Switch(ref options, FastObjectRWOptions.SkipDefaultValue, item.SkipDefaultValue);
+
+                            Switch(ref options, FastObjectRWOptions.MembersOptIn, item.MembersOptIn);
+                        }
+
+                        FastObjectRW<T>.CurrentOptions = options;
+                    }
+
+                    #endregion
+
+                    Options = FastObjectRW.SetToInitialized(type);
+
+                    var fieldsMap = new Dictionary<string, BaseField>((Options & FastObjectRWOptions.IgnoreCase) != 0 ? StringComparer.InvariantCultureIgnoreCase : StringComparer.InvariantCulture);
+
+                    GetFields(type, fieldsMap, attributes);
+
+                    var fields = fieldsMap.Values.ToList();
+
+                    fields.Sort((x, y) =>
+                    {
+                        var com = x.Order.CompareTo(y.Order);
+
+                        if (com != 0)
+                        {
+                            return com;
+                        }
+
+                        return x.Name.CompareTo(y.Name);
+                    });
+
+                    if (attributes.Length != 0)
+                    {
+                        var temp = fields.Cast<IObjectField>().ToList();
+
+                        foreach (var item in attributes)
+                        {
+                            item.OnCreate(type, ref temp);
+                        }
+
+                        fields = temp.Cast<BaseField>().ToList();
+                    }
+
+                    Fields = fields.ToArray();
+
+                    StringKeys = Fields.Select(item => item.Name).ToArray();
+
+                    UTF16Keys = new Ps<char>[StringKeys.Length];
+
+                    UTF8Keys = new Ps<Utf8Byte>[StringKeys.Length];
+
+                    GCHandle.Alloc(UTF16Keys, GCHandleType.Pinned);
+
+                    GCHandle.Alloc(UTF8Keys, GCHandleType.Pinned);
+
+                    SetUTF16Keys();
+
+                    SetUTF8Keys();
+
+                    Creater = CreateCreater();
+                }
+                catch (Exception e)
+                {
+                    Creater = new ErrorFastObjectRWCreater<T>(e);
                 }
             }
-
-            return r;
         }
+
+
+        public static TypeBuilder TypeBuilder;
 
         public static string GetReadValueMethodName(Type type)
         {
@@ -494,7 +686,7 @@ namespace Swifter.RW
                     return ValueInterface<string>.IsNotModified ? nameof(IValueReader.ReadString) : null;
             }
 
-            if (type.IsValueType && Nullable.GetUnderlyingType(type) != null && ValueInterface.GetInterface(type).IsNotModified_)
+            if (type.IsValueType && Nullable.GetUnderlyingType(type) != null && ValueInterface.GetInterface(type).InterfaceIsNotModified)
             {
                 return nameof(IValueReader.ReadNullable);
             }
@@ -551,10 +743,7 @@ namespace Swifter.RW
             return null;
         }
 
-        public TypeBuilder TypeBuilder;
-        public event Action<Type> TypeCreated;
-
-        public IFastObjectRWCreater<T> CreateCreater()
+        public static IFastObjectRWCreater<T> CreateCreater()
         {
             TypeBuilder = DynamicAssembly.DefineType(
                 $"{nameof(FastObjectRW)}_{typeof(T).Name}_{Guid.NewGuid().ToString("N")}",
@@ -562,9 +751,12 @@ namespace Swifter.RW
 
             Type tType;
 
-            if (typeof(T).IsVisible || DynamicAssemblyCanAccessNonPublicTypes)
+            if (typeof(T).IsExternalVisible() || DynamicAssemblyCanAccessNonPublicTypes)
             {
                 TypeBuilder.SetParent(typeof(FastObjectRW<T>));
+
+                TypeBuilder.AddInterfaceImplementation(typeof(IFastObjectRWCreater<T>));
+                TypeBuilder.AddInterfaceImplementation(typeof(IValueInterface<T>));
 
                 tType = typeof(T);
             }
@@ -575,74 +767,78 @@ namespace Swifter.RW
                 TypeBuilder.SetParent(typeof(FastObjectRW<>).MakeGenericType(tType));
 
                 TypeBuilder.AddInterfaceImplementation(typeof(IFastObjectRWCreater<>).MakeGenericType(tType));
+                TypeBuilder.AddInterfaceImplementation(typeof(IValueInterface<>).MakeGenericType(tType));
             }
-            
+
             ImplInitialize();
 
-            ImplOnWriteValue();
+            ImplOnWriteValue<string>();
 
-            ImplOnReadValue();
+            ImplOnReadValue<string>();
 
-            ImplOnReadAll();
+            ImplOnReadAll<string>();
 
-            ImplOnWriteAll();
+            ImplOnWriteAll<string>();
 
-            ImplOnReadAllWithFilter();
-
-            ImplId64OnReadValue();
-
-            ImplId64OnWriteValue();
-
-            ImplGetId64();
-
-            ImplGetUtf8Id64();
+            ImplGetOrdinal<string>();
 
 
-            if (typeof(T).IsVisible || DynamicAssemblyCanAccessNonPublicTypes)
+            ImplOnWriteValue<Ps<char>>();
+
+            ImplOnReadValue<Ps<char>>();
+
+            ImplOnReadAll<Ps<char>>();
+
+            ImplOnWriteAll<Ps<char>>();
+
+            ImplGetOrdinal<Ps<char>>();
+
+
+            ImplOnWriteValue<Ps<Utf8Byte>>();
+
+            ImplOnReadValue<Ps<Utf8Byte>>();
+
+            ImplOnReadAll<Ps<Utf8Byte>>();
+
+            ImplOnWriteAll<Ps<Utf8Byte>>();
+
+            ImplGetOrdinal<Ps<Utf8Byte>>();
+
+
+            ImplOnWriteValue<int>();
+
+            ImplOnReadValue<int>();
+
+            ImplOnReadAll<int>();
+
+            ImplOnWriteAll<int>();
+
+            var defaultConstructor = TypeBuilder.DefineDefaultConstructor(MethodAttributes.Public);
+
+            ImplCreate(defaultConstructor);
+
+            ImplReadValue(defaultConstructor);
+
+            ImplWriteValue(defaultConstructor);
+
+            Type rtType = TypeBuilder.CreateTypeInfo();
+
+            if (rtType.IsGenericTypeDefinition)
             {
-                Type rtType = TypeBuilder.CreateTypeInfo();
-
-                TypeCreated?.Invoke(rtType);
-
-                TypeBuilder = DynamicAssembly.DefineType(
-                    $"{nameof(FastObjectRW)}_{typeof(T).Name}_{Guid.NewGuid().ToString("N")}_Creater",
-                    TypeAttributes.Sealed | TypeAttributes.Public);
-
-                TypeBuilder.AddInterfaceImplementation(typeof(IFastObjectRWCreater<T>));
-                TypeBuilder.AddInterfaceImplementation(typeof(IValueInterface<T>));
-
-                ImplCreate(rtType);
-
-                ImplReadValue(rtType);
-
-                ImplWriteValue(rtType);
-
-                Type createrType = TypeBuilder.CreateTypeInfo();
-
-                var creater = (IFastObjectRWCreater<T>)Activator.CreateInstance(createrType);
-
-                if (ValueInterface<T>.Content is FastObjectInterface<T>)
-                {
-                    ValueInterface<T>.SetInterface((IValueInterface<T>)creater);
-                }
-
-                return creater;
+                rtType = rtType.MakeGenericType(typeof(T));
             }
-            else
+
+            var creater = (IFastObjectRWCreater<T>)Activator.CreateInstance(rtType);
+
+            if (ValueInterface<T>.Content is FastObjectInterface<T>)
             {
-                ImplCreate();
-
-                Type rtType = TypeBuilder.CreateTypeInfo().MakeGenericType(typeof(T));
-
-                TypeCreated?.Invoke(rtType);
-
-                var creater = (IFastObjectRWCreater<T>)Activator.CreateInstance(rtType);
-
-                return creater;
+                ValueInterface<T>.SetInterface((IValueInterface<T>)creater);
             }
+
+            return creater;
         }
 
-        public void ImplInitialize()
+        public static void ImplInitialize()
         {
             var methodBuilder = TypeBuilder.DefineMethod(
                 nameof(FastObjectRW<T>.Initialize),
@@ -651,448 +847,345 @@ namespace Swifter.RW
                 typeof(void),
                 Type.EmptyTypes);
 
-
-            if (typeof(T).IsVisible || typeof(T).IsValueType || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplInitialize(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var delegateType = typeof(Action<object>);
-
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplInitialize)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
-
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
-                ilGen.Return();
-
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplInitialize)}",
-                        typeof(void),
-                        new Type[] { typeof(object) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-
-                    ImplInitialize(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
-            }
+            ImplInitialize(methodBuilder.GetILGenerator());
         }
 
-        public void ImplOnWriteValue()
+        public static void ImplOnWriteValue<TKey>()
         {
             var methodBuilder = TypeBuilder.DefineMethod(
                 nameof(FastObjectRW<T>.OnWriteValue),
                 MethodAttributes.Public | MethodAttributes.Virtual,
                 CallingConventions.HasThis,
                 typeof(void),
-                new Type[] { typeof(string), typeof(IValueReader) });
+                new Type[] { typeof(TKey), typeof(IValueReader) });
 
-            if ((typeof(T).IsVisible && (!HaveNonPublicWriteMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
+            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicWriteMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
             {
-                ImplOnWriteValue(methodBuilder.GetILGenerator());
+                ImplOnWriteValue<TKey>(methodBuilder.GetILGenerator());
             }
             else
             {
-                var delegateType = typeof(Action<object, string, IValueReader>);
+                var dynamicMethod = new DynamicMethod(
+                    $"{TypeBuilder.Name}_{nameof(ImplOnWriteValue)}",
+                    typeof(void),
+                    new Type[] { typeof(FastObjectRW<T>), typeof(TKey), typeof(IValueReader) },
+                    typeof(FastObjectRW<T>).Module, true);
 
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplOnWriteValue)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
+                ImplOnWriteValue<TKey>(dynamicMethod.GetILGenerator());
 
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
-                ilGen.LoadArgument(1);
-                ilGen.LoadArgument(2);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
-                ilGen.Return();
-
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplOnWriteValue)}",
-                        typeof(void),
-                        new Type[] { typeof(object), typeof(string), typeof(IValueReader) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-                    ImplOnWriteValue(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
+                methodBuilder.GetILGenerator()
+                    .LoadArgument(0)
+                    .LoadArgument(1)
+                    .LoadArgument(2)
+                    .Calli(dynamicMethod)
+                    .Return();
             }
         }
 
-        public void ImplOnReadAll()
+        public static void ImplOnReadAll<TKey>()
         {
             var methodBuilder = TypeBuilder.DefineMethod(
                 nameof(FastObjectRW<T>.OnReadAll),
                 MethodAttributes.Public | MethodAttributes.Virtual,
                 CallingConventions.HasThis,
                 typeof(void),
-                new Type[] { typeof(IDataWriter<string>) });
+                new Type[] { typeof(IDataWriter<TKey>) });
 
-            if ((typeof(T).IsVisible && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
+            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
             {
-                ImplOnReadAll(methodBuilder.GetILGenerator());
+                ImplOnReadAll<TKey>(methodBuilder.GetILGenerator());
             }
             else
             {
-                var delegateType = typeof(Action<object, IDataWriter<string>>);
+                var dynamicMethod = new DynamicMethod(
+                    $"{TypeBuilder.Name}_{nameof(ImplOnReadAll)}",
+                    typeof(void),
+                    new Type[] { typeof(FastObjectRW<T>), typeof(IDataWriter<TKey>) },
+                    typeof(FastObjectRW<T>).Module,
+                    true);
 
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplOnReadAll)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
+                ImplOnReadAll<TKey>(dynamicMethod.GetILGenerator());
 
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
-                ilGen.LoadArgument(1);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
-                ilGen.Return();
-
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplOnReadAll)}",
-                        typeof(void),
-                        new Type[] { typeof(object), typeof(IDataWriter<string>) },
-                        typeof(FastObjectRW<T>).Module, true);
-                    
-                    ImplOnReadAll(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
+                methodBuilder.GetILGenerator()
+                    .LoadArgument(0)
+                    .LoadArgument(1)
+                    .Calli(dynamicMethod)
+                    .Return();
             }
         }
 
-        public void ImplOnWriteAll()
+        public static void ImplOnWriteAll<TKey>()
         {
             var methodBuilder = TypeBuilder.DefineMethod(
                 nameof(FastObjectRW<T>.OnWriteAll),
                 MethodAttributes.Public | MethodAttributes.Virtual,
                 CallingConventions.HasThis,
                 typeof(void),
-                new Type[] { typeof(IDataReader<string>) });
+                new Type[] { typeof(IDataReader<TKey>) });
 
 
-            if ((typeof(T).IsVisible && (!HaveNonPublicWriteMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
+            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicWriteMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
             {
-                ImplOnWriteAll(methodBuilder.GetILGenerator());
+                ImplOnWriteAll<TKey>(methodBuilder.GetILGenerator());
             }
             else
             {
-                var delegateType = typeof(Action<object, IDataReader<string>>);
+                var dynamicMethod = new DynamicMethod(
+                    $"{TypeBuilder.Name}_{nameof(ImplOnWriteAll)}",
+                    typeof(void),
+                    new Type[] { typeof(FastObjectRW<T>), typeof(IDataReader<TKey>) },
+                    typeof(FastObjectRW<T>).Module, true);
 
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplOnWriteAll)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
+                ImplOnWriteAll<TKey>(dynamicMethod.GetILGenerator());
 
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
-                ilGen.LoadArgument(1);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
-                ilGen.Return();
-
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplOnWriteAll)}",
-                        typeof(void),
-                        new Type[] { typeof(object), typeof(IDataReader<string>) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-
-                    ImplOnWriteAll(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
+                methodBuilder.GetILGenerator()
+                    .LoadArgument(0)
+                    .LoadArgument(1)
+                    .Calli(dynamicMethod)
+                    .Return();
             }
         }
 
-        public void ImplOnReadAllWithFilter()
-        {
-            var methodBuilder = TypeBuilder.DefineMethod(
-                nameof(FastObjectRW<T>.OnReadAll),
-                MethodAttributes.Public | MethodAttributes.Virtual,
-                CallingConventions.HasThis,
-                typeof(void),
-                new Type[] { typeof(IDataWriter<string>), typeof(IValueFilter<string>) });
-
-            if ((typeof(T).IsVisible && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplOnReadAllWithFilter(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var delegateType = typeof(Action<object, IDataWriter<string>, IValueFilter<string>>);
-
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplOnReadAllWithFilter)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
-
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
-                ilGen.LoadArgument(1);
-                ilGen.LoadArgument(2);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
-                ilGen.Return();
-
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplOnReadAllWithFilter)}",
-                        typeof(void),
-                        new Type[] { typeof(object), typeof(IDataWriter<string>), typeof(IValueFilter<string>) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-
-                    ImplOnReadAllWithFilter(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
-            }
-        }
-
-        public void ImplOnReadValue()
+        public static void ImplOnReadValue<TKey>()
         {
             var methodBuilder = TypeBuilder.DefineMethod(
                 nameof(FastObjectRW<T>.OnReadValue),
                 MethodAttributes.Public | MethodAttributes.Virtual,
                 CallingConventions.HasThis,
                 typeof(void),
-                new Type[] { typeof(string), typeof(IValueWriter) });
+                new Type[] { typeof(TKey), typeof(IValueWriter) });
 
-            if ((typeof(T).IsVisible && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
+            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
             {
-                ImplOnReadValue(methodBuilder.GetILGenerator());
+                ImplOnReadValue<TKey>(methodBuilder.GetILGenerator());
             }
             else
             {
-                var delegateType = typeof(Action<object, string, IValueWriter>);
+                var dynamicMethod = new DynamicMethod(
+                    $"{TypeBuilder.Name}_{nameof(ImplOnReadValue)}",
+                    typeof(void),
+                    new Type[] { typeof(FastObjectRW<T>), typeof(TKey), typeof(IValueWriter) },
+                    typeof(FastObjectRW<T>).Module, true);
 
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplOnReadValue)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
+                ImplOnReadValue<TKey>(dynamicMethod.GetILGenerator());
 
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
-                ilGen.LoadArgument(1);
-                ilGen.LoadArgument(2);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
-                ilGen.Return();
-
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplOnReadValue)}",
-                        typeof(void),
-                        new Type[] { typeof(object), typeof(string), typeof(IValueWriter) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-
-                    ImplOnReadValue(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
+                methodBuilder.GetILGenerator()
+                    .LoadArgument(0)
+                    .LoadArgument(1)
+                    .LoadArgument(2)
+                    .Calli(dynamicMethod)
+                    .Return();
             }
         }
 
-        public void ImplId64OnReadValue()
+        public static void ImplGetOrdinal<TKey>()
         {
             var methodBuilder = TypeBuilder.DefineMethod(
-                nameof(FastObjectRW<T>.OnReadValue),
+                nameof(FastObjectRW<T>.GetOrdinal),
                 MethodAttributes.Public | MethodAttributes.Virtual,
                 CallingConventions.HasThis,
-                typeof(void),
-                new Type[] { typeof(long), typeof(IValueWriter) });
+                typeof(int),
+                new Type[] { typeof(TKey) });
 
-            if ((typeof(T).IsVisible && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
+            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
             {
-                ImplId64OnReadValue(methodBuilder.GetILGenerator());
+                ImplGetOrdinal<TKey>(methodBuilder.GetILGenerator());
             }
             else
             {
-                var delegateType = typeof(Action<object, long, IValueWriter>);
+                var dynamicMethod = new DynamicMethod(
+                    $"{TypeBuilder.Name}_{nameof(ImplGetOrdinal)}",
+                    typeof(int),
+                    new Type[] { typeof(FastObjectRW<T>), typeof(TKey) },
+                    typeof(FastObjectRW<T>).Module, true);
 
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplId64OnReadValue)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
+                ImplGetOrdinal<TKey>(dynamicMethod.GetILGenerator());
 
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
+                methodBuilder.GetILGenerator()
+                    .LoadArgument(0)
+                    .LoadArgument(1)
+                    .Calli(dynamicMethod)
+                    .Return();
+            }
+        }
+
+        public static void ImplCreate(ConstructorBuilder defaultConstructor)
+        {
+            var methodBuilder = TypeBuilder.DefineMethod(
+               nameof(IFastObjectRWCreater<T>.Create),
+               MethodAttributes.Public | MethodAttributes.Virtual,
+               CallingConventions.HasThis,
+               TypeBuilder.BaseType,
+               Type.EmptyTypes);
+
+            var ilGen = methodBuilder.GetILGenerator();
+
+            ilGen.NewObject(defaultConstructor);
+            ilGen.Return();
+        }
+
+        public static void ImplWriteValue(ConstructorBuilder defaultConstructor)
+        {
+            var methodBuilder = TypeBuilder.DefineMethod(
+            nameof(IValueInterface<T>.WriteValue),
+            MethodAttributes.Public | MethodAttributes.Virtual,
+            CallingConventions.HasThis,
+            typeof(void),
+            new Type[] { typeof(IValueWriter), ContentType });
+
+            var ilGen = methodBuilder.GetILGenerator();
+
+            var label_write = ilGen.DefineLabel();
+            var label_final = ilGen.DefineLabel();
+
+            if (!typeof(T).IsValueType)
+            {
+                ilGen.LoadArgument(2);
+                ilGen.BranchTrue(label_final);
+                ilGen.LoadArgument(1);
+                ilGen.LoadNull();
+                ilGen.Call(typeof(IValueWriter).GetMethod(nameof(IValueWriter.DirectWrite)));
+                ilGen.Return();
+            }
+
+            ilGen.MarkLabel(label_final);
+            if (!(typeof(T).IsSealed || typeof(T).IsValueType))
+            {
+                ilGen.LoadConstant((long)TypeHelper.GetTypeHandle(typeof(T)));
+                ilGen.LoadArgument(2);
+                ilGen.Call(GetTypeHandle_Object);
+                ilGen.ConvertInt64();
+                ilGen.BranchIfEqual(label_write);
+                ilGen.LoadArgument(2);
+                ilGen.Call(GetInterface_Object);
                 ilGen.LoadArgument(1);
                 ilGen.LoadArgument(2);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
+                ilGen.Call(Write_IValueWriter_Object);
                 ilGen.Return();
-
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplId64OnReadValue)}",
-                        typeof(void),
-                        new Type[] { typeof(object), typeof(long), typeof(IValueWriter) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-
-                    ImplId64OnReadValue(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
             }
+
+            ilGen.MarkLabel(label_write);
+            ilGen.LoadArgument(1);
+            ilGen.NewObject(defaultConstructor);
+            ilGen.Duplicate();
+            ilGen.LoadArgument(2);
+            ilGen.StoreField(ContentField);
+            ilGen.Call(typeof(IValueWriter).GetMethod(nameof(IValueWriter.WriteObject)));
+            ilGen.Return();
         }
 
-        public void ImplId64OnWriteValue()
+        public static void ImplReadValue(ConstructorBuilder defaultConstructor)
         {
             var methodBuilder = TypeBuilder.DefineMethod(
-                nameof(FastObjectRW<T>.OnWriteValue),
-                MethodAttributes.Public | MethodAttributes.Virtual,
-                CallingConventions.HasThis,
-                typeof(void),
-                new Type[] { typeof(long), typeof(IValueReader) });
+               nameof(IValueInterface<T>.ReadValue),
+               MethodAttributes.Public | MethodAttributes.Virtual,
+               CallingConventions.HasThis,
+               ContentType,
+               new Type[] { typeof(IValueReader) });
 
-            if ((typeof(T).IsVisible && (!HaveNonPublicWriteMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplId64OnWriteValue(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var delegateType = typeof(Action<object, long, IValueReader>);
+            var ilGen = methodBuilder.GetILGenerator();
 
-                var delegateField = TypeBuilder.DefineField(
-                    $"{nameof(ImplId64OnWriteValue)}_{nameof(Delegate)}",
-                    delegateType,
-                    FieldAttributes.Public | FieldAttributes.Static);
+            // var rw = new FastObjectRW_T();
+            var local_rw = ilGen.DeclareLocal(TypeBuilder);
+            ilGen.NewObject(defaultConstructor);
+            ilGen.StoreLocal(local_rw);
 
-                var ilGen = methodBuilder.GetILGenerator();
-                
-                ilGen.LoadField(delegateField);
-                ilGen.LoadArgument(0);
-                ilGen.LoadArgument(1);
-                ilGen.LoadArgument(2);
-                ilGen.Call(delegateType.GetMethod(nameof(Action.Invoke)));
-                ilGen.Return();
+            //// 
+            ilGen.LoadArgument(1);
+            ilGen.LoadLocal(local_rw);
+            ilGen.Call(typeof(IValueReader).GetMethod(nameof(IValueReader.ReadObject)));
 
-                TypeCreated += type =>
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplId64OnWriteValue)}",
-                        typeof(void),
-                        new Type[] { typeof(object), typeof(long), typeof(IValueReader) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-                    ImplId64OnWriteValue(dynamicMethod.GetILGenerator());
-                    
-                    type.GetField(delegateField.Name).SetValue(null, dynamicMethod.CreateDelegate(delegateType));
-                };
-            }
-        }
-
-        public void ImplGetId64()
-        {
-            var methodBuilder = TypeBuilder.DefineMethod(
-                nameof(FastObjectRW<T>.GetId64),
-                MethodAttributes.Public | MethodAttributes.Virtual,
-                CallingConventions.HasThis,
-                typeof(long),
-                new Type[] { typeof(char).MakeByRefType(), typeof(int) });
-
-            ImplGetId64(methodBuilder.GetILGenerator());
-        }
-
-        public void ImplGetUtf8Id64()
-        {
-            var methodBuilder = TypeBuilder.DefineMethod(
-                nameof(FastObjectRW<T>.GetId64),
-                MethodAttributes.Public | MethodAttributes.Virtual,
-                CallingConventions.HasThis,
-                typeof(long),
-                new Type[] { typeof(Utf8Byte).MakeByRefType(), typeof(int) });
-
-            ImplGetUtf8Id64(methodBuilder.GetILGenerator());
+            ilGen.LoadLocal(local_rw);
+            ilGen.LoadField(ContentField);
+            ilGen.Return();
         }
 
 
 
-
-
-        public void ImplInitialize(ILGenerator ilGen)
+        public static void ImplInitialize(ILGenerator ilGen)
         {
             if (typeof(T).IsValueType)
             {
+                var local = ilGen.DeclareLocal(ContentType);
+
+                ilGen.LoadArgument(0);
+                ilGen.LoadLocal(local);
+                ilGen.StoreField(ContentField);
+
                 ilGen.Return();
             }
             else if ((Options & FastObjectRWOptions.Allocate) != 0)
             {
                 ilGen.LoadArgument(0);
 
-                ilGen.LoadType(typeof(T));
+                ilGen.LoadType(ContentType);
 
-                ilGen.Call(AllocateMethod);
+                ilGen.Call(MethodOf<Type, object>(TypeHelper.Allocate));
 
                 ilGen.StoreField(ContentField);
                 ilGen.Return();
             }
             else
             {
-                ilGen.LoadArgument(0);
-
                 var constructor = typeof(T).GetConstructor(Type.EmptyTypes);
 
-                if (constructor == null)
+                if (constructor is null)
                 {
-                    ilGen.LoadType(typeof(T));
-                    ilGen.Call(CreateInstanceFromTypeMethod);
+                    ilGen.LoadArgument(0);
+                    ilGen.LoadType(ContentType);
+                    ilGen.Call(MethodOf<Type, object>(Activator.CreateInstance));
+                    ilGen.StoreField(ContentField);
+                    ilGen.Return();
+
+                    return;
+                }
+
+                if (typeof(T).IsExternalVisible() || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
+                {
+                    ilGen.LoadArgument(0);
+                    ilGen.NewObject(constructor);
+                    ilGen.StoreField(ContentField);
+                    ilGen.Return();
                 }
                 else
                 {
-                    ilGen.NewObject(constructor);
-                }
+                    var dynamicMethod = new DynamicMethod(
+                        $"{TypeBuilder.Name}_{nameof(ImplInitialize)}",
+                        typeof(void),
+                        new Type[] { typeof(FastObjectRW<T>) },
+                        typeof(FastObjectRW<T>).Module, true);
 
-                ilGen.StoreField(ContentField);
-                ilGen.Return();
+                    dynamicMethod.GetILGenerator()
+                        .LoadArgument(0)
+                        .NewObject(constructor)
+                        .StoreField(RTContentField)
+                        .Return();
+
+                    ilGen.LoadArgument(0);
+                    ilGen.Calli(dynamicMethod);
+                    ilGen.Return();
+                }
             }
         }
 
-        public void ImplOnReadAll(ILGenerator ilGen)
+        public static void ImplOnReadAll<TKey>(ILGenerator ilGen)
         {
-            var locals = new TypeCache<LocalBuilder>();
+            var m_GetValueWriter = typeof(IDataWriter<TKey>).GetProperty(new Type[] { typeof(TKey) }).GetGetMethod(true);
 
-            foreach (var field in Fields)
+            var locals = new Dictionary<Type, LocalBuilder>();
+
+            for (int i = 0; i < Fields.Length; i++)
             {
-                if ((Options & FastObjectRWOptions.MembersOptIn) != 0 && field.Attribute == null)
+                var field = Fields[i];
+
+                if ((Options & FastObjectRWOptions.MembersOptIn) != 0 && field.Attribute is null)
                 {
                     continue;
                 }
 
                 if (field.CanRead)
                 {
-                    if ((Options & FastObjectRWOptions.SkipDefaultValue) != 0)
+                    if (field.SkipDefaultValue)
                     {
                         var local = locals.GetOrAdd(field.BeforeType, t => ilGen.DeclareLocal(t));
 
@@ -1108,8 +1201,10 @@ namespace Swifter.RW
                         field.WriteValueBefore(ilGen);
 
                         ilGen.LoadArgument(1);
-                        ilGen.LoadString(field.Name);
-                        ilGen.Call(IDataWriterIndexerGetMethod);
+
+                        EmitLoadKey<TKey>(ilGen, i);
+
+                        ilGen.Call(m_GetValueWriter);
 
                         ilGen.LoadLocal(local);
 
@@ -1122,8 +1217,10 @@ namespace Swifter.RW
                         field.WriteValueBefore(ilGen);
 
                         ilGen.LoadArgument(1);
-                        ilGen.LoadString(field.Name);
-                        ilGen.Call(IDataWriterIndexerGetMethod);
+
+                        EmitLoadKey<TKey>(ilGen, i);
+
+                        ilGen.Call(m_GetValueWriter);
 
                         field.GetValueBefore(ilGen);
 
@@ -1137,12 +1234,14 @@ namespace Swifter.RW
             ilGen.Return();
         }
 
-        public void ImplOnWriteAll(ILGenerator ilGen)
+        public static void ImplOnWriteAll<TKey>(ILGenerator ilGen)
         {
-            var fields = Fields;
+            var m_GetValueReader = typeof(IDataReader<TKey>).GetProperty(new Type[] { typeof(TKey) }).GetGetMethod(true);
 
-            foreach (var field in fields)
+            for (int i = 0; i < Fields.Length; i++)
             {
+                var field = Fields[i];
+
                 if (field.CanWrite)
                 {
                     field.SetValueBefore(ilGen);
@@ -1150,8 +1249,10 @@ namespace Swifter.RW
                     field.ReadValueBefore(ilGen);
 
                     ilGen.LoadArgument(1);
-                    ilGen.LoadString(field.Name);
-                    ilGen.Call(IDataReaderIndexerGetMethod);
+
+                    EmitLoadKey<TKey>(ilGen, i);
+
+                    ilGen.Call(m_GetValueReader);
 
                     field.ReadValueAfter(ilGen);
 
@@ -1162,127 +1263,20 @@ namespace Swifter.RW
             ilGen.Return();
         }
 
-        public void ImplOnReadAllWithFilter(ILGenerator ilGen)
-        {
-            var locals = new TypeCache<LocalBuilder>();
-
-            var valueInfo = ilGen.DeclareLocal(typeof(ValueFilterInfo<string>));
-
-            ilGen.NewObject(typeof(ValueFilterInfo<string>).GetConstructor(Type.EmptyTypes));
-
-            ilGen.StoreLocal(valueInfo);
-
-            foreach (var field in Fields)
-            {
-                if ((Options & FastObjectRWOptions.MembersOptIn) != 0 && field.Attribute == null)
-                {
-                    continue;
-                }
-
-                if (field.CanRead)
-                {
-                    if ((Options & FastObjectRWOptions.SkipDefaultValue) != 0)
-                    {
-                        var local = locals.GetOrAdd(field.BeforeType, t => ilGen.DeclareLocal(t));
-
-                        field.GetValueBefore(ilGen);
-                        field.GetValueAfter(ilGen);
-
-                        ilGen.StoreLocal(local);
-
-                        var skip = ilGen.DefineLabel();
-
-                        ilGen.BranchDefaultValue(local, skip);
-
-                        field.WriteValueBefore(ilGen);
-
-                        ilGen.LoadLocal(valueInfo);
-                        ilGen.LoadField(ValueFilterInfoValueCopyerField);
-
-                        ilGen.LoadLocal(local);
-
-                        field.WriteValueAfter(ilGen);
-
-                        FilterItem(field, skip);
-
-                        ilGen.MarkLabel(skip);
-                    }
-                    else
-                    {
-                        field.WriteValueBefore(ilGen);
-
-                        ilGen.LoadLocal(valueInfo);
-                        ilGen.LoadField(ValueFilterInfoValueCopyerField);
-
-                        field.GetValueBefore(ilGen);
-
-                        field.GetValueAfter(ilGen);
-
-                        field.WriteValueAfter(ilGen);
-
-                        var skip = ilGen.DefineLabel();
-
-                        FilterItem(field, skip);
-
-                        ilGen.MarkLabel(skip);
-                    }
-                }
-            }
-
-            ilGen.Return();
-
-            void FilterItem(BaseField field, Label skip)
-            {
-                ilGen.LoadLocal(valueInfo);
-
-                ilGen.LoadString(field.Name);
-
-                ilGen.StoreField(ValueFilterInfoKeyField);
-
-                ilGen.LoadLocal(valueInfo);
-                
-                ilGen.LoadType(field.AfterType);
-
-                ilGen.StoreField(ValueFilterInfoTypeField);
-
-                ilGen.LoadArgument(2);
-
-                ilGen.LoadLocal(valueInfo);
-
-                ilGen.Call(IValueFilterFilterMethod);
-
-                ilGen.BranchFalse(skip);
-
-                ilGen.LoadLocal(valueInfo);
-
-                ilGen.LoadField(ValueFilterInfoValueCopyerField);
-
-                ilGen.LoadArgument(1);
-
-                ilGen.LoadLocal(valueInfo);
-
-                ilGen.LoadField(ValueFilterInfoKeyField);
-
-                ilGen.Call(IDataWriterIndexerGetMethod);
-
-                ilGen.Call(ValueCopyerWriteToMethod);
-            }
-        }
-
-        public void ImplOnReadValue(ILGenerator ilGen)
+        public static void ImplOnReadValue<TKey>(ILGenerator ilGen)
         {
             var fields = Fields;
 
-            var Cases = new CaseInfo<string>[fields.Length];
+            var Cases = new CaseInfo<TKey>[fields.Length];
 
             for (int i = 0; i < fields.Length; i++)
             {
-                Cases[i] = new CaseInfo<string>(fields[i].Name, ilGen.DefineLabel());
+                Cases[i] = new CaseInfo<TKey>(GetKeyByIndex<TKey>(i), ilGen.DefineLabel());
             }
 
             var DefaultLabel = ilGen.DefineLabel();
 
-            ilGen.Switch((iLGen) => { iLGen.LoadArgument(1); }, Cases, DefaultLabel, (Options & FastObjectRWOptions.IgnoreCase) != 0);
+            EmitSwitch(ilGen, iLGen => ilGen.LoadArgument(1), Cases, DefaultLabel);
 
             ilGen.MarkLabel(DefaultLabel);
 
@@ -1291,6 +1285,8 @@ namespace Swifter.RW
                 ilGen.LoadString(typeof(T).Name);
 
                 ilGen.LoadArgument(1);
+
+                EmitToString<TKey>(ilGen);
 
                 ilGen.NewObject(MissingMemberException_String_String_Constructor);
 
@@ -1330,7 +1326,7 @@ namespace Swifter.RW
                 }
                 else
                 {
-                    if ((Options & FastObjectRWOptions.CannotGetException) != 0)
+                    if (field.CannotGetException)
                     {
                         ilGen.LoadString($"This member '{field.Name}' no get method or cannot access.");
 
@@ -1352,35 +1348,43 @@ namespace Swifter.RW
             }
         }
 
-        public void ImplOnWriteValue(ILGenerator ilGen)
+        public static void ImplOnWriteValue<TKey>(ILGenerator ilGen)
         {
             var fields = Fields;
 
-            var cases = new CaseInfo<string>[fields.Length];
+            var cases = new CaseInfo<TKey>[fields.Length];
 
             for (int i = 0; i < fields.Length; i++)
             {
-                cases[i] = new CaseInfo<string>(fields[i].Name, ilGen.DefineLabel());
+                cases[i] = new CaseInfo<TKey>(GetKeyByIndex<TKey>(i), ilGen.DefineLabel());
             }
 
             var DefaultLabel = ilGen.DefineLabel();
 
-            ilGen.Switch((iLGen) => { iLGen.LoadArgument(1); }, cases, DefaultLabel, (Options & FastObjectRWOptions.IgnoreCase) != 0);
+            EmitSwitch(ilGen, iLGen => ilGen.LoadArgument(1), cases, DefaultLabel);
 
             ilGen.MarkLabel(DefaultLabel);
 
             if ((Options & FastObjectRWOptions.NotFoundException) != 0)
             {
                 ilGen.LoadString(typeof(T).Name);
+
                 ilGen.LoadArgument(1);
+
+                EmitToString<TKey>(ilGen);
+
                 ilGen.NewObject(MissingMemberException_String_String_Constructor);
+
                 ilGen.Throw();
             }
             else
             {
                 ilGen.LoadArgument(2);
+
                 ilGen.Call(typeof(IValueReader).GetMethod(nameof(IValueReader.DirectRead)));
+
                 ilGen.Pop();
+
                 ilGen.Return();
             }
 
@@ -1407,430 +1411,50 @@ namespace Swifter.RW
                 }
                 else
                 {
-                    if ((Options & FastObjectRWOptions.CannotSetException) != 0)
+                    if (field.CannotSetException)
                     {
                         ilGen.LoadString($"This member '{field.Name}' no set method or cannot access.");
+
                         ilGen.NewObject(MemberAccessException_String_Constructor);
+
                         ilGen.Throw();
                     }
                     else
                     {
                         ilGen.LoadArgument(2);
+
                         ilGen.Call(typeof(IValueReader).GetMethod(nameof(IValueReader.DirectRead)));
+
                         ilGen.Pop();
+
                         ilGen.Return();
                     }
                 }
             }
         }
 
-        public void ImplId64OnReadValue(ILGenerator ilGen)
+        public static void ImplGetOrdinal<TKey>(ILGenerator ilGen)
         {
             var fields = Fields;
 
-            var cases = new CaseInfo<long>[fields.Length];
+            var cases = new CaseInfo<TKey>[fields.Length];
 
             for (int i = 0; i < fields.Length; i++)
             {
-                long value;
-
-                if ((Options & FastObjectRWOptions.IndexId64) != 0)
-                {
-                    value = i;
-                }
-                else
-                {
-                    value = ComputeId64(fields[i].Name);
-                }
-
-                cases[i] = new CaseInfo<long>(value, ilGen.DefineLabel());
+                cases[i] = new CaseInfo<TKey>(GetKeyByIndex<TKey>(i), ilGen.DefineLabel());
             }
 
             var DefaultLabel = ilGen.DefineLabel();
 
-            ilGen.Switch((iLGen) => { iLGen.LoadArgument(1); }, cases, DefaultLabel);
+            EmitSwitch(ilGen, iLGen => ilGen.LoadArgument(1), cases, DefaultLabel);
 
             ilGen.MarkLabel(DefaultLabel);
 
-            if ((Options & FastObjectRWOptions.NotFoundException) != 0)
-            {
-                ilGen.NewObject(MissingMemberException_Constructor);
-
-                ilGen.Throw();
-            }
-            else
-            {
-                ilGen.LoadArgument(2);
-
-                ilGen.LoadNull();
-
-                ilGen.Call(typeof(IValueWriter).GetMethod(nameof(IValueWriter.DirectWrite)));
-
-                ilGen.Return();
-            }
-
-            for (int i = 0; i < fields.Length; i++)
-            {
-                var field = fields[i];
-                var @case = cases[i];
-
-                ilGen.MarkLabel(@case.Label);
-
-                if (field.CanRead)
-                {
-                    field.WriteValueBefore(ilGen);
-
-                    ilGen.LoadArgument(2);
-
-                    field.GetValueBefore(ilGen);
-
-                    field.GetValueAfter(ilGen);
-
-                    field.WriteValueAfter(ilGen);
-
-                    ilGen.Return();
-                }
-                else
-                {
-                    if ((Options & FastObjectRWOptions.CannotGetException) != 0)
-                    {
-                        ilGen.LoadString($"This member '{field.Name}' no get method or cannot access.");
-
-                        ilGen.NewObject(MemberAccessException_String_Constructor);
-
-                        ilGen.Throw();
-                    }
-                    else
-                    {
-                        ilGen.LoadArgument(2);
-
-                        ilGen.LoadNull();
-
-                        ilGen.Call(typeof(IValueWriter).GetMethod(nameof(IValueWriter.DirectWrite)));
-
-                        ilGen.Return();
-                    }
-                }
-            }
-        }
-
-        public void ImplId64OnWriteValue(ILGenerator ilGen)
-        {
-            var fields = Fields;
-
-            var cases = new CaseInfo<long>[fields.Length];
-
-            for (int i = 0; i < fields.Length; i++)
-            {
-                long value;
-
-                if ((Options & FastObjectRWOptions.IndexId64) != 0)
-                {
-                    value = i;
-                }
-                else
-                {
-                    value = ComputeId64(fields[i].Name);
-                }
-
-                cases[i] = new CaseInfo<long>(value, ilGen.DefineLabel());
-            }
-
-            var label_default = ilGen.DefineLabel();
-
-            ilGen.Switch((iLGen) => { iLGen.LoadArgument(1); }, cases, label_default);
-
-            ilGen.MarkLabel(label_default);
-
-            if ((Options & FastObjectRWOptions.NotFoundException) != 0)
-            {
-                ilGen.NewObject(MissingMemberException_Constructor);
-                ilGen.Throw();
-            }
-            else
-            {
-                ilGen.LoadArgument(2);
-                ilGen.Call(typeof(IValueReader).GetMethod(nameof(IValueReader.DirectRead)));
-                ilGen.Pop();
-                ilGen.Return();
-            }
-
-            for (int i = 0; i < fields.Length; i++)
-            {
-                var field = fields[i];
-                var @case = cases[i];
-
-                ilGen.MarkLabel(@case.Label);
-
-                if (field.CanWrite)
-                {
-                    field.SetValueBefore(ilGen);
-
-                    field.ReadValueBefore(ilGen);
-
-                    ilGen.LoadArgument(2);
-
-                    field.ReadValueAfter(ilGen);
-
-                    field.SetValueAfter(ilGen);
-
-                    ilGen.Return();
-                }
-                else
-                {
-                    if ((Options & FastObjectRWOptions.CannotSetException) != 0)
-                    {
-                        ilGen.LoadString($"This member '{field.Name}' no set method or cannot access.");
-                        ilGen.NewObject(MemberAccessException_String_Constructor);
-                        ilGen.Throw();
-                    }
-                    else
-                    {
-                        ilGen.LoadArgument(2);
-                        ilGen.Call(typeof(IValueReader).GetMethod(nameof(IValueReader.DirectRead)));
-                        ilGen.Pop();
-                        ilGen.Return();
-                    }
-                }
-            }
-        }
-
-        public void ImplGetUtf8Id64(ILGenerator ilGen)
-        {
-            if ((Options & FastObjectRWOptions.IndexId64) != 0)
-            {
-                ImplGetUtf8IndexId64(ilGen);
-
-                return;
-            }
-
-            // long result;
-            var local_result = ilGen.DeclareLocal(typeof(long));
-
-            // int index;
-            var local_index = ilGen.DeclareLocal(typeof(int));
-
-            // result = 0L;
-            ilGen.LoadConstant(0L);
-            ilGen.StoreLocal(local_result);
-
-            // index = 0;
-            ilGen.LoadConstant(0);
-            ilGen.StoreLocal(local_index);
-
-            var label_loop = ilGen.DefineLabel();
-            var label_return = ilGen.DefineLabel();
-
-            ilGen.MarkLabel(label_loop);
-            // if (index >= length) goto Return;
-            ilGen.LoadLocal(local_index);
-            ilGen.LoadArgument(2);
-            ilGen.BranchIfGreaterOrEqual(label_return);
-
-
-            var label_xor = ilGen.DefineLabel();
-
-            // var byt = bytes[index];
-            ilGen.LoadArgument(1);
-            ilGen.LoadLocal(local_index);
-            ilGen.Add();
-            ilGen.LoadValue(typeof(byte));
-
-            // ++index;
-            ilGen.LoadLocal(local_index);
-            ilGen.LoadConstant(1);
-            ilGen.Add();
-            ilGen.StoreLocal(local_index);
-
-            // if (byt <= 0x7f) goto xor;
-            ilGen.Duplicate();
-            ilGen.LoadConstant(0x7f);
-            ilGen.BranchIfLessOrEqual(label_xor);
-
-            // byt = (byt & 0x3f) << 6;
-            ilGen.LoadConstant(0x3f);
-            ilGen.And();
-            ilGen.LoadConstant(6);
-            ilGen.ShiftLeft();
-
-            // var byt2 = bytes[index] & 0x3f;
-            ilGen.LoadArgument(1);
-            ilGen.LoadLocal(local_index);
-            ilGen.Add();
-            ilGen.LoadValue(typeof(byte));
-            ilGen.LoadConstant(0x3f);
-            ilGen.And();
-
-            // byt = byt | byt2;
-            ilGen.Or();
-
-            // ++index;
-            ilGen.LoadLocal(local_index);
-            ilGen.LoadConstant(1);
-            ilGen.Add();
-            ilGen.StoreLocal(local_index);
-
-            // if (byt <= 0x7ff) goto xor;
-            ilGen.Duplicate();
-            ilGen.LoadConstant(0x7ff);
-            ilGen.BranchIfLessOrEqual(label_xor);
-
-            // byt = (byt & 0x7ff) << 6;
-            ilGen.LoadConstant(0x7ff);
-            ilGen.And();
-            ilGen.LoadConstant(6);
-            ilGen.ShiftLeft();
-
-            // var byt3 = bytes[index] & 0x3f;
-            ilGen.LoadArgument(1);
-            ilGen.LoadLocal(local_index);
-            ilGen.Add();
-            ilGen.LoadValue(typeof(byte));
-            ilGen.LoadConstant(0x3f);
-            ilGen.And();
-
-            // byt = byt | byt3;
-            ilGen.Or();
-
-            // ++index;
-            ilGen.LoadLocal(local_index);
-            ilGen.LoadConstant(1);
-            ilGen.Add();
-            ilGen.StoreLocal(local_index);
-
-            // if (byt <= 0xffff) goto xor;
-            ilGen.Duplicate();
-            ilGen.LoadConstant(0xffff);
-            ilGen.BranchIfLessOrEqual(label_xor);
-
-            // byt = (byt & 0x7fff) << 6;
-            ilGen.LoadConstant(0x7fff);
-            ilGen.And();
-            ilGen.LoadConstant(6);
-            ilGen.ShiftLeft();
-
-            // var byt4 = bytes[index] & 0x3f;
-            ilGen.LoadArgument(1);
-            ilGen.LoadLocal(local_index);
-            ilGen.Add();
-            ilGen.LoadValue(typeof(byte));
-            ilGen.LoadConstant(0x3f);
-            ilGen.And();
-
-            // byt = byt | byt4;
-            ilGen.Or();
-
-            // ++index;
-            ilGen.LoadLocal(local_index);
-            ilGen.LoadConstant(1);
-            ilGen.Add();
-            ilGen.StoreLocal(local_index);
-
-            // byt -= 0x10000;
-            ilGen.LoadConstant(0x10000);
-            ilGen.Subtract();
-
-            ilGen.Duplicate();
-            ilGen.LoadConstant(0x400);
-            ilGen.Division();
-            ilGen.LoadConstant(0xd800);
-            ilGen.Add();
-            ilGen.ConvertInt64();
-            ilGen.LoadConstant(Mult);
-            ilGen.Multiply();
-            ilGen.LoadLocal(local_result);
-            ilGen.LoadConstant(1);
-            ilGen.ShiftLeft();
-            ilGen.Xor();
-            ilGen.StoreLocal(local_result);
-
-            ilGen.LoadConstant(0x400);
-            ilGen.Rem();
-            ilGen.LoadConstant(0xdc00);
-            ilGen.Add();
-
-            // label xor.
-            ilGen.MarkLabel(label_xor);
-            if ((Options & FastObjectRWOptions.IgnoreCase) != 0)
-            {
-                ilGen.Call(CharToUpperMethod);
-            }
-            ilGen.ConvertInt64();
-            ilGen.LoadConstant(Mult);
-            ilGen.Multiply();
-            ilGen.LoadLocal(local_result);
-            ilGen.LoadConstant(1);
-            ilGen.ShiftLeft();
-            ilGen.Xor();
-            ilGen.StoreLocal(local_result);
-
-            // goto Loop;
-            ilGen.Branch(label_loop);
-
-            // Return:
-            ilGen.MarkLabel(label_return);
-
-            // return result;
-            ilGen.LoadLocal(local_result);
+            ilGen.LoadConstant(-1);
             ilGen.Return();
-        }
 
-        public void ImplGetUtf8IndexId64(ILGenerator ilGen)
-        {
-            var fields = Fields;
-
-            var cases = new CaseInfo<string>[fields.Length];
-
-            var label_default = ilGen.DefineLabel();
-
-            if ((Options & FastObjectRWOptions.IgnoreCase) != 0)
+            for (int i = 0; i < fields.Length; i++)
             {
-                for (int i = 0; i < fields.Length; i++)
-                {
-                    cases[i] = new CaseInfo<string>(StringHelper.ToLower(fields[i].Name), ilGen.DefineLabel())
-                    {
-                        HashCode = StringHelper.GetLoweredHashCode(fields[i].Name)
-                    };
-                }
-
-                ilGen.Switch(LoadValue, BytesGetLoweredHashCode, BytesVsStringIgnoreCaseEqualsByLower, cases, label_default, LoadCase);
-            }
-            else
-            {
-                for (int i = 0; i < fields.Length; i++)
-                {
-                    cases[i] = new CaseInfo<string>(fields[i].Name, ilGen.DefineLabel())
-                    {
-                        HashCode = StringHelper.GetHashCode(fields[i].Name)
-                    };
-                }
-
-                ilGen.Switch(LoadValue, BytesGetHashCode, BytesVsStringEquals, cases, label_default, LoadCase);
-            }
-
-            ilGen.MarkLabel(label_default);
-
-            if ((Options & FastObjectRWOptions.NotFoundException) != 0)
-            {
-                ilGen.LoadString(typeof(T).Name);
-
-                ilGen.LoadArgument(1);
-                ilGen.LoadArgument(2);
-                ilGen.Call(GetUtf8StringMethod);
-
-                ilGen.NewObject(MissingMemberException_String_String_Constructor);
-                ilGen.Throw();
-            }
-            else
-            {
-                ilGen.LoadConstant(-1L);
-
-                ilGen.Return();
-            }
-
-            for (long i = 0; i < cases.Length; i++)
-            {
-                var field = fields[i];
                 var @case = cases[i];
 
                 ilGen.MarkLabel(@case.Label);
@@ -1838,285 +1462,6 @@ namespace Swifter.RW
                 ilGen.LoadConstant(i);
                 ilGen.Return();
             }
-
-
-            void LoadValue(ILGenerator iL)
-            {
-                iL.LoadArgument(1);
-                iL.LoadArgument(2);
-            }
-
-            void LoadCase(ILGenerator iL, string value)
-            {
-                iL.LoadString(value);
-            }
-        }
-
-        public void ImplGetId64(ILGenerator ilGen)
-        {
-            if ((Options & FastObjectRWOptions.IndexId64) != 0)
-            {
-                ImplGetIndexId64(ilGen);
-
-                return;
-            }
-
-            // long result;
-            var local_result = ilGen.DeclareLocal(typeof(long));
-
-            // int index;
-            var local_index = ilGen.DeclareLocal(typeof(int));
-
-            // result = 0L;
-            ilGen.LoadConstant(0L);
-            ilGen.StoreLocal(local_result);
-
-            // index = 0;
-            ilGen.LoadConstant(0);
-            ilGen.StoreLocal(local_index);
-
-            var label_loop = ilGen.DefineLabel();
-            var label_return = ilGen.DefineLabel();
-
-            ilGen.MarkLabel(label_loop);
-            // if (index >= length) goto Return;
-            ilGen.LoadLocal(local_index);
-            ilGen.LoadArgument(2);
-            ilGen.BranchIfGreaterOrEqual(label_return);
-
-            // result = result ^ (chars[index] * Mult);
-            ilGen.LoadArgument(1);
-            ilGen.LoadLocal(local_index);
-            ilGen.SizeOf(typeof(char));
-            ilGen.Multiply();
-            ilGen.Add();
-            ilGen.LoadValue(typeof(char));
-            if ((Options & FastObjectRWOptions.IgnoreCase) != 0)
-            {
-                ilGen.Call(CharToUpperMethod);
-            }
-            ilGen.ConvertInt64();
-            ilGen.LoadConstant(Mult);
-            ilGen.Multiply();
-            ilGen.LoadLocal(local_result);
-            ilGen.LoadConstant(1);
-            ilGen.ShiftLeft();
-            ilGen.Xor();
-            ilGen.StoreLocal(local_result);
-
-            // index = index + 1;
-            ilGen.LoadLocal(local_index);
-            ilGen.LoadConstant(1);
-            ilGen.Add();
-            ilGen.StoreLocal(local_index);
-
-            // goto Loop;
-            ilGen.Branch(label_loop);
-
-            // Return:
-            ilGen.MarkLabel(label_return);
-
-            // return result;
-            ilGen.LoadLocal(local_result);
-            ilGen.Return();
-        }
-
-        public void ImplGetIndexId64(ILGenerator ilGen)
-        {
-            var fields = Fields;
-
-            var cases = new CaseInfo<string>[fields.Length];
-
-            var label_default = ilGen.DefineLabel();
-
-            if ((Options & FastObjectRWOptions.IgnoreCase) != 0)
-            {
-                for (int i = 0; i < fields.Length; i++)
-                {
-                    cases[i] = new CaseInfo<string>(StringHelper.ToLower(fields[i].Name), ilGen.DefineLabel())
-                    {
-                        HashCode = StringHelper.GetLoweredHashCode(fields[i].Name)
-                    };
-                }
-
-                ilGen.Switch(LoadValue, CharsGetLoweredHashCode, CharsVsStringIgnoreCaseEqualsByLower, cases, label_default, LoadCase);
-            }
-            else
-            {
-                for (int i = 0; i < fields.Length; i++)
-                {
-                    cases[i] = new CaseInfo<string>(fields[i].Name, ilGen.DefineLabel())
-                    {
-                        HashCode = StringHelper.GetHashCode(fields[i].Name)
-                    };
-                }
-
-                ilGen.Switch(LoadValue, CharsGetHashCode, CharsVsStringEquals, cases, label_default, LoadCase);
-            }
-
-            ilGen.MarkLabel(label_default);
-
-            if ((Options & FastObjectRWOptions.NotFoundException) != 0)
-            {
-                ilGen.LoadString(typeof(T).Name);
-
-                ilGen.LoadArgument(1);
-                ilGen.LoadConstant(0);
-                ilGen.LoadArgument(2);
-                ilGen.NewObject(String_PChar_Length_Constructor);
-
-                ilGen.NewObject(MissingMemberException_String_String_Constructor);
-                ilGen.Throw();
-            }
-            else
-            {
-                ilGen.LoadConstant(-1L);
-
-                ilGen.Return();
-            }
-
-            for (long i = 0; i < cases.Length; i++)
-            {
-                var field = fields[i];
-                var @case = cases[i];
-
-                ilGen.MarkLabel(@case.Label);
-
-                ilGen.LoadConstant(i);
-                ilGen.Return();
-            }
-
-
-            void LoadValue(ILGenerator iL)
-            {
-                iL.LoadArgument(1);
-                iL.LoadArgument(2);
-            }
-
-            void LoadCase(ILGenerator iL, string value)
-            {
-                iL.LoadString(value);
-            }
-        }
-
-        public void ImplCreate()
-        {
-            var methodBuilder = TypeBuilder.DefineMethod(
-               nameof(IFastObjectRWCreater<T>.Create),
-               MethodAttributes.Public | MethodAttributes.Virtual |
-               MethodAttributes.Final,
-               CallingConventions.HasThis,
-               TypeBuilder.BaseType,
-               Type.EmptyTypes);
-
-            var constructor = TypeBuilder.DefineConstructor(
-                MethodAttributes.Public, 
-                CallingConventions.Standard,
-                Type.EmptyTypes);
-
-            var ilGen = constructor.GetILGenerator();
-
-            ilGen.Return();
-
-            ilGen = methodBuilder.GetILGenerator();
-
-            ilGen.NewObject(constructor);
-            ilGen.Return();
-        }
-
-        public void ImplCreate(Type rtType)
-        {
-            var methodBuilder = TypeBuilder.DefineMethod(
-               nameof(IFastObjectRWCreater<T>.Create),
-               MethodAttributes.Public | MethodAttributes.Virtual |
-               MethodAttributes.Final,
-               CallingConventions.HasThis,
-               typeof(FastObjectRW<T>),
-               Type.EmptyTypes);
-
-            var ilGen = methodBuilder.GetILGenerator();
-
-            var constructor = rtType.GetConstructor(Type.EmptyTypes);
-
-            ilGen.NewObject(constructor);
-            ilGen.Return();
-        }
-
-        public void ImplWriteValue(Type rtType)
-        {
-            var methodBuilder = TypeBuilder.DefineMethod(
-            nameof(IValueInterface<T>.WriteValue),
-            MethodAttributes.Public | MethodAttributes.Virtual |
-            MethodAttributes.Final,
-            CallingConventions.HasThis,
-            typeof(void),
-            new Type[] { typeof(IValueWriter), typeof(T) });
-
-            var ilGen = methodBuilder.GetILGenerator();
-
-            var label_write = ilGen.DefineLabel();
-            var label_final = ilGen.DefineLabel();
-
-            if (!typeof(T).IsValueType)
-            {
-                ilGen.LoadArgument(2);
-                ilGen.BranchTrue(label_final);
-                ilGen.LoadArgument(1);
-                ilGen.LoadNull();
-                ilGen.Call(typeof(IValueWriter).GetMethod(nameof(IValueWriter.DirectWrite)));
-                ilGen.Return();
-            }
-
-            ilGen.MarkLabel(label_final);
-            if (!(typeof(T).IsSealed || typeof(T).IsValueType))
-            {
-                ilGen.LoadConstant((long)TypeHelper.GetTypeHandle(typeof(T)));
-                ilGen.LoadArgument(2);
-                ilGen.Call(GetTypeHandle_Object);
-                ilGen.ConvertInt64();
-                ilGen.BranchIfEqual(label_write);
-                ilGen.LoadArgument(2);
-                ilGen.Call(GetInterface_Object);
-                ilGen.LoadArgument(1);
-                ilGen.LoadArgument(2);
-                ilGen.Call(Write_IValueWriter_Object);
-                ilGen.Return();
-            }
-
-            ilGen.MarkLabel(label_write);
-            ilGen.LoadArgument(1);
-            ilGen.NewObject(rtType.GetConstructor(Type.EmptyTypes));
-            ilGen.Duplicate();
-            ilGen.LoadArgument(2);
-            ilGen.StoreField(ContentField);
-            ilGen.Call(typeof(IValueWriter).GetMethod(nameof(IValueWriter.WriteObject)));
-            ilGen.Return();
-        }
-
-        public void ImplReadValue(Type rtType)
-        {
-            var methodBuilder = TypeBuilder.DefineMethod(
-               nameof(IValueInterface<T>.ReadValue),
-               MethodAttributes.Public | MethodAttributes.Virtual |
-               MethodAttributes.Final,
-               CallingConventions.HasThis,
-               typeof(T),
-               new Type[] { typeof(IValueReader) });
-            
-            var ilGen = methodBuilder.GetILGenerator();
-
-            // var rw = new FastObjectRW_T();
-            var local_rw = ilGen.DeclareLocal(TypeBuilder);
-            ilGen.NewObject(rtType.GetConstructor(Type.EmptyTypes));
-            ilGen.Duplicate();
-            ilGen.StoreLocal(local_rw);
-
-            ilGen.LoadArgument(1);
-            ilGen.LoadLocal(local_rw);
-
-            ilGen.Call(typeof(IValueReader).GetMethod(nameof(IValueReader.ReadObject)));
-            ilGen.LoadField(ContentField);
-            ilGen.Return();
         }
     }
 }

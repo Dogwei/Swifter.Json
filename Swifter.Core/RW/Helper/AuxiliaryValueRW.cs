@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
-    sealed class AuxiliaryValueRW : IValueRW, IValueRW<Guid>, IValueRW<DateTimeOffset>, IValueRW<TimeSpan>, IValueWriter<IDataReader>, IMapValueRW
+    sealed class AuxiliaryValueRW : IValueRW, IValueRW<Guid>, IValueRW<DateTimeOffset>, IValueRW<TimeSpan>, IValueWriter<IDataReader>
     {
         object rw;
         Type type;
@@ -14,7 +14,7 @@ namespace Swifter.RW
         {
             if (rw is IAsDataWriter asWriter)
             {
-                return asWriter.Content;
+                return asWriter.Original;
             }
 
             return rw as IDataWriter;
@@ -25,7 +25,7 @@ namespace Swifter.RW
         {
             if (rw is IAsDataReader asReader)
             {
-                return asReader.Content;
+                return asReader.Original;
             }
 
             return rw as IDataReader;
@@ -36,21 +36,31 @@ namespace Swifter.RW
         {
             if (rw is IAsDataRW asRW)
             {
-                return asRW.Content;
+                return asRW.Original;
             }
 
             return rw as IDataRW;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public new Type GetType()
+        public Type GetValueType()
         {
             if (type != null)
             {
                 return type;
             }
 
-            return RWHelper.GetContentType(rw);
+            if (rw is IDataReader reader)
+            {
+                return reader.ContentType;
+            }
+
+            if (rw is IDataWriter writer)
+            {
+                return writer.ContentType;
+            }
+
+            throw new NotSupportedException();
         }
 
         public object DirectRead() { type = typeof(object); return default; }
@@ -79,7 +89,9 @@ namespace Swifter.RW
 
         public void ReadMap<TKey>(IDataWriter<TKey> mapWriter) { rw = mapWriter; }
 
-        public T? ReadNullable<T>() where T : struct => default;
+        public T? ReadNullable<T>() where T : struct { type = typeof(T?); return default; }
+
+        public T ReadEnum<T>() where T : struct, Enum { type = typeof(T); return default; }
 
         public void ReadObject(IDataWriter<string> valueWriter) { rw = valueWriter; }
 
@@ -132,6 +144,8 @@ namespace Swifter.RW
         public void WriteUInt64(ulong value) { type = typeof(ulong); }
 
         public void WriteValue(IDataReader value) { rw = value; }
+
+        public void WriteEnum<T>(T value) where T : struct, Enum { type = typeof(T); }
 
         Guid IValueReader<Guid>.ReadValue() { type = typeof(Guid);return default; }
 

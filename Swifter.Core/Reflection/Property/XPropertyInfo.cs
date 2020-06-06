@@ -1,6 +1,9 @@
-﻿using System;
+﻿using Swifter.Tools;
+using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+
+using static Swifter.Reflection.ThrowHelpers;
 
 namespace Swifter.Reflection
 {
@@ -13,58 +16,47 @@ namespace Swifter.Reflection
         /// <summary>
         /// 创建 XPropertyInfo 属性信息。
         /// </summary>
-        /// <param name="propertyInfo">.Net 自带的 PropertyInfo 属性</param>
+        /// <param name="propertyInfo">.Net 自带的 PropertyInfo 属性信息</param>
         /// <param name="flags">绑定标识</param>
         /// <returns>返回 XPropertyInfo 属性信息。</returns>
         public static XPropertyInfo Create(PropertyInfo propertyInfo, XBindingFlags flags)
         {
-            if (propertyInfo == null)
+            if (propertyInfo is null)
             {
                 throw new ArgumentNullException(nameof(propertyInfo));
             }
 
-            var getMethod = propertyInfo.GetGetMethod((flags & XBindingFlags.NonPublic) != 0);
-            var setMethod = propertyInfo.GetSetMethod((flags & XBindingFlags.NonPublic) != 0);
-
-            var isStatic = (getMethod == null || getMethod.IsStatic) && (setMethod == null || setMethod.IsStatic);
             var declaringType = propertyInfo.DeclaringType;
-            var propertyType = propertyInfo.PropertyType;
 
-            if (propertyType.IsPointer)
-            {
-                propertyType = typeof(IntPtr);
-            }
-            else if (propertyType.IsByRef)
-            {
-                propertyType = propertyType.GetElementType();
-            }
+            var propertyType
+                = propertyInfo.PropertyType.IsPointer ? typeof(IntPtr)
+                : propertyInfo.PropertyType.IsByRef ? propertyInfo.PropertyType.GetElementType()
+                : propertyInfo.PropertyType;
 
-            Type targetType;
+            XPropertyInfo result;
 
-            if (propertyType.IsByRefLike())
+            try
             {
-                targetType = typeof(XDefaultPropertyInfo);
-            }
-            else if (isStatic)
-            {
-                targetType = typeof(XStaticPropertyInfo<>).MakeGenericType(propertyType);
-            }
-            else if (declaringType.IsValueType)
-            {
-                targetType = typeof(XStructPropertyInfo<,>).MakeGenericType(declaringType, propertyType);
-            }
-            else
-            {
-                targetType = typeof(XClassPropertyInfo<>).MakeGenericType(propertyType);
-            }
+                var targetType
+                    = propertyType.IsByRefLike() ? typeof(XDefaultPropertyInfo)
+                     : propertyInfo.IsStatic() ? typeof(XStaticPropertyInfo<>).MakeGenericType(propertyType)
+                     : declaringType.IsValueType ? typeof(XStructPropertyInfo<,>).MakeGenericType(declaringType, propertyType)
+                    : typeof(XClassPropertyInfo<,>).MakeGenericType(declaringType, propertyType);
 
-            var result = (XPropertyInfo)Activator.CreateInstance(targetType);
+                result = (XPropertyInfo)Activator.CreateInstance(targetType, true);
 
-            result.Initialize(propertyInfo, flags);
+                result.Initialize(propertyInfo, flags);
+            }
+            catch
+            {
+                result = new XDefaultPropertyInfo();
+
+                result.Initialize(propertyInfo, flags);
+            }
 
             return result;
         }
-        
+
         internal string name;
         internal XBindingFlags flags;
         internal PropertyInfo propertyInfo;
@@ -105,6 +97,7 @@ namespace Swifter.Reflection
                 Throw();
             }
 
+            [MethodImpl(MethodImplOptions.NoInlining)]
             void Throw()
             {
                 throw new MissingMethodException($"Property '{PropertyInfo.DeclaringType.Name}.{PropertyInfo.Name}' No define '{name}' method or cannot access.");
@@ -112,7 +105,7 @@ namespace Swifter.Reflection
         }
 
         /// <summary>
-        /// 获取 .Net 自带的 PropertyInfo 属性
+        /// 获取 .Net 自带的 PropertyInfo 属性信息。
         /// </summary>
         public PropertyInfo PropertyInfo => propertyInfo;
 
@@ -126,25 +119,41 @@ namespace Swifter.Reflection
         /// </summary>
         /// <param name="obj">类型的实例</param>
         /// <returns>返回该属性的值</returns>
-        public virtual object GetValue(object obj) => throw new InvalidOperationException("Is not an instance property.");
+        public virtual object GetValue(object obj)
+        {
+            ThrowInvalidOperationException("property", "instance");
+
+            return default;
+        }
 
         /// <summary>
         /// 设置该实例属性的值。
         /// </summary>
         /// <param name="obj">类型的实例</param>
         /// <param name="value">值</param>
-        public virtual void SetValue(object obj, object value) => throw new InvalidOperationException("Is not an instance property.");
+        public virtual void SetValue(object obj, object value)
+        {
+            ThrowInvalidOperationException("property", "instance");
+        }
 
         /// <summary>
         /// 获取该静态属性的值。
         /// </summary>
         /// <returns>返回该属性的值</returns>
-        public virtual object GetValue() => throw new InvalidOperationException("Is not an static property.");
+        public virtual object GetValue()
+        {
+            ThrowInvalidOperationException("property", "instance");
+
+            return default;
+        }
 
         /// <summary>
         /// 设置该静态属性的值。
         /// </summary>
         /// <param name="value">值</param>
-        public virtual void SetValue(object value) => throw new InvalidOperationException("Is not an static property.");
+        public virtual void SetValue(object value)
+        {
+            ThrowInvalidOperationException("property", "static");
+        }
     }
 }

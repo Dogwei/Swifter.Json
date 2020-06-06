@@ -1,4 +1,5 @@
 ﻿
+using System;
 using System.Collections.Generic;
 
 namespace Swifter.RW
@@ -9,6 +10,10 @@ namespace Swifter.RW
     /// <typeparam name="TKey">键的类型</typeparam>
     public interface IDataWriter<TKey> : IDataWriter
     {
+        /// <summary>
+        /// 获取键的集合。
+        /// </summary>
+        IEnumerable<TKey> Keys { get; }
         /// <summary>
         /// 从值读取器中读取一个值设置到指定键的值中。
         /// </summary>
@@ -28,11 +33,6 @@ namespace Swifter.RW
         /// <param name="key">指定键</param>
         /// <returns>返回值写入器实例</returns>
         IValueWriter this[TKey key] { get; }
-
-        /// <summary>
-        /// 获取该数据所有的键。
-        /// </summary>
-        IEnumerable<TKey> Keys { get; }
     }
 
     /// <summary>
@@ -52,8 +52,19 @@ namespace Swifter.RW
         void Initialize(int capacity);
 
         /// <summary>
-        /// 获取数据源键的数量
+        /// 获取数据源键的数量。
+        /// -1 表示未知数量。
         /// </summary>
         int Count { get; }
+
+        /// <summary>
+        /// 获取数据源的类型。
+        /// </summary>
+        Type ContentType { get; }
+
+        /// <summary>
+        /// 获取或设置数据源。
+        /// </summary>
+        object Content { get; set; }
     }
 }

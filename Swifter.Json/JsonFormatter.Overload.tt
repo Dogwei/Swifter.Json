@@ -1,6 +1,5 @@
 ﻿<#@ template debug="false" hostspecific="false" language="C#" #>
 <#@ assembly name="System.Core" #>
-<#@ Assembly name="$(TargetPath)" #>
 <#@ Assembly name="$(TargetDir)\Swifter.Core.dll" #>
 <#@ import namespace="System" #>
 <#@ import namespace="System.Linq" #>
@@ -15,8 +14,6 @@
 	var serializes = new []
 	{
 		new { ReturnType = "string", ReturnDescription = "Json 字符串", ParameterType = "", ParameterName = "", ParameterDescription = "", IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = false },
-		new { ReturnType = "void", ReturnDescription = "", ParameterType = "HGlobalCache<char>", ParameterName = "hGCache", ParameterDescription = "Json 缓存", IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = false },
-		new { ReturnType = "void", ReturnDescription = "", ParameterType = "TextWriter", ParameterName = "textWriter", ParameterDescription = "Json 写入器", IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = false },
 
 		new { ReturnType = "string", ReturnDescription = "Json 字符串", ParameterType ="", ParameterName = "", ParameterDescription = "", IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = false },
 		new { ReturnType = "void", ReturnDescription = "", ParameterType = "HGlobalCache<char>", ParameterName = "hGCache", ParameterDescription = "Json 缓存", IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = false },
@@ -46,7 +43,6 @@
 
 		new { ReturnType = "void", ReturnDescription = "", ParameterType = "TextWriter", ParameterName = "textWriter", ParameterDescription = "Json 写入器", IsAsync = true, IsOptions = false, IsStatic = false, IsEncoding = false },
 		
-		// new { ReturnType = "byte[]", ReturnDescription = "Json 字节数组", ParameterType = "", ParameterName = "", ParameterDescription = "", IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ReturnType = "void", ReturnDescription = "", ParameterType = "out byte[]", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ReturnType = "void", ReturnDescription = "", ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "Json 字节缓存", IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ReturnType = "void", ReturnDescription = "", ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输出流", IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
@@ -97,10 +93,12 @@
 
 		
 		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "Json 字节缓存", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输入流", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = true, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "Json 字节缓存", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输入流", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = true, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = true, IsEncoding = true },
@@ -108,10 +106,12 @@
 		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输入流", IsCore = false, IsGeneric = false, IsAsync = true, IsOptions = false, IsStatic = true, IsEncoding = true },
 
 		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "Json 字节缓存", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输入流", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = true, IsGeneric = false, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "Json 字节缓存", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输入流", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
 		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = true, IsGeneric = true, IsAsync = false, IsOptions = true, IsStatic = true, IsEncoding = true },
@@ -120,10 +120,12 @@
 
 		
 		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "Json 字节缓存", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输入流", IsCore = false, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = true, IsGeneric = false, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ParameterType = "ArraySegment<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
+		new { ParameterType = "byte[]", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ParameterType = "HGlobalCache<byte>", ParameterName = "hGCache", ParameterDescription = "Json 字节缓存", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ParameterType = "Stream", ParameterName = "stream", ParameterDescription = "Json 输入流", IsCore = false, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
 		new { ParameterType = "ReadOnlySpan<byte>", ParameterName = "bytes", ParameterDescription = "Json 字节数组", IsCore = true, IsGeneric = true, IsAsync = false, IsOptions = false, IsStatic = false, IsEncoding = true },
@@ -149,18 +151,6 @@
 
 
 
-#if NETCOREAPP && !NETCOREAPP2_0
-
-#define ALLOW_CORE
-
-#endif
-
-#if NETCOREAPP || NETSTANDARD || NET45 || NET451 || NET47 || NET471
-
-#define ALLOW_TASK
-
-#endif
-
 using Swifter.RW;
 using Swifter.Tools;
 using System;
@@ -168,7 +158,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 
-#if ALLOW_TASK
+#if Async
 
 using System.Threading.Tasks;
 
@@ -181,7 +171,7 @@ namespace Swifter.Json
 	{
 <# { #>
 <# foreach(var serialize in serializes) { #>
-<#= serialize.IsAsync ? "#if ALLOW_TASK" : "" #>
+<#= serialize.IsAsync ? "#if Async" : "" #>
 
 <# var parameter_list = "T value"; #>
 <# var method_name = "Serialize"; #>
@@ -190,7 +180,19 @@ namespace Swifter.Json
 <# var encoding_name = ""; #>
 <# var encoding_parameter = ""; #>
 <# if (serialize.IsOptions) { options_parameter = ", options"; } #>
-<# if (serialize.IsAsync) { result = result == "void" ? "async Task" : $"async Task<{result}>"; } #>
+<# if (serialize.IsAsync) { result = result == "void" ? @"async
+#if ValueTask
+        ValueTask
+#else
+        Task
+#endif
+       " : @$"async
+#if ValueTask
+        ValueTask<{result}>
+#else
+        Task<{result}>
+#endif
+	   "; } #>
 <# if (serialize.IsStatic) { result = $"static {result}"; method_name += "Object"; } #>
 <# if (!string.IsNullOrEmpty(serialize.ParameterType) && !string.IsNullOrEmpty(serialize.ParameterName)) { parameter_list += $", {serialize.ParameterType} {serialize.ParameterName}"; } #>
 <# if (serialize.IsEncoding) { encoding_name = "Encoding"; encoding_parameter = ", Encoding"; } #>
@@ -218,22 +220,26 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public <#= result #> <#= method_name #><#= serialize.IsAsync ? "Async" : "" #><T>(<#= parameter_list #>)
         {
-
-<# if (serialize.ReturnType == "string" || serialize.ReturnType == "byte[]") { #>
+<# if (serialize.ReturnType == "string") { #>
 			var hGChars = CharsPool.Rent();
 
 			<#= method_name #>(value, hGChars<#= options_parameter#>);
-
-<# if (serialize.ReturnType == "byte[]") { #>
-			var ret = hGChars.ToBytes(<#= encoding_name #>);
-<# } else { #>
+			
 			var ret = hGChars.ToStringEx();
-<# } #>
 
 			CharsPool.Return(hGChars);
 
 			return ret;
+<# } else if (serialize.ReturnType == "byte[]") { #>
+			var hGChars = CharsPool.Rent();
 
+			<#= method_name #>(value, hGChars<#= options_parameter#>);
+			
+			var ret = hGChars.ToBytes(<#= encoding_name #>);
+
+			CharsPool.Return(hGChars);
+
+			return ret;
 <# } else if (serialize.ParameterType == "out byte[]") { #>
 
 			var hGChars = CharsPool.Rent();
@@ -243,75 +249,84 @@ namespace Swifter.Json
 			<#= serialize.ParameterName #> = hGChars.ToBytes(<#= encoding_name #>);
 
 			CharsPool.Return(hGChars);
-
-<# } else if (
-				serialize.ParameterType == "Stream" ||
-				(serialize.ParameterType == "TextWriter" && serialize.IsAsync) ||
-				serialize.ParameterType == "HGlobalCache<byte>"
-				) { #>
 			
+<# } else if (serialize.ParameterType == "TextWriter" && serialize.IsAsync) { #>
+
 			var hGChars = CharsPool.Rent();
 
-<# var writer_parameter = ""; #>
-<# if (!serialize.IsAsync && serialize.ParameterType == "TextWriter") { writer_parameter = $", {serialize.ParameterName}"; } #>
-			<#= method_name #>(value, hGChars<#= writer_parameter #><#= options_parameter #>);
+			<#= method_name #>(value, hGChars<#= options_parameter #>);
 
-<# var write_to_exp = serialize.IsAsync ? "await hGChars.WriteToAsync" : "hGChars.WriteTo"; #>
-			<#= write_to_exp #>(<#= serialize.ParameterName #><#= encoding_parameter #>);
-
+			var chars = hGChars.ToArray();
+			
 			CharsPool.Return(hGChars);
 
-<# } else { #>
+			await <#= serialize.ParameterName #>.WriteAsync(chars, 0, chars.Length);
 
+<# } else if (serialize.ParameterType == "TextWriter") { #>
 
-
-<# if (serialize.IsStatic && !serialize.IsOptions) { #>
-
-<# var parameters = $"{serialize.ParameterName}, DefaultMaxDepth"; #>
-<# if (serialize.ParameterType == "TextWriter") { parameters = "hGChars, DefaultMaxDepth, textWriter"; #>
-			var hGChars = CharsPool.Rent();
-<# } #>
-
-            var jsonSerializer = new JsonSerializer<JsonSerializeModes.SimpleMode>(<#= parameters #>);
-
-            ValueInterface<T>.WriteValue(jsonSerializer, value);
-
-            jsonSerializer.Flush();
-
-<# } else { #>
-
-<# var parameters = serialize.ParameterName; #>
-<# if (serialize.ParameterType == "TextWriter") { parameters = "hGChars, textWriter"; #>
-			var hGChars = CharsPool.Rent();
-<# } #>
-
-<# if (!serialize.IsStatic) { #>
+<#if (!serialize.IsStatic) { #>
 			var options = Options;
-<# } #>
+<#}#>
+
+			var hGChars = CharsPool.Rent();
 
             if ((options & ReferenceOptions) != 0)
             {
-                <#= method_name #><T, JsonSerializeModes.ReferenceMode>(value, <#= parameters #>, options);
+                <#= method_name #><T, JsonSerializeModes.ReferenceMode>(value, hGChars, <#= serialize.ParameterName #>, options);
             }
             else if ((options & ComplexOptions) != 0)
             {
-                <#= method_name #><T, JsonSerializeModes.ComplexMode>(value, <#= parameters #>, options);
+                <#= method_name #><T, JsonSerializeModes.ComplexMode>(value, hGChars, <#= serialize.ParameterName #>, options);
             }
             else
             {
-                <#= method_name #><T, JsonSerializeModes.SimpleMode>(value, <#= parameters #>, options);
+                <#= method_name #><T, JsonSerializeModes.SimpleMode>(value, hGChars, <#= serialize.ParameterName #>, options);
             }
 
-<# } #>
-
-<#if (serialize.ParameterType == "TextWriter") { #>
-
-<# var write_to_exp = serialize.IsAsync ? "await hGChars.WriteToAsync" : "hGChars.WriteTo"; #>
-			<#= write_to_exp #>(<#= serialize.ParameterName #><#= encoding_parameter #>);
+			hGChars.WriteTo(<#= serialize.ParameterName #>);
 
 			CharsPool.Return(hGChars);
-<# } #>
+			
+<# } else if (serialize.ParameterType == "Stream"  && serialize.IsAsync) { #>
 
+			var hGChars = CharsPool.Rent();
+
+			<#= method_name #>(value, hGChars<#= options_parameter #>);
+
+			var bytes = hGChars.ToBytes(<#= encoding_name #>);
+			
+			CharsPool.Return(hGChars);
+
+			await <#= serialize.ParameterName #>.WriteAsync(bytes, 0, bytes.Length);
+
+<# } else if (serialize.ParameterType == "Stream" || serialize.ParameterType == "HGlobalCache<byte>") { #>
+			
+			var hGChars = CharsPool.Rent();
+
+			<#= method_name #>(value, hGChars<#= options_parameter #>);
+
+			hGChars.WriteTo(<#= serialize.ParameterName #><#= encoding_parameter #>);
+
+			CharsPool.Return(hGChars);
+			
+<# } else if (serialize.ParameterType == "HGlobalCache<char>") { #>
+
+<#if (!serialize.IsStatic) { #>
+			var options = Options;
+<#}#>
+
+            if ((options & ReferenceOptions) != 0)
+            {
+                <#= method_name #><T, JsonSerializeModes.ReferenceMode>(value, <#= serialize.ParameterName #>, options);
+            }
+            else if ((options & ComplexOptions) != 0)
+            {
+                <#= method_name #><T, JsonSerializeModes.ComplexMode>(value, <#= serialize.ParameterName #>, options);
+            }
+            else
+            {
+                <#= method_name #><T, JsonSerializeModes.SimpleMode>(value, <#= serialize.ParameterName #>, options);
+            }
 <# } #>
         }
 
@@ -323,19 +338,28 @@ namespace Swifter.Json
 <# { #>
 
 <# foreach(var deserialize in deserializes) { #>
-<#= deserialize.IsCore ? "#if ALLOW_CORE" : "" #>
-<#= deserialize.IsAsync ? "#if ALLOW_TASK" : "" #>
+<#= deserialize.IsCore ? "#if Span" : "" #>
+<#= deserialize.IsAsync ? "#if Async" : "" #>
 <# var result_type = deserialize.IsGeneric ? "T" : "object"; #>
 <# var generic_parameter = deserialize.IsGeneric ? "<T>" : ""; #>
-<# var non_generic_parameter = deserialize.IsGeneric ? "" : ", type"; #>
+<# var non_generic_parameter_before = deserialize.IsGeneric ? "" : "type, "; #>
+<# var non_generic_parameter_after = deserialize.IsGeneric ? "" : ", type"; #>
+<# var options_parameter = deserialize.IsOptions ? ", options" : ""; #>
 <# var parameter_list = $"{deserialize.ParameterType} {deserialize.ParameterName}"; #>
 <# var method_name = "Deserialize"; #>
 <# var encoding_parameter = ""; #>
+<# var modifiable_check = ""; #>
 <# if (deserialize.IsEncoding) { encoding_parameter = ", Encoding"; } #>
 <# if (deserialize.IsEncoding && deserialize.IsStatic) { parameter_list += ", Encoding encoding"; encoding_parameter = ", encoding"; } #>
 <# if (!deserialize.IsGeneric) { parameter_list += ", Type type"; }#>
-<# if (deserialize.IsOptions) { parameter_list += ", JsonFormatterOptions options"; non_generic_parameter += ", options"; }#>
-<# if (deserialize.IsAsync) { result_type = $"async Task<{result_type}>"; } #>
+<# if (deserialize.IsOptions) { parameter_list += ", JsonFormatterOptions options"; modifiable_check += "(options & JsonFormatterOptions.ModifiableDeserialize) == 0 && "; }#>
+<# if (deserialize.IsAsync) { result_type = @$"async
+#if ValueTask
+        ValueTask<{result_type}>
+#else
+        Task<{result_type}>
+#endif
+       "; } #>
 <# if (deserialize.IsStatic) { result_type = $"static {result_type}"; method_name += "Object"; }#>
         /// <summary>
         /// 将 <#= deserialize.ParameterDescription #>反序列化为指定类型的实例。
@@ -358,31 +382,40 @@ namespace Swifter.Json
 		public <#= result_type #> <#= method_name #><#= deserialize.IsAsync ? "Async" : "" #><#= deserialize.IsGeneric ? "<T>" : "" #>(<#= parameter_list #>)
 		{
 <# if (deserialize.ParameterType == "string" || deserialize.ParameterType == "ReadOnlySpan<char>") { #>
+
 			unsafe
 			{
 				fixed (char* chars = <#= deserialize.ParameterName #>)
 				{
-					return <#= method_name #><#= generic_parameter #>(chars, <#= deserialize.ParameterName #>.Length<#= non_generic_parameter #>);
+					return <#= method_name #><#= generic_parameter #>(<#= non_generic_parameter_before #>chars, <#= deserialize.ParameterName #>.Length<#= options_parameter #>);
 				}
 			}
 <# } else if (deserialize.ParameterType == "HGlobalCache<char>") { #>
 			unsafe
 			{
-				return <#= method_name #><#= generic_parameter #>(<#= deserialize.ParameterName #>.GetPointer(), <#= deserialize.ParameterName #>.Count<#= non_generic_parameter #>);
+				return <#= method_name #><#= generic_parameter #>(<#= non_generic_parameter_before #><#= deserialize.ParameterName #>.First, <#= deserialize.ParameterName #>.Count<#= options_parameter #>);
 			}
+<# } else if (deserialize.ParameterType == "TextReader" && deserialize.IsAsync) { #>
+
+			return <#= method_name #><#= generic_parameter #>(await <#= deserialize.ParameterName #>.ReadToEndAsync()<#= non_generic_parameter_after #><#= options_parameter #>);
+
+<# } else if (deserialize.ParameterType == "Stream" && deserialize.IsAsync) { #>
+
+			return <#= method_name #><#= generic_parameter #>(await new StreamReader(<#= deserialize.ParameterName #><#= encoding_parameter #>).ReadToEndAsync()<#= non_generic_parameter_after #><#= options_parameter #>);
+
 <# } else if (
 				deserialize.ParameterType == "HGlobalCache<byte>" || 
 				deserialize.ParameterType == "ArraySegment<byte>" || 
+				deserialize.ParameterType == "byte[]" || 
 				deserialize.ParameterType == "ReadOnlySpan<byte>" || 
 				deserialize.ParameterType == "Stream" ||
 				deserialize.ParameterType == "TextReader"
 				) { #>
 			var hGChars = CharsPool.Rent();
 
-<# var read_from_exp = deserialize.IsAsync ? "await hGChars.ReadFromAsync" : "hGChars.ReadFrom"; #>
-			<#= read_from_exp #>(<#= deserialize.ParameterName #><#= encoding_parameter #>);
+			hGChars.ReadFrom(<#= deserialize.ParameterName #><#= encoding_parameter #>);
 
-			var value = <#= method_name #><#= generic_parameter #>(hGChars<#= non_generic_parameter #>);
+			var value = <#= method_name #><#= generic_parameter #>(hGChars<#= non_generic_parameter_after #><#= options_parameter #>);
 
 			CharsPool.Return(hGChars);
 
@@ -404,8 +437,8 @@ namespace Swifter.Json
 <# { #>
 
 <# foreach(var deserializeto in deserializetos) { #>
-<#= deserializeto.IsCore ? "#if ALLOW_CORE" : "" #>
-<#= deserializeto.IsAsync ? "#if ALLOW_TASK" : "" #>
+<#= deserializeto.IsCore ? "#if Span" : "" #>
+<#= deserializeto.IsAsync ? "#if Async" : "" #>
 
 <# var parameters_list = $"{deserializeto.ParameterType} {deserializeto.ParameterName}"; #>
 <# var method_name = "DeserializeTo"; #>
@@ -421,7 +454,13 @@ namespace Swifter.Json
 <# } #>
         /// <param name="dataWriter">数据写入器</param>
 <# parameters_list += ", IDataWriter dataWriter"; #>
-        public <#= deserializeto.IsAsync ? "async Task" : "void" #> <#= method_name #><#= deserializeto.IsAsync ? "Async" : "" #>(<#= parameters_list #>)
+        public <#= deserializeto.IsAsync ? @"async
+#if ValueTask
+        ValueTask
+#else
+        Task
+#endif
+	   " : "void" #> <#= method_name #><#= deserializeto.IsAsync ? "Async" : "" #>(<#= parameters_list #>)
         {
 <# if (deserializeto.ParameterType == "string" || deserializeto.ParameterType == "ReadOnlySpan<char>") { #>
 			unsafe
@@ -431,16 +470,25 @@ namespace Swifter.Json
 					<#= method_name #>(chars, <#= deserializeto.ParameterName #>.Length, dataWriter);
 				}
 			}
+<# } else if (deserializeto.ParameterType == "TextReader" && deserializeto.IsAsync) { #>
+
+			<#= method_name #>(await <#= deserializeto.ParameterName #>.ReadToEndAsync(), dataWriter);
+
+<# } else if (deserializeto.ParameterType == "Stream" && deserializeto.IsAsync) { #>
+
+			<#= method_name #>(await new StreamReader(<#= deserializeto.ParameterName #><#= encoding_parameter #>).ReadToEndAsync(), dataWriter);
+
 <# } else if (
 				deserializeto.ParameterType == "HGlobalCache<byte>" || 
 				deserializeto.ParameterType == "ArraySegment<byte>" || 
+				deserializeto.ParameterType == "byte[]" || 
 				deserializeto.ParameterType == "ReadOnlySpan<byte>" || 
 				deserializeto.ParameterType == "Stream" ||
 				deserializeto.ParameterType == "TextReader"
 			 ) { #>
 			var hGChars = CharsPool.Rent();
 
-			<#= deserializeto.IsAsync ? "await hGChars.ReadFromAsync" : "hGChars.ReadFrom" #>(<#= deserializeto.ParameterName #><#= encoding_parameter #>);
+			hGChars.ReadFrom(<#= deserializeto.ParameterName #><#= encoding_parameter #>);
 
 			<#= method_name #>(hGChars, dataWriter);
 
@@ -448,7 +496,7 @@ namespace Swifter.Json
 <# } else if (deserializeto.ParameterType == "HGlobalCache<char>") { #>
 			unsafe
 			{
-				<#= method_name #>(<#= deserializeto.ParameterName #>.GetPointer(), <#= deserializeto.ParameterName #>.Count, dataWriter);
+				<#= method_name #>(<#= deserializeto.ParameterName #>.First, <#= deserializeto.ParameterName #>.Count, dataWriter);
 			}
 <# } #>
         }

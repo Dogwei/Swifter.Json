@@ -30,7 +30,7 @@ namespace Swifter.Reflection
         /// <returns>返回该类型的实例</returns>
         public T ReadValue(IValueReader valueReader)
         {
-            var objectRW = XObjectRW.Create<T>(valueReader is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.None);
+            var objectRW = XObjectRW.Create<T>(valueReader is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.UseDefault);
 
             valueReader.ReadObject(objectRW);
 
@@ -44,7 +44,7 @@ namespace Swifter.Reflection
         /// <param name="value">该类型的实例</param>
         public void WriteValue(IValueWriter valueWriter, T value)
         {
-            if (value == null)
+            if (value is null)
             {
                 valueWriter.DirectWrite(null);
             }
@@ -56,7 +56,7 @@ namespace Swifter.Reflection
             }
             else
             {
-                var objectRW = XObjectRW.Create<T>(valueWriter is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.None);
+                var objectRW = XObjectRW.Create<T>(valueWriter is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.UseDefault);
 
                 objectRW.Initialize(value);
 
@@ -89,7 +89,7 @@ namespace Swifter.Reflection
         /// <returns>返回绑定标识</returns>
         public static XBindingFlags GetXObjectRWFlags(this ITargetedBind targeted)
         {
-            return ValueInterface<XAssistant>.GetTargetedInterface(targeted) is XAssistant assistant ? assistant.Flags : XObjectRW.DefaultBindingFlags;
+            return ValueInterface<XAssistant>.GetTargetedInterface(targeted) is XAssistant assistant ? assistant.Flags : XBindingFlags.UseDefault;
         }
 
         sealed class XAssistant : IValueInterface<XAssistant>

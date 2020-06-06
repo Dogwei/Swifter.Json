@@ -4,19 +4,42 @@ using Swifter.Tools;
 
 using System;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.Reflection
 {
-    sealed class XStaticPropertyInfo<TValue> : XPropertyInfo, IXFieldRW
+    /// <summary>
+    /// 表示静态属性的信息。
+    /// </summary>
+    /// <typeparam name="TValue">属性类型</typeparam>
+    public sealed class XStaticPropertyInfo<TValue> : XPropertyInfo, IXFieldRW
     {
         XStaticGetValueHandler<TValue> _get;
         XStaticSetValueHandler<TValue> _set;
+
+        /// <summary>
+        /// 获取或设置属性的值。
+        /// </summary>
+        public TValue Value
+        {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => _get();
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            set => _set(value);
+        }
+
+        XStaticPropertyInfo()
+        {
+
+        }
 
         private protected override void InitializeByValue(PropertyInfo propertyInfo, XBindingFlags flags)
         {
             base.InitializeByValue(propertyInfo, flags);
 
-            if (_get == null)
+            // TODO: RWAutoPropertyDirectRW
+
+            if (_get is null)
             {
                 var getMethod = propertyInfo.GetGetMethod((flags & XBindingFlags.NonPublic) != 0);
 
@@ -26,7 +49,7 @@ namespace Swifter.Reflection
                 }
             }
 
-            if (_set == null)
+            if (_set is null)
             {
                 var setMethod = propertyInfo.GetSetMethod((flags & XBindingFlags.NonPublic) != 0);
 
@@ -41,7 +64,7 @@ namespace Swifter.Reflection
         {
             base.InitializeByRef(propertyInfo, flags);
 
-            if (_get == null || _set == null)
+            if (_get is null || _set is null)
             {
                 var getMethod = propertyInfo.GetGetMethod((flags & XBindingFlags.NonPublic) != 0);
 
@@ -62,23 +85,12 @@ namespace Swifter.Reflection
             }
         }
 
-        public bool CanRead => _get != null;
 
-        public bool CanWrite => _set != null;
-
-        public int Order => RWFieldAttribute.DefaultOrder;
-
-        public Type BeforeType => propertyInfo.PropertyType;
-
-        public Type AfterType => typeof(TValue);
-
-        public bool IsPublic => (PropertyInfo.GetGetMethod(true) ?? PropertyInfo.GetSetMethod(true))?.IsPublic ?? false;
-
-        public bool IsStatic => true;
-
-        public object Original => PropertyInfo;
-
-
+        /// <summary>
+        /// 获取属性的值。
+        /// </summary>
+        /// <returns>返回属性的值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public override object GetValue()
         {
             Assert(CanRead, "get");
@@ -86,6 +98,11 @@ namespace Swifter.Reflection
             return _get();
         }
 
+        /// <summary>
+        /// 设置属性的值。
+        /// </summary>
+        /// <param name="value">值</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public override void SetValue(object value)
         {
             Assert(CanWrite, "set");
@@ -93,46 +110,70 @@ namespace Swifter.Reflection
             _set((TValue)value);
         }
 
-        public void OnReadValue(object obj, IValueWriter valueWriter)
+        /// <summary>
+        /// 获取一个值，表示属性能否读取。
+        /// </summary>
+        public bool CanRead
+        {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => _get != null;
+        }
+
+        /// <summary>
+        /// 获取一个值，表示属性能否写入。
+        /// </summary>
+        public bool CanWrite
+        {
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            get => _set != null;
+        }
+
+
+        int IObjectField.Order => RWFieldAttribute.DefaultOrder;
+
+        Type IObjectField.BeforeType => typeof(TValue);
+
+        Type IObjectField.AfterType => typeof(TValue);
+
+        bool IObjectField.IsPublic => (PropertyInfo.GetGetMethod(true) ?? PropertyInfo.GetSetMethod(true))?.IsPublic ?? false;
+
+        bool IObjectField.IsStatic => true;
+
+        object IObjectField.Original => PropertyInfo;
+
+        bool IObjectField.SkipDefaultValue => (flags & XBindingFlags.RWSkipDefaultValue) != 0;
+
+        bool IObjectField.CannotGetException => (flags & XBindingFlags.RWCannotGetException) != 0;
+
+        bool IObjectField.CannotSetException => (flags & XBindingFlags.RWCannotSetException) != 0;
+
+
+        void IXFieldRW.OnReadValue(object obj, IValueWriter valueWriter)
         {
             Assert(CanRead, "get");
 
-            ValueInterface<TValue>.WriteValue(valueWriter, _get());
+            ValueInterface<TValue>.WriteValue(valueWriter, Value);
         }
 
-        public void OnWriteValue(object obj, IValueReader valueReader)
+        void IXFieldRW.OnWriteValue(object obj, IValueReader valueReader)
         {
             Assert(CanWrite, "set");
 
-            _set(ValueInterface<TValue>.ReadValue(valueReader));
+            Value = ValueInterface<TValue>.ReadValue(valueReader);
         }
 
-        public T ReadValue<T>(object obj)
+        T IXFieldRW.ReadValue<T>(object obj)
         {
             Assert(CanRead, "get");
 
-            var value = _get();
-
-            if (typeof(T) == typeof(TValue))
-            {
-                return Unsafe.As<TValue, T>(ref value);
-            }
-
-            return XConvert<T>.Convert(value);
+            return XConvert<T>.Convert(Value);
         }
 
-        public void WriteValue<T>(object obj, T value)
+        void IXFieldRW.WriteValue<T>(object obj, T value)
         {
             Assert(CanWrite, "set");
-            
-            if (typeof(T) == typeof(TValue))
-            {
-                _set(Unsafe.As<T, TValue>(ref value));
 
-                return;
-            }
-
-            _set(XConvert<TValue>.Convert(value));
+            Value = XConvert<TValue>.Convert(value);
         }
     }
 }

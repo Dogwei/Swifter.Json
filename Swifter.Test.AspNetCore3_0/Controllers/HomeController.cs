@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Swifter.Test.AspNetCore3_0.Models;
 
 namespace Swifter.Test.AspNetCore3_0.Controllers
@@ -16,9 +17,9 @@ namespace Swifter.Test.AspNetCore3_0.Controllers
         }
 
         [HttpPost]
-        public IActionResult Data([FromBody]DataParameters data)
+        public IActionResult Data([FromBody] string name)
         {
-            return Json(new { Id = data.Id, Name = data.Name });
+            return Json(new { Id = 123, Name = name });
         }
 
         public IActionResult Privacy()

@@ -1,44 +1,37 @@
-﻿
-using Swifter.Tools;
-
-
-namespace Swifter.RW
+﻿namespace Swifter.RW
 {
-    internal sealed class ArrayInterface<T> : BaseObjectPool<ArrayRW<T>>, IValueInterface<T> where T : class
+    internal sealed class ArrayInterface<TElement> : IValueInterface<TElement[]>
     {
-        public T ReadValue(IValueReader valueReader)
+        public TElement[] ReadValue(IValueReader valueReader)
         {
-            var writer = Rent();
-
-            valueReader.ReadArray(writer);
-
-            if (valueReader is IUsePool)
+            if (valueReader is IValueReader<TElement[]> reader)
             {
-                var content = writer.GetCopy();
-
-                Return(writer);
-
-                return content;
-            }
-
-            return writer.Content;
-        }
-
-        public void WriteValue(IValueWriter valueWriter, T value)
-        {
-            if (value == null)
-            {
-                valueWriter.DirectWrite(null);
+                return reader.ReadValue();
             }
             else
             {
-                valueWriter.WriteArray(ArrayRW<T>.Create(value));
+                var rw = new ArrayRW<TElement>();
+
+                valueReader.ReadArray(rw);
+
+                return rw.GetContent();
             }
         }
 
-        protected override ArrayRW<T> CreateInstance()
+        public void WriteValue(IValueWriter valueWriter, TElement[] value)
         {
-            return ArrayRW<T>.CreateAppend();
+            if (value is null)
+            {
+                valueWriter.DirectWrite(null);
+            }
+            else if (valueWriter is IValueWriter<TElement[]> writer)
+            {
+                writer.WriteValue(value);
+            }
+            else
+            {
+                valueWriter.WriteArray(new ArrayRW<TElement>(value));
+            }
         }
     }
 }

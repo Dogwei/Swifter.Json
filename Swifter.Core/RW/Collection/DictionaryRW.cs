@@ -1,73 +1,38 @@
-﻿
-
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Swifter.RW
 {
 
-    internal sealed class DictionaryRW<T> : IDataRW<object>, IDirectContent where T : IDictionary
+    internal sealed class DictionaryRW<T> : IDataRW<object> where T : IDictionary
     {
         public const int DefaultCapacity = 3;
 
         internal T content;
 
-        public T Content => content;
-
-        public ValueCopyer<object> this[object key]=> new ValueCopyer<object>(this, key);
-
-        IValueRW IDataRW<object>.this[object key] => this[key];
+        public IValueRW this[object key] => new ValueCopyer<object>(this, key);
 
         IValueWriter IDataWriter<object>.this[object key]=> this[key];
 
         IValueReader IDataReader<object>.this[object key]=> this[key];
 
-        public IEnumerable<object> Keys
+        public IEnumerable<object> Keys => content.Keys.Cast<object>();
+
+        public int Count => content.Count;
+
+        public object Content
         {
-            get
-            {
-                // TODO:
-                return (IEnumerable<object>)content.Keys;
-            }
+            get => content;
+            set => content = (T)value;
         }
 
-        public int Count
-        {
-            get
-            {
-                return content.Count;
-            }
-        }
-
-        object IDirectContent.DirectContent
-        {
-            get
-            {
-                return content;
-            }
-            set
-            {
-                content = (T)value;
-            }
-        }
-
-        public object ReferenceToken
-        {
-            get
-            {
-                return content;
-            }
-        }
+        public Type ContentType => typeof(T);
 
         public void Initialize()
         {
             Initialize(DefaultCapacity);
-        }
-
-        public void Initialize(T content)
-        {
-            this.content = content;
         }
 
         public void Initialize(int capacity)
@@ -101,26 +66,9 @@ namespace Swifter.RW
             content[key] = ValueInterface<object>.ReadValue(valueReader);
         }
 
-        public void OnReadAll(IDataWriter<object> dataWriter, IValueFilter<object> valueFilter)
-        {
-            var valueInfo = new ValueFilterInfo<object>();
-
-            foreach (DictionaryEntry item in content)
-            {
-                ValueInterface.WriteValue(valueInfo.ValueCopyer, item.Value);
-
-                valueInfo.Key = item.Key;
-                valueInfo.Type = typeof(object);
-
-                if (valueFilter.Filter(valueInfo))
-                {
-                    valueInfo.ValueCopyer.WriteTo(dataWriter[valueInfo.Key]);
-                }
-            }
-        }
-
         public void OnWriteAll(IDataReader<object> dataReader)
         {
+            // TODO: Fast
             var buckets = new KeyValuePair<object, object>[content.Count];
 
             var index = 0;

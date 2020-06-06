@@ -28,13 +28,21 @@ namespace Swifter.RW
 
             public override bool CanWrite => Attribute != null ? (Attribute.Access & RWFieldAccess.WriteOnly) != 0 : Field.IsPublic;
 
-            public override bool IsPublic => Field.IsPublic;
+            public override bool IsPublicGet => true;
+
+            public override bool IsPublicSet => true;
 
             public override Type BeforeType => (Field.FieldType.IsPointer || Field.FieldType.IsByRef) ? typeof(IntPtr) : Field.FieldType;
 
             public override Type AfterType => ReadValueMethod?.ReturnType ?? BeforeType;
 
             public override bool IsStatic => Field.IsStatic;
+
+            public override bool SkipDefaultValue => (Attribute?.SkipDefaultValue ?? RWBoolean.None) != RWBoolean.None ? (Attribute.SkipDefaultValue == RWBoolean.Yes) : (Options & FastObjectRWOptions.SkipDefaultValue) != 0;
+
+            public override bool CannotGetException => (Attribute?.CannotGetException ?? RWBoolean.None) != RWBoolean.None ? (Attribute.CannotGetException == RWBoolean.Yes) : (Options & FastObjectRWOptions.CannotGetException) != 0;
+
+            public override bool CannotSetException => (Attribute?.CannotSetException ?? RWBoolean.None) != RWBoolean.None ? (Attribute.CannotSetException == RWBoolean.Yes) : (Options & FastObjectRWOptions.CannotSetException) != 0;
 
             public override void GetValueAfter(ILGenerator ilGen)
             {

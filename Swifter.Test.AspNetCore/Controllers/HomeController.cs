@@ -23,12 +23,12 @@ namespace Swifter.Test.AspNetCore.Controllers
 
             // return View();
         }
-        
 
+        [Produces("application/json")]
         [HttpPost]
         public IActionResult Data([FromBody]DataParameters data)
         {
-            return Json(new { data.Id, data.Name });
+            return Ok(new { data.Id, data.Name });
             // return Ok(new { data.Id, data.Name });
         }
 

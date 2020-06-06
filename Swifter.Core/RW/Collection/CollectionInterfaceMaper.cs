@@ -7,7 +7,7 @@ namespace Swifter.RW
     {
         public IValueInterface<T> TryMap<T>()
         {
-            if (typeof(T).IsArray)
+            if (typeof(Array).IsAssignableFrom(typeof(T)))
             {
                 return null;
             }
