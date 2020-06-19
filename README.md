@@ -80,5 +80,5 @@ For more features, please see Swifter.Json.JsonFormatterOptions enum.
 更多功能请看 Swifter.Json.JsonFormatterOptions 配置项。
 ```
 ## Performance 性能
-
+# ![Performance](Performance.png)
 ###### ServiceStack.Json, Jil, LitJson, NetJson and etc libraries are not shown because there are too many errors; if necessary, you can clone the test program on GitHub and run. Most of the Json serialization libraries of .NET have been included.
