@@ -37,14 +37,17 @@ Unity, Xamarin.iOS, Xamarin.Android
 
 Uncertain：Unity IL2CPP
 
-Unsupported:
+Unsupported: Sliverlight
+
+Note:
+    .NET Core uses the Core version, and other platforms use the Framework version or Standard version.
+    Because the Core version is performance-optimized. the Framework version and Standard version are optimized for compatibility.
+    Framework version and Standard version can run directly on AOT platforms.
+注意：
+    .NET Core 请使用 Core 版本，其他平台和运行时请使用 Framework 版本或 Standard 版本。
+    因为 Core 版本专为性能优化，Framework 版本和 Standard 版本为兼容性优化。
+    Framework 版本和 Standard 版本可以直接在 AOT 平台上运行。
 ```
-##### Note: .NET Core uses the Core version, and other platforms use the Framework version or Standard version.
-##### Because the Core version is performance-optimized. the Framework version and Standard version are optimized for compatibility.
-##### Framework version and Standard version can run directly on AOT platforms.
-##### 注意：.NET Core 请使用 Core 版本，其他平台和运行时请使用 Framework 版本或 Standard 版本。
-##### 因为 Core 版本专为性能优化，Framework 版本和 Standard 版本为兼容性优化。
-##### Framework 版本和 Standard 版本可以直接在 AOT 平台上运行。
 
 ## Supported features 支持的功能
 ```
