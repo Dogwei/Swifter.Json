@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 
 namespace Swifter.RW
 {
@@ -39,7 +40,7 @@ namespace Swifter.RW
         /// 获取所有索引。
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
+        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
 
         /// <summary>
         /// 获取列表长度。

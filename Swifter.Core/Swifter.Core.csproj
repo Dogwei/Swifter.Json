@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net20;net35;net40;net45;net47;netstandard2.0;netcoreapp2.0;netcoreapp2.1;netcoreapp3.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.3.2</Version>
+    <Version>1.5.0</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Swifter.Core.xml</DocumentationFile>
     <Description>Swifter Core components.</Description>
@@ -11,10 +11,12 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageIcon>icon.png</PackageIcon>
     <NoWarn>0162</NoWarn>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>Swifter.Core.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Swifter.Underlying" Version="1.0.2" />
+    <PackageReference Include="Swifter.Underlying" Version="1.3.1" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,4 @@
 ﻿using Swifter.Tools;
-using System;
 using System.Reflection;
 
 using static Swifter.Reflection.ThrowHelpers;
@@ -32,12 +31,12 @@ namespace Swifter.Reflection
         /// <summary>
         /// 获取该索引器的 get 方法的委托。
         /// </summary>
-        public readonly Delegate GetValueDelegate;
+        public readonly XMethodInfo GetValueMethod;
 
         /// <summary>
         /// 获取该索引器的 set 方法的委托。
         /// </summary>
-        public readonly Delegate SetValueDelegate;
+        public readonly XMethodInfo SetValueMethod;
 
         XIndexerInfo(PropertyInfo propertyInfo, XBindingFlags flags)
         {
@@ -47,12 +46,12 @@ namespace Swifter.Reflection
 
             if (propertyInfo.GetGetMethod((flags & XBindingFlags.NonPublic) != 0) is var getMethod)
             {
-                GetValueDelegate = MethodHelper.CreateDelegate(getMethod);
+                GetValueMethod = XMethodInfo.Create(getMethod, flags);
             }
 
             if (propertyInfo.GetSetMethod((flags & XBindingFlags.NonPublic) != 0) is var setMethod)
             {
-                SetValueDelegate = MethodHelper.CreateDelegate(setMethod);
+                SetValueMethod = XMethodInfo.Create(setMethod, flags);
             }
         }
 
@@ -64,22 +63,12 @@ namespace Swifter.Reflection
         /// <returns>返回该值</returns>
         public object GetValue(object obj, object[] parameters)
         {
-            if (GetValueDelegate is null)
+            if (GetValueMethod is null)
             {
-                if ((Flags & XBindingFlags.RWCannotGetException) != 0)
-                {
-                    ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "get");
-                }
-
-                return null;
+                ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "get");
             }
 
-            if (!PropertyInfo.DeclaringType.IsInstanceOfType(obj))
-            {
-                ThrowTargetException(nameof(obj), PropertyInfo.DeclaringType);
-            }
-
-            return GetValueDelegate.DynamicInvoke(ArrayHelper.Merge(obj, parameters));
+            return GetValueMethod.Invoke(obj, parameters);
         }
 
         /// <summary>
@@ -89,17 +78,12 @@ namespace Swifter.Reflection
         /// <returns>返回该值</returns>
         public object GetValue(object[] parameters)
         {
-            if (GetValueDelegate is null)
+            if (GetValueMethod is null)
             {
-                if ((Flags & XBindingFlags.RWCannotGetException) != 0)
-                {
-                    ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "get");
-                }
-
-                return null;
+                ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "get");
             }
 
-            return GetValueDelegate.DynamicInvoke(parameters);
+            return GetValueMethod.Invoke(parameters);
         }
 
         /// <summary>
@@ -110,22 +94,12 @@ namespace Swifter.Reflection
         /// <param name="value">值</param>
         public void SetValue(object obj, object[] parameters, object value)
         {
-            if (SetValueDelegate is null)
+            if (GetValueMethod is null)
             {
-                if ((Flags & XBindingFlags.RWCannotSetException) != 0)
-                {
-                    ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "set");
-                }
-
-                return;
+                ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "set");
             }
 
-            if (!PropertyInfo.DeclaringType.IsInstanceOfType(obj))
-            {
-                ThrowTargetException(nameof(obj), PropertyInfo.DeclaringType);
-            }
-
-            SetValueDelegate.DynamicInvoke(ArrayHelper.Merge(obj, parameters, value));
+            SetValueMethod.Invoke(ArrayHelper.Merge(obj, parameters, value));
         }
 
         /// <summary>
@@ -135,17 +109,12 @@ namespace Swifter.Reflection
         /// <param name="value">值</param>
         public void SetValue(object[] parameters, object value)
         {
-            if (SetValueDelegate is null)
+            if (GetValueMethod is null)
             {
-                if ((Flags & XBindingFlags.RWCannotSetException) != 0)
-                {
-                    ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "set");
-                }
-
-                return;
+                ThrowMissingMethodException("Indexer", PropertyInfo.DeclaringType, PropertyInfo, "set");
             }
 
-            SetValueDelegate.DynamicInvoke(ArrayHelper.Merge(parameters, value));
+            SetValueMethod.Invoke(ArrayHelper.Merge(parameters, value));
         }
     }
 }

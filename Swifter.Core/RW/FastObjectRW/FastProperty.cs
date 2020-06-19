@@ -5,8 +5,6 @@ using System;
 using System.Reflection;
 using System.Reflection.Emit;
 
-using static Swifter.RW.StaticFastObjectRW;
-
 namespace Swifter.RW
 {
     partial class StaticFastObjectRW<T>
@@ -61,16 +59,16 @@ namespace Swifter.RW
                         return false;
                     }
 
-                    // Get 方法可访问。
+                    // 公开的 Get 方法。
                     if (GetMethod?.IsPublic == true)
                     {
                         return true;
                     }
 
-                    // 自动属性，只有其中一个方法为 IsPublic。
+                    // 自动属性 Set 方法可访问。
                     if ((Options & FastObjectRWOptions.AutoPropertyDirectRW) != 0)
                     {
-                        return GetMethod?.IsPublic == true || SetMethod?.IsPublic == true;
+                        return SetMethod.IsPublic == true;
                     }
 
                     return false;
@@ -81,8 +79,14 @@ namespace Swifter.RW
             {
                 get
                 {
+                    // ByRef 属性判断 Get 方法是否可读。
+                    if (IsByRef)
+                    {
+                        return CanRead;
+                    }
+
                     // 没有设置方式。
-                    if (SetMethod is null && AutoFieldInfo is null && !(IsByRef && GetMethod != null))
+                    if (SetMethod is null && AutoFieldInfo is null)
                     {
                         return false;
                     }
@@ -99,22 +103,16 @@ namespace Swifter.RW
                         return false;
                     }
 
-                    // ByRef 属性判断 Get 方法是否可读。
-                    if (IsByRef)
-                    {
-                        return GetMethod?.IsPublic == true;
-                    }
-
-                    // Set 方法可访问。
+                    // 公开的 Set 方法。
                     if (SetMethod?.IsPublic == true)
                     {
                         return true;
                     }
 
-                    // 自动属性，只有其中一个方法为 IsPublic。
+                    // 自动属性 Get 方法可访问。
                     if ((Options & FastObjectRWOptions.AutoPropertyDirectRW) != 0)
                     {
-                        return GetMethod?.IsPublic == true || SetMethod?.IsPublic == true;
+                        return GetMethod?.IsPublic == true;
                     }
 
                     return false;
@@ -125,9 +123,9 @@ namespace Swifter.RW
 
             public MethodInfo SetMethod => Property.GetSetMethod(true);
 
-            public override bool IsPublicGet => AutoFieldInfo != null || GetMethod?.IsPublic == true;
+            public override bool IsPublicGet => true;
 
-            public override bool IsPublicSet => AutoFieldInfo != null || SetMethod?.IsPublic == true || (IsByRef && GetMethod?.IsPublic == true);
+            public override bool IsPublicSet => true;
 
             public override Type BeforeType => IsByRef ? Property.PropertyType.GetElementType() : Property.PropertyType.IsPointer ? typeof(IntPtr) : Property.PropertyType;
 
@@ -154,13 +152,29 @@ namespace Swifter.RW
                 }
                 else
                 {
-                    if (GetMethod?.IsPublic == true || AutoFieldInfo is null)
+                    if (GetMethod is null)
+                    {
+                        if (AutoFieldInfo.IsExternalVisible())
+                        {
+                            ilGen.LoadField(AutoFieldInfo);
+                        }
+                        else
+                        {
+                            ilGen.UnsafeLoadField(AutoFieldInfo);
+                        }
+                    }
+                    else if (GetMethod?.IsExternalVisible() == true || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
                     {
                         ilGen.Call(GetMethod);
                     }
                     else
                     {
-                        ilGen.LoadField(AutoFieldInfo);
+
+#if DEBUG
+                        Console.WriteLine($"{nameof(FastProperty)} : \"{typeof(T)}.{GetMethod}\" Use UnsafeCall");
+#endif
+
+                        ilGen.UnsafeCall(GetMethod);
                     }
                 }
             }
@@ -173,13 +187,29 @@ namespace Swifter.RW
                 }
                 else
                 {
-                    if (SetMethod?.IsPublic == true || AutoFieldInfo is null)
+                    if (SetMethod is null)
+                    {
+                        if (AutoFieldInfo.IsExternalVisible())
+                        {
+                            ilGen.StoreField(AutoFieldInfo);
+                        }
+                        else
+                        {
+                            ilGen.UnsafeStoreField(AutoFieldInfo);
+                        }
+                    }
+                    else if (SetMethod.IsExternalVisible() || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
                     {
                         ilGen.Call(SetMethod);
                     }
                     else
                     {
-                        ilGen.StoreField(AutoFieldInfo);
+
+#if DEBUG
+                        Console.WriteLine($"{nameof(FastProperty)} : \"{typeof(T)}.{SetMethod}\" Use UnsafeCall");
+#endif
+
+                        ilGen.UnsafeCall(SetMethod);
                     }
                 }
             }

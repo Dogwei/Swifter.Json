@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -70,7 +71,7 @@ namespace Swifter.Tools
         /// <summary>
         /// 分割连续内存信息的迭代器。
         /// </summary>
-        public unsafe ref struct SplitEnumerator
+        public ref struct SplitEnumerator
         {
             T* pointer;
             int length;
@@ -128,6 +129,8 @@ namespace Swifter.Tools
                 else return EqualityComparer<T>.Default.Equals(x, y);
             }
         }
+
+
 
 #if Span
 

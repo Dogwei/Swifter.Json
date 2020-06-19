@@ -3,6 +3,7 @@ using Swifter.RW;
 using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Swifter.RW
 {
@@ -60,7 +61,7 @@ namespace Swifter.RW
         /// <summary>
         /// 获取转换后的键集合。
         /// </summary>
-        public IEnumerable<TOut> Keys => ArrayHelper.CreateConvertIterator<TIn, TOut>(dataWriter.Keys);
+        public IEnumerable<TOut> Keys => dataWriter.Keys.Select(key => XConvert.Convert<TIn, TOut>(key));
 
         /// <summary>
         /// 获取数据源键的数量。

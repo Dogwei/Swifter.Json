@@ -126,30 +126,35 @@ namespace Swifter.Json
         UseSystemFloatingPointsMethods = 0x10000,
 
         /// <summary>
+        /// 序列化对象时，字段名使用驼峰命名法。即：如果字段名首字母为大写，则将首字母写入为小写字母。
+        /// </summary>
+        CamelCaseWhenSerialize = 0x20000,
+
+        /// <summary>
         /// 启用对象字段和值的筛选。<br/>
         /// 此配置与 <see cref="JsonFormatter.ObjectFiltering"/> 事件相互影响。<br/>
         /// </summary>
-        OnFilter = 0x20000,
+        OnFilter = 0x40000,
 
         /// <summary>
-        /// 启用筛选并筛选掉 Null 值
+        /// 在序列化或反序列化时忽略 Null 值。
         /// </summary>
-        IgnoreNull = 0x40000,
+        IgnoreNull = 0x80000,
 
         /// <summary>
-        /// 启用筛选并筛选掉 0 值
+        /// 在序列化或反序列化时忽略 0 值。
         /// </summary>
-        IgnoreZero = 0x80000,
+        IgnoreZero = 0x100000,
 
         /// <summary>
-        /// 启用筛选并筛选掉 "" 值 (空字符串)
+        /// 在序列化时忽略 ""(空字符串) 值。
         /// </summary>
-        IgnoreEmptyString = 0x100000,
+        IgnoreEmptyString = 0x200000,
 
         /// <summary>
         /// 启用数组元素的筛选。<br/>
         /// 此配置与 <see cref="JsonFormatter.ArrayFiltering"/> 事件相互影响。<br/>
         /// </summary>
-        ArrayOnFilter = 0x200000,
+        ArrayOnFilter = 0x400000,
     }
 }

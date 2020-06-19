@@ -1218,9 +1218,11 @@ namespace Swifter.MessagePack
 
                 ++depth;
 
+                var count_non_zero = valueWriter.Count > 0;
+
                 if (valueWriter is IDataWriter<Ps<Utf8Byte>> fastWriter)
                 {
-                    if (On(AsOrderedObjectDeserialize) && fastWriter.Count > 0)
+                    if (On(AsOrderedObjectDeserialize) && count_non_zero)
                     {
                         var fieldCountBackup = fieldCount;
 
@@ -1235,22 +1237,75 @@ namespace Swifter.MessagePack
 
                     for (int i = 0; i < size; i++)
                     {
-
                         var bytesLength = TryReadStringHead();
 
                         if (bytesLength >= 0)
                         {
-                            fastWriter.OnWriteValue(InternalReadString(bytesLength), this);
+                            var name = InternalReadString(bytesLength);
+
+                            if (count_non_zero)
+                            {
+                                switch (Current())
+                                {
+                                    case Nil:
+                                        if (On(IgnoreNull))
+                                        {
+                                            ++current;
+
+                                            continue;
+                                        }
+
+                                        break;
+                                    case FixInt:
+                                        if (On(IgnoreZero))
+                                        {
+                                            ++current;
+
+                                            continue;
+                                        }
+
+                                        break;
+                                }
+                            }
+
+                            fastWriter.OnWriteValue(name, this);
                         }
                         else
                         {
-                            valueWriter.OnWriteValue(ReadString(), this);
+                            var name = ReadString();
+
+                            if (count_non_zero)
+                            {
+                                switch (Current())
+                                {
+                                    case Nil:
+                                        if (On(IgnoreNull))
+                                        {
+                                            ++current;
+
+                                            continue;
+                                        }
+
+                                        break;
+                                    case FixInt:
+                                        if (On(IgnoreZero))
+                                        {
+                                            ++current;
+
+                                            continue;
+                                        }
+
+                                        break;
+                                }
+                            }
+
+                            valueWriter.OnWriteValue(name, this);
                         }
                     }
                 }
                 else
                 {
-                    if (On(AsOrderedObjectDeserialize) && valueWriter.Count > 0)
+                    if (On(AsOrderedObjectDeserialize) && count_non_zero)
                     {
                         var fieldCountBackup = fieldCount;
 
@@ -1265,7 +1320,34 @@ namespace Swifter.MessagePack
 
                     for (int i = 0; i < size; i++)
                     {
-                        valueWriter.OnWriteValue(ReadString(), this);
+                        var name = ReadString();
+
+                        if (count_non_zero)
+                        {
+                            switch (Current())
+                            {
+                                case Nil:
+                                    if (On(IgnoreNull))
+                                    {
+                                        ++current;
+
+                                        continue;
+                                    }
+
+                                    break;
+                                case FixInt:
+                                    if (On(IgnoreZero))
+                                    {
+                                        ++current;
+
+                                        continue;
+                                    }
+
+                                    break;
+                            }
+                        }
+
+                        valueWriter.OnWriteValue(name, this);
                     }
                 }
 

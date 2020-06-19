@@ -15,7 +15,7 @@ namespace Swifter.RW
 
         public FastObjectRW<T> Create()
         {
-            throw new TargetException($"Failed to create FastObjectRW of '{typeof(T).FullName}' type.", InnerException);
+            throw new TargetException($"Failed to create FastObjectRW of \"{typeof(T).FullName}\" type.", InnerException);
         }
     }
 }

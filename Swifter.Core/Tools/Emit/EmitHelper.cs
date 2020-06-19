@@ -20,9 +20,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TValue LoadFieldValue<TValue>(object obj, int offset)
+        public static TValue LoadClassField<TValue>(object obj, int offset)
         {
-            return Underlying.As<byte, TValue>(ref Underlying.Add(ref TypeHelper.Unbox<byte>(obj), offset));
+            return Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
         }
 
         /// <summary>
@@ -30,9 +30,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void StoreFieldValue<TValue>(object obj, TValue value, int offset)
+        public static ref TValue LoadClassFieldAddress<TValue>(object obj, int offset)
         {
-            Underlying.As<byte, TValue>(ref Underlying.Add(ref TypeHelper.Unbox<byte>(obj), offset)) = value;
+            return ref Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
         }
 
         /// <summary>
@@ -40,9 +40,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TValue LoadStructFieldValue<TValue>(ref byte obj , int offset)
+        public static void StoreClassField<TValue>(object obj, TValue value, int offset)
         {
-            return Underlying.As<byte, TValue>(ref Underlying.Add(ref obj, offset));
+            Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset) = value;
         }
 
         /// <summary>
@@ -50,9 +50,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void StoreStructFieldValue<TValue>(ref byte obj, TValue value, int offset)
+        public static TValue LoadStructField<TValue>(ref TValue obj, int offset)
         {
-            Underlying.As<byte, TValue>(ref Underlying.Add(ref obj, offset)) = value;
+            return Underlying.AddByteOffset(ref obj, offset);
         }
 
         /// <summary>
@@ -60,9 +60,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe TValue LoadStaticFieldValue<TValue>(IntPtr address)
+        public static ref TValue LoadStructFieldAddress<TValue>(ref TValue obj, int offset)
         {
-            return Underlying.AsRef<TValue>((void*)address);
+            return ref Underlying.AddByteOffset(ref obj, offset);
         }
 
         /// <summary>
@@ -70,139 +70,128 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe void StoreStaticFieldValue<TValue>(TValue value, IntPtr address)
+        public static void StoreStructField<TValue>(ref TValue obj, TValue value, int offset)
         {
-            Underlying.AsRef<TValue>((void*)address) = value;
+            Underlying.AddByteOffset(ref obj, offset) = value;
         }
 
+        /// <summary>
+        /// Emit 内部使用函数。
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static TValue LoadStaticField<TValue>(ref TValue address)
+        {
+            return address;
+        }
+
+        /// <summary>
+        /// Emit 内部使用函数。
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static ref TValue LoadStaticFieldAddress<TValue>(ref TValue address)
+        {
+            return ref address;
+        }
+
+        /// <summary>
+        /// Emit 内部使用函数。
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void StoreStaticField<TValue>(TValue value, ref TValue address)
+        {
+            address = value;
+        }
 
         /// <summary>
         /// 加载字段值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="fieldInfo">字段信息</param>
-        /// <param name="normal">是否只使用默认的方式</param>
-        public static ILGenerator LoadField(this ILGenerator ilGen, FieldInfo fieldInfo, bool normal = false)
+        public static ILGenerator LoadField(this ILGenerator ilGen, FieldInfo fieldInfo)
         {
-            if (fieldInfo is FieldBuilder)
-            {
-                normal = true;
-            }
-
             if (fieldInfo.IsStatic)
             {
-                if (fieldInfo.IsPublic || normal || fieldInfo.IsThreadStatic())
-                {
-                    ilGen.Emit(OpCodes.Ldsfld, fieldInfo);
-                }
-                else
-                {
-                    ilGen.LoadConstant((long)TypeHelper.GetStaticsBasePointer(fieldInfo) + TypeHelper.OffsetOf(fieldInfo));
-                    ilGen.ConvertPointer();
-
-                    if (fieldInfo.FieldType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadStaticFieldValue)).MakeGenericMethod(fieldInfo.FieldType));
-                    }
-                    else
-                    {
-                        ilGen.Call(MethodOf<IntPtr, object>(LoadStaticFieldValue<object>));
-                    }
-                }
+                ilGen.Emit(OpCodes.Ldsfld, fieldInfo);
             }
             else
             {
-                if (fieldInfo.IsPublic || normal)
-                {
-                    ilGen.Emit(OpCodes.Ldfld, fieldInfo);
-                }
-                else
-                {
-                    ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
-
-                    if (fieldInfo.DeclaringType.IsValueType && fieldInfo.FieldType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadStructFieldValue)).MakeGenericMethod(fieldInfo.FieldType));
-                    }
-                    else if (fieldInfo.DeclaringType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadStructFieldValue)).MakeGenericMethod(typeof(object)));
-                    }
-                    else if (fieldInfo.FieldType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadFieldValue)).MakeGenericMethod(fieldInfo.FieldType));
-                    }
-                    else
-                    {
-                        ilGen.Call(MethodOf<object, int, object>(LoadFieldValue<object>));
-                    }
-                }
+                ilGen.Emit(OpCodes.Ldfld, fieldInfo);
             }
 
             return ilGen;
         }
 
         /// <summary>
-        /// 设置实例字段值。
+        /// 跳过字段访问检查加载字段值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="fieldInfo">字段信息</param>
-        /// <param name="normal">是否只使用默认的方式</param>
-        public static ILGenerator StoreField(this ILGenerator ilGen, FieldInfo fieldInfo, bool normal = false)
+        public static ILGenerator UnsafeLoadField(this ILGenerator ilGen, FieldInfo fieldInfo)
         {
-            if (fieldInfo is FieldBuilder)
-            {
-                normal = true;
-            }
-
             if (fieldInfo.IsStatic)
             {
-                if (fieldInfo.IsPublic || normal || fieldInfo.IsThreadStatic())
-                {
-                    ilGen.Emit(OpCodes.Stsfld, fieldInfo);
-                }
-                else
-                {
-                    ilGen.LoadConstant((long)TypeHelper.GetStaticsBasePointer(fieldInfo) + TypeHelper.OffsetOf(fieldInfo));
-                    ilGen.ConvertPointer();
+                throw new NotSupportedException("Static fields are not supported at this time.");
+            }
+            else if(fieldInfo.DeclaringType.IsValueType)
+            {
+                ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                    if (fieldInfo.FieldType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreStaticFieldValue)).MakeGenericMethod(fieldInfo.FieldType));
-                    }
-                    else
-                    {
-                        ilGen.Call(MethodOf<object, IntPtr>(StoreStaticFieldValue));
-                    }
-                }
+                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadStructField)).MakeGenericMethod(fieldInfo.FieldType));
             }
             else
             {
-                if (fieldInfo.IsPublic || normal)
-                {
-                    ilGen.Emit(OpCodes.Stfld, fieldInfo);
-                }
-                else
-                {
-                    ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
+                ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                    if (fieldInfo.DeclaringType.IsValueType && fieldInfo.FieldType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreStructFieldValue)).MakeGenericMethod(fieldInfo.FieldType));
-                    }
-                    else if (fieldInfo.DeclaringType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreStructFieldValue)).MakeGenericMethod(typeof(object)));
-                    }
-                    else if (fieldInfo.FieldType.IsValueType)
-                    {
-                        ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreFieldValue)).MakeGenericMethod(fieldInfo.FieldType));
-                    }
-                    else
-                    {
-                        ilGen.Call(MethodOf<object, object, int>(StoreFieldValue));
-                    }
-                }
+                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadClassField)).MakeGenericMethod(fieldInfo.FieldType));
+            }
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 设置字段值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="fieldInfo">字段信息</param>
+        public static ILGenerator StoreField(this ILGenerator ilGen, FieldInfo fieldInfo)
+        {
+            if (fieldInfo.IsStatic)
+            {
+                ilGen.Emit(OpCodes.Stsfld, fieldInfo);
+            }
+            else
+            {
+                ilGen.Emit(OpCodes.Stfld, fieldInfo);
+            }
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 跳过字段访问检查设置字段值。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="fieldInfo">字段信息</param>
+        public static ILGenerator UnsafeStoreField(this ILGenerator ilGen, FieldInfo fieldInfo)
+        {
+            if (fieldInfo.IsStatic)
+            {
+                throw new NotSupportedException("Static fields are not supported at this time.");
+            }
+            else if (fieldInfo.DeclaringType.IsValueType)
+            {
+                ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
+
+                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreStructField)).MakeGenericMethod(fieldInfo.FieldType));
+            }
+            else
+            {
+                ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
+
+                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreClassField)).MakeGenericMethod(fieldInfo.FieldType));
             }
 
             return ilGen;
@@ -213,7 +202,7 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="fieldInfo">字段信息</param>
-        public static void LoadFieldAddress(this ILGenerator ilGen, FieldInfo fieldInfo)
+        public static ILGenerator LoadFieldAddress(this ILGenerator ilGen, FieldInfo fieldInfo)
         {
             if (fieldInfo.IsStatic)
             {
@@ -223,6 +212,35 @@ namespace Swifter.Tools
             {
                 ilGen.Emit(OpCodes.Ldflda, fieldInfo);
             }
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 跳过字段访问检查加载字段地址。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="fieldInfo">字段信息</param>
+        public static ILGenerator UnsafeLoadFieldAddress(this ILGenerator ilGen, FieldInfo fieldInfo)
+        {
+            if (fieldInfo.IsStatic)
+            {
+                throw new NotSupportedException("Static fields are not supported at this time.");
+            }
+            else if (fieldInfo.DeclaringType.IsValueType)
+            {
+                ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
+
+                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadClassFieldAddress)).MakeGenericMethod(typeof(byte)));
+            }
+            else
+            {
+                ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
+
+                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadStructFieldAddress)).MakeGenericMethod(typeof(byte)));
+            }
+
+            return ilGen;
         }
 
         /// <summary>
@@ -230,9 +248,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">类型信息</param>
-        public static void LoadToken(this ILGenerator ilGen, Type type)
+        public static ILGenerator LoadToken(this ILGenerator ilGen, Type type)
         {
             ilGen.Emit(OpCodes.Ldtoken, type);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -240,10 +260,13 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">类型信息</param>
-        public static void LoadType(this ILGenerator ilGen, Type type)
+        public static ILGenerator LoadType(this ILGenerator ilGen, Type type)
         {
             ilGen.LoadToken(type);
+
             ilGen.Call(MethodOf<RuntimeTypeHandle, Type>(Type.GetTypeFromHandle));
+
+            return ilGen;
         }
 
         /// <summary>
@@ -251,9 +274,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="localBuilder">变量信息</param>
-        public static void LoadLocal(this ILGenerator ilGen, LocalBuilder localBuilder)
+        public static ILGenerator LoadLocal(this ILGenerator ilGen, LocalBuilder localBuilder)
         {
             ilGen.Emit(OpCodes.Ldloc, localBuilder);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -261,9 +286,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="localBuilder">本地变量信息</param>
-        public static void StoreLocal(this ILGenerator ilGen, LocalBuilder localBuilder)
+        public static ILGenerator StoreLocal(this ILGenerator ilGen, LocalBuilder localBuilder)
         {
             ilGen.Emit(OpCodes.Stloc, localBuilder);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -271,9 +298,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="localBuilder">变量信息</param>
-        public static void LoadLocalAddress(this ILGenerator ilGen, LocalBuilder localBuilder)
+        public static ILGenerator LoadLocalAddress(this ILGenerator ilGen, LocalBuilder localBuilder)
         {
             ilGen.Emit(OpCodes.Ldloca, localBuilder);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -354,9 +383,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="value">值</param>
-        public static void LoadConstant(this ILGenerator ilGen, long value)
+        public static ILGenerator LoadConstant(this ILGenerator ilGen, long value)
         {
             ilGen.Emit(OpCodes.Ldc_I8, value);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -364,9 +395,9 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="value">值</param>
-        public static void LoadConstant(this ILGenerator ilGen, IntPtr value)
+        public static ILGenerator LoadConstant(this ILGenerator ilGen, IntPtr value)
         {
-            if (IntPtr.Size == 4)
+            if ((int)(long)value == (long)value)
             {
                 ilGen.LoadConstant((int)value);
                 ilGen.ConvertPointer();
@@ -376,6 +407,8 @@ namespace Swifter.Tools
                 ilGen.LoadConstant((long)value);
                 ilGen.ConvertPointer();
             }
+
+            return ilGen;
         }
 
         /// <summary>
@@ -383,9 +416,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="value">值</param>
-        public static void LoadString(this ILGenerator ilGen, string value)
+        public static ILGenerator LoadString(this ILGenerator ilGen, string value)
         {
             ilGen.Emit(OpCodes.Ldstr, value);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -393,64 +428,69 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">值的类型</param>
-        public static void StoreValue(this ILGenerator ilGen, Type type)
+        public static ILGenerator StoreValue(this ILGenerator ilGen, Type type)
         {
             if (type.IsValueType)
             {
-                if (type == typeof(IntPtr) || type == typeof(UIntPtr) || type.IsPointer || type.IsPointer)
+                if (type.IsByRef ||
+                    type.IsPointer ||
+                    type == typeof(IntPtr) ||
+                    type == typeof(UIntPtr))
                 {
                     ilGen.Emit(OpCodes.Stind_I);
-
-                    return;
                 }
-
-                switch (Type.GetTypeCode(type))
+                else
                 {
-                    case TypeCode.Boolean:
-                        ilGen.Emit(OpCodes.Stind_I1);
-                        break;
-                    case TypeCode.Char:
-                        ilGen.Emit(OpCodes.Stind_I2);
-                        break;
-                    case TypeCode.SByte:
-                        ilGen.Emit(OpCodes.Stind_I1);
-                        break;
-                    case TypeCode.Byte:
-                        ilGen.Emit(OpCodes.Stind_I1);
-                        break;
-                    case TypeCode.Int16:
-                        ilGen.Emit(OpCodes.Stind_I2);
-                        break;
-                    case TypeCode.UInt16:
-                        ilGen.Emit(OpCodes.Stind_I2);
-                        break;
-                    case TypeCode.Int32:
-                        ilGen.Emit(OpCodes.Stind_I4);
-                        break;
-                    case TypeCode.UInt32:
-                        ilGen.Emit(OpCodes.Stind_I4);
-                        break;
-                    case TypeCode.Int64:
-                        ilGen.Emit(OpCodes.Stind_I8);
-                        break;
-                    case TypeCode.UInt64:
-                        ilGen.Emit(OpCodes.Stind_I8);
-                        break;
-                    case TypeCode.Single:
-                        ilGen.Emit(OpCodes.Stind_R4);
-                        break;
-                    case TypeCode.Double:
-                        ilGen.Emit(OpCodes.Stind_R8);
-                        break;
-                    default:
-                        ilGen.Emit(OpCodes.Stobj, type);
-                        break;
+                    switch (Type.GetTypeCode(type))
+                    {
+                        case TypeCode.Boolean:
+                            ilGen.Emit(OpCodes.Stind_I1);
+                            break;
+                        case TypeCode.Char:
+                            ilGen.Emit(OpCodes.Stind_I2);
+                            break;
+                        case TypeCode.SByte:
+                            ilGen.Emit(OpCodes.Stind_I1);
+                            break;
+                        case TypeCode.Byte:
+                            ilGen.Emit(OpCodes.Stind_I1);
+                            break;
+                        case TypeCode.Int16:
+                            ilGen.Emit(OpCodes.Stind_I2);
+                            break;
+                        case TypeCode.UInt16:
+                            ilGen.Emit(OpCodes.Stind_I2);
+                            break;
+                        case TypeCode.Int32:
+                            ilGen.Emit(OpCodes.Stind_I4);
+                            break;
+                        case TypeCode.UInt32:
+                            ilGen.Emit(OpCodes.Stind_I4);
+                            break;
+                        case TypeCode.Int64:
+                            ilGen.Emit(OpCodes.Stind_I8);
+                            break;
+                        case TypeCode.UInt64:
+                            ilGen.Emit(OpCodes.Stind_I8);
+                            break;
+                        case TypeCode.Single:
+                            ilGen.Emit(OpCodes.Stind_R4);
+                            break;
+                        case TypeCode.Double:
+                            ilGen.Emit(OpCodes.Stind_R8);
+                            break;
+                        default:
+                            ilGen.Emit(OpCodes.Stobj, type);
+                            break;
+                    }
                 }
             }
             else
             {
                 ilGen.Emit(OpCodes.Stind_Ref);
             }
+
+            return ilGen;
         }
 
         /// <summary>
@@ -458,64 +498,70 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">值的类型</param>
-        public static void LoadValue(this ILGenerator ilGen, Type type)
+        public static ILGenerator LoadValue(this ILGenerator ilGen, Type type)
         {
             if (type.IsValueType)
             {
-                if (type == typeof(IntPtr) || type == typeof(UIntPtr) || type.IsPointer || type.IsPointer)
+                if (type.IsByRef ||
+                    type.IsPointer ||
+                    type == typeof(IntPtr) ||
+                    type == typeof(UIntPtr))
                 {
                     ilGen.Emit(OpCodes.Ldind_I);
-
-                    return;
                 }
-
-                switch (Type.GetTypeCode(type))
+                else
                 {
-                    case TypeCode.Boolean:
-                        ilGen.Emit(OpCodes.Ldind_I1);
-                        break;
-                    case TypeCode.Char:
-                        ilGen.Emit(OpCodes.Ldind_U2);
-                        break;
-                    case TypeCode.SByte:
-                        ilGen.Emit(OpCodes.Ldind_I1);
-                        break;
-                    case TypeCode.Byte:
-                        ilGen.Emit(OpCodes.Ldind_U1);
-                        break;
-                    case TypeCode.Int16:
-                        ilGen.Emit(OpCodes.Ldind_I2);
-                        break;
-                    case TypeCode.UInt16:
-                        ilGen.Emit(OpCodes.Ldind_U2);
-                        break;
-                    case TypeCode.Int32:
-                        ilGen.Emit(OpCodes.Ldind_I4);
-                        break;
-                    case TypeCode.UInt32:
-                        ilGen.Emit(OpCodes.Ldind_U4);
-                        break;
-                    case TypeCode.Int64:
-                        ilGen.Emit(OpCodes.Ldind_I8);
-                        break;
-                    case TypeCode.UInt64:
-                        ilGen.Emit(OpCodes.Ldind_I8);
-                        break;
-                    case TypeCode.Single:
-                        ilGen.Emit(OpCodes.Ldind_R4);
-                        break;
-                    case TypeCode.Double:
-                        ilGen.Emit(OpCodes.Ldind_R8);
-                        break;
-                    default:
-                        ilGen.Emit(OpCodes.Ldobj, type);
-                        break;
+                    switch (Type.GetTypeCode(type))
+                    {
+                        case TypeCode.Boolean:
+                            ilGen.Emit(OpCodes.Ldind_I1);
+                            break;
+                        case TypeCode.Char:
+                            ilGen.Emit(OpCodes.Ldind_U2);
+                            break;
+                        case TypeCode.SByte:
+                            ilGen.Emit(OpCodes.Ldind_I1);
+                            break;
+                        case TypeCode.Byte:
+                            ilGen.Emit(OpCodes.Ldind_U1);
+                            break;
+                        case TypeCode.Int16:
+                            ilGen.Emit(OpCodes.Ldind_I2);
+                            break;
+                        case TypeCode.UInt16:
+                            ilGen.Emit(OpCodes.Ldind_U2);
+                            break;
+                        case TypeCode.Int32:
+                            ilGen.Emit(OpCodes.Ldind_I4);
+                            break;
+                        case TypeCode.UInt32:
+                            ilGen.Emit(OpCodes.Ldind_U4);
+                            break;
+                        case TypeCode.Int64:
+                            ilGen.Emit(OpCodes.Ldind_I8);
+                            break;
+                        case TypeCode.UInt64:
+                            ilGen.Emit(OpCodes.Ldind_I8);
+                            ilGen.Emit(OpCodes.Conv_U8);
+                            break;
+                        case TypeCode.Single:
+                            ilGen.Emit(OpCodes.Ldind_R4);
+                            break;
+                        case TypeCode.Double:
+                            ilGen.Emit(OpCodes.Ldind_R8);
+                            break;
+                        default:
+                            ilGen.Emit(OpCodes.Ldobj, type);
+                            break;
+                    }
                 }
             }
             else
             {
                 ilGen.Emit(OpCodes.Ldind_Ref);
             }
+
+            return ilGen;
         }
 
         /// <summary>
@@ -559,7 +605,7 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="index">参数序号</param>
-        public static void StoreArgument(this ILGenerator ilGen, int index)
+        public static ILGenerator StoreArgument(this ILGenerator ilGen, int index)
         {
             if (index >= 0 && index <= 255)
             {
@@ -569,6 +615,8 @@ namespace Swifter.Tools
             {
                 ilGen.Emit(OpCodes.Starg, index);
             }
+
+            return ilGen;
         }
 
         /// <summary>
@@ -576,7 +624,7 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="index">参数序号</param>
-        public static void LoadArgumentAddress(this ILGenerator ilGen, int index)
+        public static ILGenerator LoadArgumentAddress(this ILGenerator ilGen, int index)
         {
             if (index >= 0 && index <= 255)
             {
@@ -586,88 +634,96 @@ namespace Swifter.Tools
             {
                 ilGen.Emit(OpCodes.Ldarga, index);
             }
+
+            return ilGen;
         }
 
         /// <summary>
-        /// 加载提供的数组位于提供索引出的元素的地址。
+        /// 加载提供的数组位于提供索引处的元素的地址。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="elementType">元素的类型</param>
-        public static void LoadElementAddress(this ILGenerator ilGen, Type elementType)
+        public static ILGenerator LoadElementAddress(this ILGenerator ilGen, Type elementType)
         {
             ilGen.Emit(OpCodes.Ldelema, elementType);
+
+            return ilGen;
         }
 
         /// <summary>
-        /// 加载提供的数组位于提供索引出的元素。
+        /// 加载提供的数组位于提供索引处的元素。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="elementType">元素的类型</param>
-        public static void LoadElement(this ILGenerator ilGen, Type elementType)
+        public static ILGenerator LoadElement(this ILGenerator ilGen, Type elementType)
         {
             switch (Type.GetTypeCode(elementType))
             {
                 case TypeCode.Boolean:
                     ilGen.Emit(OpCodes.Ldelem_U1);
-                    return;
+                    break;
                 case TypeCode.Char:
                     ilGen.Emit(OpCodes.Ldelem_U2);
-                    return;
+                    break;
                 case TypeCode.SByte:
                     ilGen.Emit(OpCodes.Ldelem_I1);
-                    return;
+                    break;
                 case TypeCode.Byte:
                     ilGen.Emit(OpCodes.Ldelem_U1);
-                    return;
+                    break;
                 case TypeCode.Int16:
                     ilGen.Emit(OpCodes.Ldelem_I2);
-                    return;
+                    break;
                 case TypeCode.UInt16:
                     ilGen.Emit(OpCodes.Ldelem_U2);
-                    return;
+                    break;
                 case TypeCode.Int32:
                     ilGen.Emit(OpCodes.Ldelem_I4);
-                    return;
+                    break;
                 case TypeCode.UInt32:
                     ilGen.Emit(OpCodes.Ldelem_U4);
-                    return;
+                    break;
                 case TypeCode.Int64:
                     ilGen.Emit(OpCodes.Ldelem_I8);
-                    return;
+                    break;
                 case TypeCode.UInt64:
                     ilGen.Emit(OpCodes.Ldelem_I8);
                     ilGen.Emit(OpCodes.Conv_U8);
-                    return;
+                    break;
                 case TypeCode.Single:
                     ilGen.Emit(OpCodes.Ldelem_R4);
-                    return;
+                    break;
                 case TypeCode.Double:
                     ilGen.Emit(OpCodes.Ldelem_R8);
-                    return;
+                    break;
+                default:
+                    if (elementType.IsPointer || elementType.IsByRef)
+                    {
+                        ilGen.Emit(OpCodes.Ldelem_I);
+                    }
+                    else if(elementType.IsValueType)
+                    {
+                        ilGen.Emit(OpCodes.Ldelem, elementType);
+                    }
+                    else
+                    {
+                        ilGen.Emit(OpCodes.Ldelem_Ref);
+                    }
+                    break;
             }
 
-            if (elementType.IsPointer || elementType.IsByRef)
-            {
-                ilGen.Emit(OpCodes.Ldelem_I);
-                return;
-            }
-
-            if (elementType.IsValueType)
-            {
-                ilGen.Emit(OpCodes.Ldelem, elementType);
-                return;
-            }
-
-            ilGen.Emit(OpCodes.Ldelem_Ref);
+            return ilGen;
         }
 
         /// <summary>
         /// 加载引用类型元素数组的元素。
         /// </summary>
         /// <param name="ilGen"></param>
-        public static void LoadReferenceElement(this ILGenerator ilGen)
+        public static ILGenerator LoadReferenceElement(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Ldelem_Ref);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -675,18 +731,22 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">类型</param>
-        public static void SizeOf(this ILGenerator ilGen, Type type)
+        public static ILGenerator SizeOf(this ILGenerator ilGen, Type type)
         {
             ilGen.Emit(OpCodes.Sizeof, type);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 加载一个 Null 值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void LoadNull(this ILGenerator ilGen)
+        public static ILGenerator LoadNull(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Ldnull);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -694,9 +754,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void BranchFalse(this ILGenerator ilGen, Label label)
+        public static ILGenerator BranchFalse(this ILGenerator ilGen, Label label)
         {
             ilGen.Emit(OpCodes.Brfalse, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -704,9 +766,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void BranchTrue(this ILGenerator ilGen, Label label)
+        public static ILGenerator BranchTrue(this ILGenerator ilGen, Label label)
         {
             ilGen.Emit(OpCodes.Brtrue, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -714,9 +778,13 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void Branch(this ILGenerator ilGen, Label label)
+        public static ILGenerator Branch(this ILGenerator ilGen, Label label)
         {
+            // TODO: Use Br_S
+
             ilGen.Emit(OpCodes.Br, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -724,9 +792,13 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void BranchIfLess(this ILGenerator ilGen, Label label)
+        public static ILGenerator BranchIfLess(this ILGenerator ilGen, Label label)
         {
+            // TODO: Use Blt_S
+
             ilGen.Emit(OpCodes.Blt, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -734,9 +806,41 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void BranchIfLessOrEqual(this ILGenerator ilGen, Label label)
+        public static ILGenerator BranchIfLessOrEqual(this ILGenerator ilGen, Label label)
         {
+            // TODO: Use Ble_S
+
             ilGen.Emit(OpCodes.Ble, label);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 当栈顶第一个值小于第二个值时跳转到指定块。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="label">代码块</param>
+        public static ILGenerator BranchIfLessUnsigned(this ILGenerator ilGen, Label label)
+        {
+            // TODO: Use Blt_Un_S
+
+            ilGen.Emit(OpCodes.Blt_Un, label);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 当栈顶第一个值小于或等于第二个值时跳转到指定块。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="label">代码块</param>
+        public static ILGenerator BranchIfLessOrEqualUnsigned(this ILGenerator ilGen, Label label)
+        {
+            // TODO: Use Ble_Un_S
+
+            ilGen.Emit(OpCodes.Ble_Un, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -744,9 +848,27 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void BranchIfEqual(this ILGenerator ilGen, Label label)
+        public static ILGenerator BranchIfEqual(this ILGenerator ilGen, Label label)
         {
+            // TODO: Use Beq_S
+
             ilGen.Emit(OpCodes.Beq, label);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 当栈顶第一个值不等于第二个值时跳转到指定块。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="label">代码块</param>
+        public static ILGenerator BranchIfNotEqualUnsigned(this ILGenerator ilGen, Label label)
+        {
+            // TODO: Use Bne_Un_S
+
+            ilGen.Emit(OpCodes.Bne_Un, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -754,9 +876,13 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void BranchIfGreater(this ILGenerator ilGen, Label label)
+        public static ILGenerator BranchIfGreater(this ILGenerator ilGen, Label label)
         {
+            // TODO: Use Bgt_S
+
             ilGen.Emit(OpCodes.Bgt, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -764,9 +890,41 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
-        public static void BranchIfGreaterOrEqual(this ILGenerator ilGen, Label label)
+        public static ILGenerator BranchIfGreaterOrEqual(this ILGenerator ilGen, Label label)
         {
+            // TODO: Use Bge_S
+
             ilGen.Emit(OpCodes.Bge, label);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 当栈顶第一个值大于第二个值时跳转到指定块。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="label">代码块</param>
+        public static ILGenerator BranchIfGreaterUnsigned(this ILGenerator ilGen, Label label)
+        {
+            // TODO: Use Bgt_Un_S
+
+            ilGen.Emit(OpCodes.Bgt_Un, label);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 当栈顶第一个值大于或等于第二个值时跳转到指定块。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="label">代码块</param>
+        public static ILGenerator BranchIfGreaterOrEqualUnsigned(this ILGenerator ilGen, Label label)
+        {
+            // TODO: Use Bge_Un_S
+
+            ilGen.Emit(OpCodes.Bge_Un, label);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -774,9 +932,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">值类型</param>
-        public static void Box(this ILGenerator ilGen, Type type)
+        public static ILGenerator Box(this ILGenerator ilGen, Type type)
         {
             ilGen.Emit(OpCodes.Box, type);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -784,9 +944,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">类型</param>
-        public static void UnboxAny(this ILGenerator ilGen, Type type)
+        public static ILGenerator UnboxAny(this ILGenerator ilGen, Type type)
         {
             ilGen.Emit(OpCodes.Unbox_Any, type);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -794,9 +956,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">类型</param>
-        public static void Unbox(this ILGenerator ilGen, Type type)
+        public static ILGenerator Unbox(this ILGenerator ilGen, Type type)
         {
             ilGen.Emit(OpCodes.Unbox, type);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -804,9 +968,11 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">类型</param>
-        public static void CastClass(this ILGenerator ilGen, Type type)
+        public static ILGenerator CastClass(this ILGenerator ilGen, Type type)
         {
             ilGen.Emit(OpCodes.Castclass, type);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -827,7 +993,7 @@ namespace Swifter.Tools
         /// <param name="ilGen">ilGen</param>
         /// <param name="local">本地变量</param>
         /// <param name="label">代码块</param>
-        public static void BranchDefaultValue(this ILGenerator ilGen, LocalBuilder local, Label label)
+        public static ILGenerator BranchDefaultValue(this ILGenerator ilGen, LocalBuilder local, Label label)
         {
             var type = local.LocalType;
 
@@ -840,73 +1006,76 @@ namespace Swifter.Tools
             {
                 ilGen.LoadLocal(local);
                 ilGen.BranchFalse(label);
-
-                return;
             }
-
-            switch (Type.GetTypeCode(type))
+            else
             {
-                case TypeCode.Boolean:
-                case TypeCode.Char:
-                case TypeCode.SByte:
-                case TypeCode.Byte:
-                case TypeCode.Int16:
-                case TypeCode.UInt16:
-                case TypeCode.Int32:
-                case TypeCode.UInt32:
-                case TypeCode.Single:
-                case TypeCode.Int64:
-                case TypeCode.UInt64:
-                case TypeCode.Double:
-                    ilGen.LoadLocal(local);
-                    ilGen.BranchFalse(label);
-                    return;
-            }
-
-            var size = TypeHelper.SizeOf(type);
-
-            var labNotEmpty = ilGen.DefineLabel();
-
-            while (size >= 4)
-            {
-                size -= 4;
-                ilGen.LoadLocalAddress(local);
-
-                if (size != 0)
+                switch (Type.GetTypeCode(type))
                 {
-                    ilGen.LoadConstant(size);
-                    ilGen.Emit(OpCodes.Add);
+                    case TypeCode.Boolean:
+                    case TypeCode.Char:
+                    case TypeCode.SByte:
+                    case TypeCode.Byte:
+                    case TypeCode.Int16:
+                    case TypeCode.UInt16:
+                    case TypeCode.Int32:
+                    case TypeCode.UInt32:
+                    case TypeCode.Single:
+                    case TypeCode.Int64:
+                    case TypeCode.UInt64:
+                    case TypeCode.Double:
+                        ilGen.LoadLocal(local);
+                        ilGen.BranchFalse(label);
+                        break;
+                    default:
+                        var size = TypeHelper.SizeOf(type);
+
+                        var labNotEmpty = ilGen.DefineLabel();
+
+                        while (size >= 4)
+                        {
+                            size -= 4;
+                            ilGen.LoadLocalAddress(local);
+
+                            if (size != 0)
+                            {
+                                ilGen.LoadConstant(size);
+                                ilGen.Emit(OpCodes.Add);
+                            }
+
+                            ilGen.Emit(OpCodes.Ldind_I4);
+                            ilGen.BranchTrue(labNotEmpty);
+                        }
+
+                        if (size >= 2)
+                        {
+                            size -= 2;
+                            ilGen.LoadLocalAddress(local);
+
+                            if (size != 0)
+                            {
+                                ilGen.LoadConstant(size);
+                                ilGen.Emit(OpCodes.Add);
+                            }
+
+                            ilGen.Emit(OpCodes.Ldind_I2);
+                            ilGen.BranchTrue(labNotEmpty);
+                        }
+
+                        if (size >= 1)
+                        {
+                            ilGen.LoadLocalAddress(local);
+                            ilGen.Emit(OpCodes.Ldind_I1);
+                            ilGen.BranchTrue(labNotEmpty);
+                        }
+
+                        ilGen.Branch(label);
+
+                        ilGen.MarkLabel(labNotEmpty);
+                        break;
                 }
-
-                ilGen.Emit(OpCodes.Ldind_I4);
-                ilGen.BranchTrue(labNotEmpty);
             }
 
-            if (size >= 2)
-            {
-                size -= 2;
-                ilGen.LoadLocalAddress(local);
-
-                if (size != 0)
-                {
-                    ilGen.LoadConstant(size);
-                    ilGen.Emit(OpCodes.Add);
-                }
-
-                ilGen.Emit(OpCodes.Ldind_I2);
-                ilGen.BranchTrue(labNotEmpty);
-            }
-
-            if (size >= 1)
-            {
-                ilGen.LoadLocalAddress(local);
-                ilGen.Emit(OpCodes.Ldind_I1);
-                ilGen.BranchTrue(labNotEmpty);
-            }
-
-            ilGen.Branch(label);
-
-            ilGen.MarkLabel(labNotEmpty);
+            return ilGen;
         }
 
         /// <summary>
@@ -914,7 +1083,7 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="methodBase">方法信息</param>
-        public static void Call(this ILGenerator ilGen, MethodBase methodBase)
+        public static ILGenerator Call(this ILGenerator ilGen, MethodBase methodBase)
         {
             if (methodBase is ConstructorInfo constructor)
             {
@@ -922,12 +1091,31 @@ namespace Swifter.Tools
             }
             else if (methodBase.IsVirtual && !methodBase.IsFinal)
             {
+                // TODO: 检查反射类是否为最终类。
+
                 ilGen.Emit(OpCodes.Callvirt, (MethodInfo)methodBase);
             }
             else
             {
                 ilGen.Emit(OpCodes.Call, (MethodInfo)methodBase);
             }
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 跳过方法访问检查调用方法。
+        /// </summary>
+        /// <param name="ilGen"></param>
+        /// <param name="methodBase"></param>
+        /// <returns></returns>
+        public static ILGenerator UnsafeCall(this ILGenerator ilGen, MethodBase methodBase)
+        {
+            var functionPointer = methodBase.GetFunctionPointer();
+
+            GetParametersTypes(methodBase, out var parameterTypes, out var returnType);
+
+            return ilGen.Calli(functionPointer, returnType, parameterTypes);
         }
 
         /// <summary>
@@ -953,180 +1141,255 @@ namespace Swifter.Tools
         /// <param name="dynamicMethod">动态方法</param>
         public static ILGenerator Calli(this ILGenerator ilGen, DynamicMethod dynamicMethod)
         {
+            // 保存引用。
             GCHandle.Alloc(dynamicMethod);
 
-            return Calli(ilGen, dynamicMethod.GetFunctionPointer(), dynamicMethod.ReturnType, dynamicMethod.GetParameters().Select(item => item.ParameterType).ToArray());
+            return ilGen.Calli(
+                dynamicMethod.GetFunctionPointer(), 
+                dynamicMethod.ReturnType, 
+                dynamicMethod.GetParameters().Map(item => item.ParameterType));
         }
 
         /// <summary>
         /// 将值转换为指针类型。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void ConvertPointer(this ILGenerator ilGen)
+        public static ILGenerator ConvertPointer(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Conv_I);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 将值转换为 Int32 类型。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void ConvertInt32(this ILGenerator ilGen)
+        public static ILGenerator ConvertInt32(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Conv_I4);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 将值转换为 Int8 类型。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void ConvertInt8(this ILGenerator ilGen)
+        public static ILGenerator ConvertInt8(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Conv_I1);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 将值转换为 Int16 类型。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void ConvertInt16(this ILGenerator ilGen)
+        public static ILGenerator ConvertInt16(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Conv_I2);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 将值转换为 Int64 类型。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void ConvertInt64(this ILGenerator ilGen)
+        public static ILGenerator ConvertInt64(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Conv_I8);
+
+            return ilGen;
         }
 
         /// <summary>
-        /// 对栈顶的两个值进行 加法运算，返回一个值。
+        /// 从栈中弹出 2 个值进行加法运算，将结果推到栈中。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Add(this ILGenerator ilGen)
+        public static ILGenerator Add(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Add);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 从栈中弹出 2 个进整数行加法运算，并执行溢出检查，将结果推到栈中。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static ILGenerator AddOverflow(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Add_Ovf);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 从栈中弹出 2 个无符号整数进行加法运算，并执行溢出检查，将结果推到栈中。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static ILGenerator AddOverflowUnsigned(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Add_Ovf_Un);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 减法运算，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Subtract(this ILGenerator ilGen)
+        public static ILGenerator Subtract(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Sub);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 乘法运算，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Multiply(this ILGenerator ilGen)
+        public static ILGenerator Multiply(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Mul);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 除法运算，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Division(this ILGenerator ilGen)
+        public static ILGenerator Division(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Div);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 求余运算，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Rem(this ILGenerator ilGen)
+        public static ILGenerator Rem(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Rem);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 按位异或，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Xor(this ILGenerator ilGen)
+        public static ILGenerator Xor(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Xor);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 按位或，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Or(this ILGenerator ilGen)
+        public static ILGenerator Or(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Or);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 按位与，返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void And(this ILGenerator ilGen)
+        public static ILGenerator And(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.And);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 左移。返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void ShiftLeft(this ILGenerator ilGen)
+        public static ILGenerator ShiftLeft(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Shl);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 右移。返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void ShiftRight(this ILGenerator ilGen)
+        public static ILGenerator ShiftRight(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Shr);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 对栈顶的两个值进行 无符号右移。返回一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void UnsignedShiftRight(this ILGenerator ilGen)
+        public static ILGenerator ShiftRightUnsigned(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Shr_Un);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 抛出位于栈顶的异常。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Throw(this ILGenerator ilGen)
+        public static ILGenerator Throw(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Throw);
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 再次引发当前异常。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static ILGenerator ReThrow(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Rethrow);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 移除位于栈顶的一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Pop(this ILGenerator ilGen)
+        public static ILGenerator Pop(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Pop);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 复制位于栈顶的一个值。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Duplicate(this ILGenerator ilGen)
+        public static ILGenerator Duplicate(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Dup);
+
+            return ilGen;
         }
 
         /// <summary>
@@ -1134,191 +1397,45 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="type">指定类型</param>
-        public static void IsInstance(this ILGenerator ilGen, Type type)
+        public static ILGenerator IsInstance(this ILGenerator ilGen, Type type)
         {
             ilGen.Emit(OpCodes.Isinst, type);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 分配本地内存。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void LocalAllocate(this ILGenerator ilGen)
+        public static ILGenerator LocalAllocate(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Localloc);
+
+            return ilGen;
         }
 
         /// <summary>
         /// 方法返回。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
-        public static void Return(this ILGenerator ilGen)
+        public static ILGenerator Return(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Ret);
-        }
-        /// <summary>
-        /// 定义自动完成的属性。
-        /// </summary>
-        /// <param name="typeBuilder">类型生成器</param>
-        /// <param name="attributes">属性的属性</param>
-        /// <param name="name">属性的名称</param>
-        /// <param name="type">属性的类型</param>
-        /// <param name="fieldAttributes">字段的属性</param>
-        /// <param name="methodAttributes">get 和 set 方法的属性</param>
-        /// <returns>返回当前类型生成器</returns>
-        public static TypeBuilder DefineAutoProperty(
-            this TypeBuilder typeBuilder,
-            string name,
-            Type type,
-            PropertyAttributes attributes = PropertyAttributes.HasDefault,
-            FieldAttributes fieldAttributes = FieldAttributes.Private | FieldAttributes.SpecialName,
-            MethodAttributes methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName)
-        {
-            var fieldBuilder = typeBuilder.DefineField(
-                $"_{name}_{Guid.NewGuid().ToString("N")}",
-                type,
-                fieldAttributes
-                );
 
-            return typeBuilder.DefineProperty(name, attributes, type,
-                (propertyBuilder, methodBuilder, ilGen) =>
-                {
-                    ilGen.LoadArgument(0);
-                    ilGen.LoadField(fieldBuilder);
-                    ilGen.Return();
-                }, (propertyBuilder, methodBuilder, ilGen) =>
-                {
-
-                    ilGen.LoadArgument(0);
-                    ilGen.LoadArgument(1);
-                    ilGen.StoreField(fieldBuilder);
-                    ilGen.Return();
-                }, methodAttributes);
+            return ilGen;
         }
 
         /// <summary>
-        /// 定义属性。
+        /// 实现跳转表。
         /// </summary>
-        /// <param name="typeBuilder">类型生成器</param>
-        /// <param name="name">属性名</param>
-        /// <param name="attributes">属性的属性</param>
-        /// <param name="type">属性的类型</param>
-        /// <param name="getCallback">get 方法的回调</param>
-        /// <param name="setCallback">set 方法的回调</param>
-        /// <param name="methodAttributes">get 和 set 方法的属性</param>
-        /// <returns>返回当前类生成器</returns>
-        public static TypeBuilder DefineProperty(
-            this TypeBuilder typeBuilder, 
-            string name, 
-            PropertyAttributes attributes,
-            Type type, 
-            Action<PropertyBuilder, MethodBuilder, ILGenerator> getCallback, 
-            Action<PropertyBuilder, MethodBuilder, ILGenerator> setCallback, 
-            MethodAttributes methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName)
+        /// <param name="ilGen">ilGen</param>
+        /// <param name="labels">标签集合</param>
+        public static ILGenerator Switch(this ILGenerator ilGen, Label[] labels)
         {
-            var propertyBuilder = typeBuilder.DefineProperty(
-                name,
-                attributes,
-                type,
-                Type.EmptyTypes);
+            ilGen.Emit(OpCodes.Switch, labels);
 
-            if (getCallback != null)
-            {
-                typeBuilder.DefineMethod(
-                    $"{"get"}_{name}_{Guid.NewGuid().ToString("N")}",
-                    methodAttributes,
-                    type,
-                    Type.EmptyTypes,
-                    (methodBuilder, ilGen) =>
-                    {
-                        getCallback(propertyBuilder, methodBuilder, ilGen);
-
-                        propertyBuilder.SetGetMethod(methodBuilder);
-                    });
-            }
-
-            if (setCallback != null)
-            {
-                typeBuilder.DefineMethod(
-                    $"{"set"}_{name}_{Guid.NewGuid().ToString("N")}",
-                    methodAttributes,
-                    type,
-                    Type.EmptyTypes,
-                    (methodBuilder, ilGen) =>
-                    {
-                        setCallback(propertyBuilder, methodBuilder, ilGen);
-
-                        propertyBuilder.SetGetMethod(methodBuilder);
-                    });
-            }
-
-            return typeBuilder;
-        }
-
-        /// <summary>
-        /// 定义方法。
-        /// </summary>
-        /// <param name="typeBuilder">类型生成器</param>
-        /// <param name="name">方法名</param>
-        /// <param name="attributes">方法的属性</param>
-        /// <param name="returnType">返回值类型</param>
-        /// <param name="parameterTypes">参数类型集合</param>
-        /// <param name="callback">方法生成器回调</param>
-        /// <returns>返回当前类型生成器</returns>
-        public static TypeBuilder DefineMethod(this TypeBuilder typeBuilder, string name, MethodAttributes attributes, Type returnType, Type[] parameterTypes, Action<MethodBuilder, ILGenerator> callback)
-        {
-            var methodBuilder = typeBuilder.DefineMethod(name, attributes, returnType, parameterTypes);
-
-            callback(methodBuilder, methodBuilder.GetILGenerator());
-
-            return typeBuilder;
-        }
-
-        /// <summary>
-        /// 将特性转换为特性生成器。
-        /// </summary>
-        /// <typeparam name="TAttribute">特性类型</typeparam>
-        /// <param name="attribute">特性实例</param>
-        /// <returns>返回一个将特性转换为特性生成器</returns>
-        public static CustomAttributeBuilder ToCustomAttributeBuilder<TAttribute>(this TAttribute attribute) where TAttribute : Attribute, new()
-        {
-            var emptyValues = new object[0];
-
-            var constructor = typeof(TAttribute).GetConstructor(
-                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
-                Type.DefaultBinder,
-                Type.EmptyTypes,
-                null);
-
-            var constructorArgs = emptyValues;
-
-            var namedFields = new List<FieldInfo>();
-            var fieldValues = new List<object>();
-            var namedProperties = new List<PropertyInfo>();
-            var propertyValues = new List<object>();
-
-            foreach (var item in typeof(TAttribute).GetProperties(BindingFlags.Instance | BindingFlags.Public))
-            {
-                if (item.CanRead && item.CanWrite && item.GetValue(attribute, emptyValues) is object value)
-                {
-                    namedProperties.Add(item);
-                    propertyValues.Add(value);
-                }
-            }
-
-            foreach (var item in typeof(TAttribute).GetFields(BindingFlags.Instance | BindingFlags.Public))
-            {
-                if (!item.IsInitOnly && item.GetValue(attribute) is object value)
-                {
-                    namedFields.Add(item);
-                    fieldValues.Add(value);
-                }
-            }
-
-            return new CustomAttributeBuilder(
-                constructor, constructorArgs,
-                namedProperties.ToArray(), propertyValues.ToArray(),
-                namedFields.ToArray(), fieldValues.ToArray());
+            return ilGen;
         }
     }
 }

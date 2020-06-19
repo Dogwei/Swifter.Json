@@ -46,9 +46,23 @@ namespace Swifter.Reflection
                 result = (XPropertyInfo)Activator.CreateInstance(targetType, true);
 
                 result.Initialize(propertyInfo, flags);
+
             }
             catch
+
+#if DEBUG
+            (Exception e)
+#endif
             {
+#if DEBUG
+                if (e is TargetInvocationException tie)
+                {
+                    e = tie.InnerException;
+                }
+
+                Console.WriteLine($"{nameof(XPropertyInfo)} : Exception : {e.GetType()} -- {e.Message}");
+#endif
+
                 result = new XDefaultPropertyInfo();
 
                 result.Initialize(propertyInfo, flags);

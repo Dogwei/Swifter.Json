@@ -144,13 +144,13 @@ namespace Swifter.Json
 
                 SkipWhiteSpace();
 
-                if (current < end && *current == KeyEnding)
+                if (IsContent() && *current == KeyEnding)
                 {
                     ++current;
 
                     SkipWhiteSpace();
 
-                    if (current < end)
+                    if (IsContent())
                     {
                         return this;
                     }
@@ -166,7 +166,7 @@ namespace Swifter.Json
 
         public JsonToken GetToken()
         {
-            if (current < end)
+            if (IsContent())
             {
                 switch (*current)
                 {
@@ -341,7 +341,7 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (current < end && *current != ValueEnding)
+            if (IsContent() && *current != ValueEnding)
             {
                 return true;
             }
@@ -467,6 +467,9 @@ namespace Swifter.Json
 
             return ArrayHelper.CreateList(array, length);
         }
+        
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool IsContent() => /*IsDeflateMode || IsStandardMode ||*/ current < end;
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public T[] InternalReadArray<T>(int defaultCapacity, out int length)
@@ -483,7 +486,7 @@ namespace Swifter.Json
 
                 SkipWhiteSpace();
 
-                if (current < end)
+                if (IsContent())
                 {
                     if (*current == ArrayEnding)
                     {
@@ -518,7 +521,7 @@ namespace Swifter.Json
 
                     SkipWhiteSpace();
 
-                    if (current < end)
+                    if (IsContent())
                     {
                         switch (*current)
                         {
@@ -623,7 +626,7 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (current < end)
+            if (IsContent())
             {
                 if (*current == ArrayEnding)
                 {
@@ -641,7 +644,7 @@ namespace Swifter.Json
 
                 SkipWhiteSpace();
 
-                if (current < end)
+                if (IsContent())
                 {
                     switch (*current)
                     {
@@ -726,7 +729,7 @@ namespace Swifter.Json
         {
             if (!IsDeflateMode)
             {
-                if (current < end && *current <= 0x20)
+                if (IsContent() && *current <= 0x20)
                 {
                     NoInliningSkipWhiteSpace();
                 }
@@ -747,7 +750,7 @@ namespace Swifter.Json
                 case WhiteChar5:
                 case WhiteChar6:
                     ++current;
-                    if (current < end)
+                    if (IsContent())
                     {
                         goto Loop;
                     }
@@ -829,7 +832,7 @@ namespace Swifter.Json
 
             for (int i = 0; i < lowerstr.Length; i++)
             {
-                if (ToLower(current[i]) != lowerstr[i])
+                if (current[i] != lowerstr[i] && ToLower(current[i]) != lowerstr[i])
                 {
                     return false;
                 }
@@ -1179,7 +1182,7 @@ namespace Swifter.Json
 
             var res = false;
 
-            if (current < end)
+            if (IsContent())
             {
                 switch (current[0])
                 {
@@ -1200,7 +1203,7 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (res && current < end && *current == KeyEnding)
+            if (res && IsContent() && *current == KeyEnding)
             {
                 ++current;
 
@@ -1341,7 +1344,7 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (!(current < end && *current == ObjectEnding))
+            if (!(IsContent() && *current == ObjectEnding))
             {
                 goto Exception;
             }
@@ -1445,7 +1448,7 @@ namespace Swifter.Json
         {
             var temp = current;
 
-            while (current < end)
+            while (IsContent())
             {
                 switch (*current)
                 {
@@ -1829,7 +1832,9 @@ namespace Swifter.Json
             ++current;
             ++depth;
 
-            if ((options & AsOrderedObjectDeserialize) != 0 && dataWriter.Count > 0)
+            var count_non_zero = dataWriter.Count > 0;
+
+            if ((options & AsOrderedObjectDeserialize) != 0 && count_non_zero)
             {
                 Underlying.As<IDataWriter<string>>(dataWriter).OnWriteAll(this); // dataWriter 一定是 IDataWriter<string>
 
@@ -1847,7 +1852,7 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (current < end)
+            if (IsContent())
             {
                 Ps<char> name;
 
@@ -1866,24 +1871,49 @@ namespace Swifter.Json
 
                 SkipWhiteSpace();
 
-                if (current < end && *current == KeyEnding)
+                if (IsContent() && *current == KeyEnding)
                 {
                     ++current;
 
                     SkipWhiteSpace();
 
-                    if (current < end)
+                    if (IsContent())
                     {
-                        if (IsReferenceMode)
+                        switch (*current)
                         {
-                            ReferenceMode.SetCurrentKey(name);
-                        }
+                            case FixNull:
+                            case Fixnull:
+                                if (count_non_zero && On(IgnoreNull) && Verify(nullString))
+                                {
+                                    current += nullString.Length;
 
-                        dataWriter.OnWriteValue(name, this);
+                                    break;
+                                }
+
+                                goto default;
+                            case FixNumberMin:
+                                if (count_non_zero && On(IgnoreZero) && IsEnding(1))
+                                {
+                                    current += 1/*length of 0*/;
+
+                                    break;
+                                }
+
+                                goto default;
+                            default:
+
+                                if (IsReferenceMode)
+                                {
+                                    ReferenceMode.SetCurrentKey(name);
+                                }
+
+                                dataWriter.OnWriteValue(name, this);
+                                break;
+                        }
 
                         SkipWhiteSpace();
 
-                        if (current < end)
+                        if (IsContent())
                         {
                             switch (*current)
                             {
@@ -1931,7 +1961,9 @@ namespace Swifter.Json
             ++current;
             ++depth;
 
-            if ((options & AsOrderedObjectDeserialize) != 0 && dataWriter.Count > 0)
+            var count_non_zero = dataWriter.Count > 0;
+
+            if ((options & AsOrderedObjectDeserialize) != 0 && count_non_zero)
             {
                 dataWriter.OnWriteAll(this);
 
@@ -1949,9 +1981,9 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (current < end)
+            if (IsContent())
             {
-                string name;
+                Ps<char> name;
 
                 switch (*current)
                 {
@@ -1959,33 +1991,60 @@ namespace Swifter.Json
                         goto Return;
                     case FixString:
                     case FixChars:
-                        name = InternalReadString().ToStringEx();
+                        name = InternalReadString();
                         break;
                     default:
-                        name = InternalReadText().ToStringEx();
+                        name = InternalReadText();
                         break;
                 }
 
                 SkipWhiteSpace();
 
-                if (current < end && *current == KeyEnding)
+                if (IsContent() && *current == KeyEnding)
                 {
                     ++current;
 
                     SkipWhiteSpace();
 
-                    if (current < end)
+                    if (IsContent())
                     {
-                        if (IsReferenceMode)
+                        switch (*current)
                         {
-                            ReferenceMode.SetCurrentKey(name);
-                        }
+                            case FixNull:
+                            case Fixnull:
+                                if (count_non_zero && On(IgnoreNull) && Verify(nullString))
+                                {
+                                    current += nullString.Length;
 
-                        dataWriter.OnWriteValue(name, this);
+                                    break;
+                                }
+
+                                goto default;
+                            case FixNumberMin:
+                                if (count_non_zero && On(IgnoreZero) && IsEnding(1))
+                                {
+                                    current += 1/*length of 0*/;
+
+                                    break;
+                                }
+
+                                goto default;
+                            default:
+
+                                var str_name = name.ToStringEx();
+
+                                if (IsReferenceMode)
+                                {
+                                    ReferenceMode.SetCurrentKey(str_name);
+                                }
+
+                                dataWriter.OnWriteValue(str_name, this);
+                                break;
+                        }
 
                         SkipWhiteSpace();
 
-                        if (current < end)
+                        if (IsContent())
                         {
                             switch (*current)
                             {
@@ -2079,7 +2138,7 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (current < end)
+            if (IsContent())
             {
                 switch (*current)
                 {
@@ -2106,7 +2165,7 @@ namespace Swifter.Json
         {
             var fixEnding = *current;
 
-            for (++current; current < end; ++current)
+            for (++current; IsContent(); ++current)
             {
                 if (*current == fixEnding)
                 {
@@ -2119,7 +2178,7 @@ namespace Swifter.Json
                 {
                     ++current;
 
-                    if (current < end && (*current == FixUnicodeEscape || *current == FixunicodeEscape))
+                    if (IsContent() && (*current == FixUnicodeEscape || *current == FixunicodeEscape))
                     {
                         current += 4;
                     }
@@ -2148,7 +2207,7 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (current < end && *current == KeyEnding)
+            if (IsContent() && *current == KeyEnding)
             {
                 ++current;
 
@@ -2165,7 +2224,7 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public bool TryReadBeginObject()
         {
-            if (current < end && *current == FixObject)
+            if (IsContent() && *current == FixObject)
             {
                 ++current;
 
@@ -2182,7 +2241,7 @@ namespace Swifter.Json
         {
             SkipWhiteSpace();
 
-            if (current < end)
+            if (IsContent())
             {
                 switch (*current)
                 {
@@ -2198,7 +2257,7 @@ namespace Swifter.Json
 
                         SkipWhiteSpace();
 
-                        if (current < end && *current == ObjectEnding)
+                        if (IsContent() && *current == ObjectEnding)
                         {
                             return true;
                         }
@@ -2213,7 +2272,7 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public bool TryReadBeginArray()
         {
-            if (current < end && *current == FixArray)
+            if (IsContent() && *current == FixArray)
             {
                 ++current;
 
@@ -2230,7 +2289,7 @@ namespace Swifter.Json
         {
             SkipWhiteSpace();
 
-            if (current < end)
+            if (IsContent())
             {
                 switch (*current)
                 {
@@ -2246,7 +2305,7 @@ namespace Swifter.Json
 
                         SkipWhiteSpace();
 
-                        if (current < end && *current == ArrayEnding)
+                        if (IsContent() && *current == ArrayEnding)
                         {
                             return true;
                         }

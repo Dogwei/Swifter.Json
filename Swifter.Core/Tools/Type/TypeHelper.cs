@@ -60,7 +60,7 @@ namespace Swifter.Tools
         /// 获取对象中的值的偏移量。
         /// </summary>
         /// <returns>返回一个 <see cref="int"/> 值</returns>
-        public static unsafe int GetObjectValueByteOffset()
+        public static int GetObjectValueByteOffset()
         {
             return AllocateHelper.ObjectValueByteOffset;
         }
@@ -186,6 +186,12 @@ namespace Swifter.Tools
         public static unsafe ref T RefValue<T>(TypedReference reference)
         {
             return ref Underlying.AsRef<T>(*(byte**)&reference);
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        internal static unsafe object CamouflageBox(void* ptr)
+        {
+            return Underlying.As<IntPtr, StructBox<byte>>(ref Underlying.AsRef((IntPtr)((byte*)ptr - GetObjectValueByteOffset())));
         }
 
         /// <summary>
@@ -712,12 +718,6 @@ namespace Swifter.Tools
         public static ref T Unbox<T>(object value)
         {
             return ref Underlying.As<StructBox<T>>(value).Value;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        internal static unsafe object CamouflageBox<T>(void* ptr)
-        {
-            return Underlying.As<IntPtr, StructBox<T>>(ref Underlying.AsRef((IntPtr)((byte*)ptr - GetObjectValueByteOffset())));
         }
 
         /// <summary>

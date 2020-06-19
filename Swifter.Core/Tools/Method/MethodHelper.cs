@@ -1,22 +1,27 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
+using static Swifter.Tools.InternalMethodHelper;
+
+#pragma warning disable
 
 
 namespace Swifter.Tools
 {
-    static class DelegateHelper
+    static class InternalMethodHelper
     {
         public static readonly int _methodPtrAux =
             typeof(Delegate).GetField(nameof(_methodPtrAux), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) is FieldInfo fieldInfo ? TypeHelper.OffsetOf(fieldInfo) : -1;
 
         public static readonly int _methodPtr =
             typeof(Delegate).GetField(nameof(_methodPtr), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) is FieldInfo fieldInfo ? TypeHelper.OffsetOf(fieldInfo) : -1;
+
+        public static bool? override_is_available = null;
+
     }
 
     /// <summary>
@@ -562,8 +567,6 @@ namespace Swifter.Tools
             return true;
         }
 
-        static bool? override_is_available = null;
-
         /// <summary>
         /// 获取 Override 方法是否可用。
         /// </summary>
@@ -582,7 +585,7 @@ namespace Swifter.Tools
 
                         override_is_available = TestSource(12, 18) == TestTarget(12, 18);
                     }
-                    catch (Exception)
+                    catch
                     {
                         override_is_available = false;
                     }
@@ -678,22 +681,22 @@ namespace Swifter.Tools
                 }
             }
 
-            if (!(@delegate.Target is null) && DelegateHelper._methodPtr >= 0)
+            if (!(@delegate.Target is null) && InternalMethodHelper._methodPtr >= 0)
             {
                 try
                 {
-                    return Underlying.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), DelegateHelper._methodPtr);
+                    return Underlying.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), InternalMethodHelper._methodPtr);
                 }
                 catch
                 {
                 }
             }
 
-            if (@delegate.Target is null && DelegateHelper._methodPtrAux >= 0)
+            if (@delegate.Target is null && InternalMethodHelper._methodPtrAux >= 0)
             {
                 try
                 {
-                    return Underlying.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), DelegateHelper._methodPtrAux);
+                    return Underlying.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), InternalMethodHelper._methodPtrAux);
                 }
                 catch
                 {
@@ -744,8 +747,6 @@ namespace Swifter.Tools
             return methodBase.MethodHandle.GetFunctionPointer();
         }
 
-#pragma warning disable CS1591
-
         public static MethodInfo MethodOf(Action action) => action.Method;
 
         public static MethodInfo MethodOf<TIn>(Action<TIn> action) => action.Method;
@@ -759,7 +760,5 @@ namespace Swifter.Tools
         public static MethodInfo MethodOf<TIn, TOut>(Func<TIn, TOut> func) => func.Method;
 
         public static MethodInfo MethodOf<TIn1, TIn2, TOut>(Func<TIn1, TIn2, TOut> func) => func.Method;
-
-#pragma warning restore CS1591
     }
 }

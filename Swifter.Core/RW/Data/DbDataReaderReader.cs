@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 using DbDataReader = System.Data.IDataReader;
@@ -110,9 +111,9 @@ namespace Swifter.RW
 
             public IValueReader this[int key] => new ValueReader(dbDataReader, key);
 
-            IEnumerable<string> IDataReader<string>.Keys => ArrayHelper.CreateNamesIterator(dbDataReader);
+            IEnumerable<string> IDataReader<string>.Keys => Enumerable.Range(0, Count).Select(i => dbDataReader.GetName(i));
 
-            IEnumerable<int> IDataReader<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+            IEnumerable<int> IDataReader<int>.Keys => Enumerable.Range(0, Count);
 
             public int Count => dbDataReader.FieldCount;
 

@@ -1,6 +1,7 @@
 ﻿using Swifter.RW;
 using Swifter.Tools;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.Serialization;
 namespace Swifter.Reflection
@@ -10,12 +11,25 @@ namespace Swifter.Reflection
     /// </summary>
     public static class SerializationBox
     {
-        internal static readonly IFormatterConverter DefaultFormatterConverter = new ValueInterfaceFormatterConverter();
+        /// <summary>
+        /// 格式化器所使用的的转换器。
+        /// </summary>
+        public static readonly IFormatterConverter DefaultFormatterConverter = new ValueInterfaceFormatterConverter();
+
+        /// <summary>
+        /// 指定创建序列化流上下文的标志。
+        /// </summary>
+        public static readonly StreamingContextStates DefaultStreamingContextStates = new StreamingContextStates();
+
+        /// <summary>
+        /// 在获取类成员信息时指定的标记。
+        /// </summary>
+        public static readonly BindingFlags DefaultBindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
         internal static SerializationInfo CreateSerializationInfo(object obj)
         {
             var serializationInfo = new SerializationInfo(obj.GetType(), DefaultFormatterConverter);
-            var streamingContext = new StreamingContext(StreamingContextStates.All);
+            var streamingContext = new StreamingContext(DefaultStreamingContextStates);
 
             Underlying.As<ISerializable>(obj).GetObjectData(serializationInfo, streamingContext);
 
@@ -32,9 +46,7 @@ namespace Swifter.Reflection
             var type = obj.GetType();
 
             var constructor = type.GetConstructor(
-                BindingFlags.Public | 
-                BindingFlags.NonPublic | 
-                BindingFlags.Instance, 
+                DefaultBindingFlags, 
                 Type.DefaultBinder, 
                 new Type[] { typeof(SerializationInfo), typeof(StreamingContext) }, 
                 null);
@@ -46,7 +58,7 @@ namespace Swifter.Reflection
 
             var pFunc = constructor.MethodHandle.GetFunctionPointer();
 
-            var streamingContext = new StreamingContext(StreamingContextStates.All);
+            var streamingContext = new StreamingContext(DefaultStreamingContextStates);
 
             if (type.IsValueType)
             {
@@ -98,11 +110,19 @@ namespace Swifter.Reflection
 
         internal static void WriteArray(IValueWriter valueWriter, object value, Type type)
         {
-            var items = Underlying.As<Array>(value).Clone();
+            //var items = Underlying.As<Array>(value).Clone();
 
-            Underlying.GetMethodTablePointer(items) = TypeHelper.GetMethodTablePointer(GetArrayValueType(type));
+            //Underlying.GetMethodTablePointer(items) = TypeHelper.GetMethodTablePointer(GetArrayValueType(type));
 
-            ValueInterface.WriteValue(valueWriter, items);
+            //ValueInterface.WriteValue(valueWriter, items);
+
+            var pMethodTableBackup = Underlying.GetMethodTablePointer(value);
+
+            Underlying.GetMethodTablePointer(value) = TypeHelper.GetMethodTablePointer(GetArrayValueType(type));
+
+            ValueInterface.WriteValue(valueWriter, value);
+
+            Underlying.GetMethodTablePointer(value) = pMethodTableBackup;
         }
 
         internal static object ReadArray(IValueReader valueReader, Type type)

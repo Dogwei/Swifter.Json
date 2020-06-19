@@ -275,7 +275,7 @@ namespace Swifter.Tools
                         return IntPtr.Zero;
                     }
 
-                    get_statics_base_pointer_func = DynamicAssembly.DefineDynamicMethod<GetStaticsBasePointerFunc>((dym, ilGen) =>
+                    get_statics_base_pointer_func = DynamicAssembly.BuildDynamicMethod<GetStaticsBasePointerFunc>((dym, ilGen) =>
                     {
                         if (gc_static_field_info != null)
                         {

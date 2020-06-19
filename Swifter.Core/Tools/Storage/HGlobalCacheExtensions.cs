@@ -357,7 +357,12 @@ namespace Swifter.Tools
         /// <returns>返回一个字符串</returns>
         public static string ToHexString(this byte[] bytes)
         {
-            return ToHexString(ref bytes[0], bytes.Length);
+            if (bytes != null && bytes.Length > 0)
+            {
+                return ToHexString(ref bytes[0], bytes.Length);
+            }
+
+            return "";
         }
 
         /// <summary>

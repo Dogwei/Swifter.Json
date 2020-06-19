@@ -429,7 +429,7 @@ namespace Swifter.Tools
                 ilGen.Subtract();
             }
 
-            ilGen.Emit(OpCodes.Switch, cases.Map(item => item.Label));
+            ilGen.Switch(cases.Map(item => item.Label));
 
             ilGen.Branch(defaultLabel);
         }
@@ -455,11 +455,11 @@ namespace Swifter.Tools
             {
                 emitLoadValue(ilGen);
                 emitLoadItem(ilGen, cases[begin].Value);
-                ilGen.Emit(OpCodes.Beq, cases[begin].Label);
+                ilGen.BranchIfEqual(cases[begin].Label);
 
                 emitLoadValue(ilGen);
                 emitLoadItem(ilGen, cases[end].Value);
-                ilGen.Emit(OpCodes.Beq, cases[end].Label);
+                ilGen.BranchIfEqual(cases[end].Label);
 
                 ilGen.Branch(defaultLabel);
 
@@ -470,22 +470,22 @@ namespace Swifter.Tools
             {
                 emitLoadValue(ilGen);
                 emitLoadItem(ilGen, cases[begin].Value);
-                ilGen.Emit(OpCodes.Beq, cases[begin].Label);
+                ilGen.BranchIfEqual(cases[begin].Label);
 
                 ilGen.Branch(defaultLabel);
 
                 return;
             }
 
-            var gtLabel = ilGen.DefineLabel();
+            var greaterLabel = ilGen.DefineLabel();
 
             emitLoadValue(ilGen);
             emitLoadItem(ilGen, cases[index].Value);
-            ilGen.Emit(OpCodes.Bgt, gtLabel);
+            ilGen.BranchIfGreater(greaterLabel);
 
             SwitchNumber(ilGen, emitLoadValue, emitLoadItem, cases, defaultLabel, begin, (begin + index) / 2, index);
 
-            ilGen.MarkLabel(gtLabel);
+            ilGen.MarkLabel(greaterLabel);
 
             SwitchNumber(ilGen, emitLoadValue, emitLoadItem, cases, defaultLabel, index + 1, (index + 1 + end) / 2, end);
         }
@@ -510,7 +510,7 @@ namespace Swifter.Tools
             {
                 emitLoadHashCode(ilGen);
                 ilGen.LoadConstant(cases[begin].Key);
-                ilGen.Emit(OpCodes.Bne_Un, defaultLabel);
+                ilGen.BranchIfNotEqualUnsigned(defaultLabel);
 
                 if (SwitchDoNotVerify && cases[begin].Value.Count == 1)
                 {
@@ -535,11 +535,11 @@ namespace Swifter.Tools
             if (begin + 1 == end)
             {
 
-                var EndLabel = ilGen.DefineLabel();
+                var endLabel = ilGen.DefineLabel();
 
                 emitLoadHashCode(ilGen);
                 ilGen.LoadConstant(cases[begin].Key);
-                ilGen.Emit(OpCodes.Bne_Un, EndLabel);
+                ilGen.BranchIfNotEqualUnsigned(endLabel);
 
                 if (SwitchDoNotVerify && cases[begin].Value.Count == 1)
                 {
@@ -556,11 +556,11 @@ namespace Swifter.Tools
                     }
                 }
 
-                ilGen.MarkLabel(EndLabel);
+                ilGen.MarkLabel(endLabel);
 
                 emitLoadHashCode(ilGen);
                 ilGen.LoadConstant(cases[end].Key);
-                ilGen.Emit(OpCodes.Bne_Un, defaultLabel);
+                ilGen.BranchIfNotEqualUnsigned(defaultLabel);
 
                 if (SwitchDoNotVerify && cases[end].Value.Count == 1)
                 {
@@ -582,11 +582,11 @@ namespace Swifter.Tools
                 return;
             }
 
-            var GtLabel = ilGen.DefineLabel();
+            var greaterLabel = ilGen.DefineLabel();
 
             emitLoadHashCode(ilGen);
             ilGen.LoadConstant(cases[index].Key);
-            ilGen.Emit(OpCodes.Bgt, GtLabel);
+            ilGen.BranchIfGreater(greaterLabel);
 
             SwitchObject(
                 ilGen,
@@ -600,7 +600,7 @@ namespace Swifter.Tools
                 (begin + index) / 2,
                 index);
 
-            ilGen.MarkLabel(GtLabel);
+            ilGen.MarkLabel(greaterLabel);
 
             SwitchObject(
                 ilGen,

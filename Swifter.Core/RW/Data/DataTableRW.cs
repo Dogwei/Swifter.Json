@@ -5,6 +5,7 @@ using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
@@ -32,7 +33,7 @@ namespace Swifter.RW
 
         IValueWriter IDataWriter<int>.this[int key] => this[key];
 
-        public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
+        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
 
         public int Count => datatable?.Rows.Count ?? -1;
 

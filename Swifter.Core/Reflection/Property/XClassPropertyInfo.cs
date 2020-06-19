@@ -6,6 +6,8 @@ using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+#pragma warning disable
+
 namespace Swifter.Reflection
 {
     /// <summary>
@@ -15,31 +17,37 @@ namespace Swifter.Reflection
     /// <typeparam name="TValue">属性类型</typeparam>
     public sealed class XClassPropertyInfo<TClass, TValue> : XPropertyInfo, IXFieldRW where TClass : class
     {
-        XClassGetValueHandler<TClass, TValue> _get;
-        XClassSetValueHandler<TClass, TValue> _set;
+        delegate ref TValue RefValueHandler(TClass obj);
+        delegate TValue GetValueHandler(TClass obj);
+        delegate void SetValueHandler(TClass obj, TValue value);
+
+        GetValueHandler _get;
+        SetValueHandler _set;
 
         XClassPropertyInfo()
         {
-
         }
 
         private protected override void InitializeByValue(PropertyInfo propertyInfo, XBindingFlags flags)
         {
             base.InitializeByValue(propertyInfo, flags);
 
-            if ((flags & XBindingFlags.RWAutoPropertyDirectRW) != 0 && TypeHelper.IsAutoProperty(propertyInfo, out var fieldInfo) && fieldInfo != null)
+            if ((flags & XBindingFlags.RWAutoPropertyDirectRW) != 0/* || !VersionDifferences.IsSupportEmit */)
             {
-                try
+                if (TypeHelper.IsAutoProperty(propertyInfo, out var fieldInfo) && fieldInfo != null)
                 {
-                    var offset = TypeHelper.OffsetOf(fieldInfo);
+                    try
+                    {
+                        var offset = TypeHelper.OffsetOf(fieldInfo);
 
-                    _get = (obj) => Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
-                    _set = (obj, value) => Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset) = value;
+                        _get = (obj) => Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
+                        _set = (obj, value) => Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset) = value;
 
-                    return;
-                }
-                catch
-                {
+                        return;
+                    }
+                    catch
+                    {
+                    }
                 }
             }
 
@@ -49,7 +57,32 @@ namespace Swifter.Reflection
 
                 if (getMethod != null)
                 {
-                    _get = MethodHelper.CreateDelegate<XClassGetValueHandler<TClass, TValue>>(getMethod, false);
+                    var __get = (GetValueHandler)Delegate.CreateDelegate(typeof(GetValueHandler), getMethod);
+
+                    _get = VersionDifferences.IsSupportEmit ? __get : AOTCheck;
+
+                    TValue AOTCheck(TClass obj)
+                    {
+                        try
+                        {
+                            return __get(obj);
+                        }
+                        catch (ExecutionEngineException)
+                        {
+                            __get = AOT;
+
+                            return AOT(obj);
+                        }
+                        finally
+                        {
+                            _get = __get;
+                        }
+                    }
+
+                    TValue AOT(TClass obj)
+                    {
+                        return (TValue)getMethod.Invoke(obj, null);
+                    }
                 }
             }
 
@@ -59,7 +92,32 @@ namespace Swifter.Reflection
 
                 if (setMethod != null)
                 {
-                    _set = MethodHelper.CreateDelegate<XClassSetValueHandler<TClass, TValue>>(setMethod, false);
+                    var __set = (SetValueHandler)Delegate.CreateDelegate(typeof(SetValueHandler), setMethod);
+
+                    _set = VersionDifferences.IsSupportEmit ? __set : AOTCheck;
+
+                    void AOTCheck(TClass obj, TValue value)
+                    {
+                        try
+                        {
+                            __set(obj, value);
+                        }
+                        catch (ExecutionEngineException)
+                        {
+                            __set = AOT;
+
+                            AOT(obj, value);
+                        }
+                        finally
+                        {
+                            _set = __set;
+                        }
+                    }
+
+                    void AOT(TClass obj, TValue value)
+                    {
+                        setMethod.Invoke(obj, new object[] { value });
+                    }
                 }
             }
         }
@@ -74,17 +132,13 @@ namespace Swifter.Reflection
 
                 if (getMethod != null)
                 {
-                    var _ref = MethodHelper.CreateDelegate<XClassRefValueHandler<TClass, TValue>>(getMethod, false);
+                    var _ref = (RefValueHandler)Delegate.CreateDelegate(typeof(RefValueHandler), getMethod);
 
-                    _get = (obj) =>
-                    {
-                        return _ref(obj);
-                    };
+                    _get = (obj) => _ref(obj);
 
-                    _set = (obj, value) =>
-                    {
-                        _ref(obj) = value;
-                    };
+                    _set = (obj, value) => _ref(obj) = value;
+
+                    // TODO: AOTCheck
                 }
             }
         }

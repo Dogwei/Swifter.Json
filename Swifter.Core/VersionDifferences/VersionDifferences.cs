@@ -3,6 +3,8 @@ using System;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Security;
+using System.Security.Permissions;
 using System.Text;
 
 namespace Swifter
@@ -12,11 +14,6 @@ namespace Swifter
     /// </summary>
     public static partial class VersionDifferences
     {
-        static VersionDifferences()
-        {
-            LoadExtensionAssembly();
-        }
-
         /// <summary>
         /// 一个 <see cref="bool"/> 值，指示是否使用 .Net 内部方法。
         /// 默认为是。
@@ -39,7 +36,7 @@ namespace Swifter
         /// </summary>
         public static bool IsSupportEmit
         {
-            get => _IsSupportEmit ?? (_IsSupportEmit = TestIsSupportEmit()).Value;
+            get => _IsSupportEmit ??= TestIsSupportEmit();
             set => _IsSupportEmit = value;
         }
 
@@ -50,28 +47,35 @@ namespace Swifter
         {
             try
             {
-                var typeBuilder = DynamicAssembly.DefineType(nameof(TestIsSupportEmit), TypeAttributes.Public);
+                const int value = 1218;
 
-                var methodBuilder = typeBuilder.DefineMethod(
-                   nameof(IsSupportEmit),
-                    MethodAttributes.Public | MethodAttributes.Static,
-                    typeof(int),
-                    Type.EmptyTypes);
-
-                methodBuilder.GetILGenerator()
-                    .LoadConstant(1)
-                    .Return();
-
-                Type rtType = typeBuilder.CreateTypeInfo();
-
-                if (rtType.GetMethod(nameof(IsSupportEmit)).Invoke(null, null).Equals(1))
+                var result = DynamicAssembly.DefineType($"{nameof(TestIsSupportEmit)}_{Guid.NewGuid():N}", TypeAttributes.Public, typeBuilder =>
                 {
+                    typeBuilder.DefineMethod(nameof(IsSupportEmit), MethodAttributes.Public | MethodAttributes.Static, typeof(int), Type.EmptyTypes, (mb, ilGen) =>
+                    {
+                        ilGen.LoadConstant(value);
+                        ilGen.Return();
+
+                    });
+
+                }).GetMethod(nameof(IsSupportEmit)).Invoke(null, null);
+
+                if (Equals(result, value))
+                {
+#if DEBUG
+                    Console.WriteLine($"{nameof(VersionDifferences)} : {nameof(IsSupportEmit)} : {true}");
+#endif
+
                     return true;
                 }
             }
-            catch (Exception)
+            catch
             {
             }
+
+#if DEBUG
+            Console.WriteLine($"{nameof(VersionDifferences)} : {nameof(IsSupportEmit)} : {false}");
+#endif
 
             return false;
         }

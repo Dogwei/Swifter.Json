@@ -580,7 +580,7 @@ namespace Swifter.Test
                 );
 
             AreEqual(
-                JsonFormatter.SerializeObject(ArrayHelper.CreateLengthIterator(10), JsonFormatterOptions.MultiReferencingNull),
+                JsonFormatter.SerializeObject(Enumerable.Range(0, 10), JsonFormatterOptions.MultiReferencingNull),
                 "[0,1,2,3,4,5,6,7,8,9]"
                 );
 

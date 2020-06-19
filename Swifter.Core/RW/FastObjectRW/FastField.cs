@@ -5,8 +5,6 @@ using System;
 using System.Reflection;
 using System.Reflection.Emit;
 
-using static Swifter.RW.StaticFastObjectRW;
-
 namespace Swifter.RW
 {
 
@@ -46,12 +44,26 @@ namespace Swifter.RW
 
             public override void GetValueAfter(ILGenerator ilGen)
             {
-                ilGen.LoadField(Field);
+                if (Field.IsExternalVisible() || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
+                {
+                    ilGen.LoadField(Field);
+                }
+                else
+                {
+                    ilGen.UnsafeLoadField(Field);
+                }
             }
 
             public override void SetValueAfter(ILGenerator ilGen)
             {
-                ilGen.StoreField(Field);
+                if (Field.IsExternalVisible() || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
+                {
+                    ilGen.StoreField(Field);
+                }
+                else
+                {
+                    ilGen.UnsafeStoreField(Field);
+                }
             }
 
             public override void GetValueBefore(ILGenerator ilGen)

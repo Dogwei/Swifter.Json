@@ -113,21 +113,21 @@ namespace Swifter.Reflection
 
         public SerializationInfo GetOrCreateSerializationInfo()
         {
-            return serializationInfo ?? (serializationInfo = CreateSerializationInfo(ContentType));
+            return serializationInfo ??= CreateSerializationInfo(ContentType);
         }
 
         public XTypeInfo GetOrCreateXTypeInfo()
         {
-            return xTypeInfo ?? (xTypeInfo = XTypeInfo.Create(ContentType,
+            return xTypeInfo ??= XTypeInfo.Create(ContentType,
                 XBindingFlags.Public |
                 XBindingFlags.NonPublic |
                 XBindingFlags.Instance |
-                XBindingFlags.Field));
+                XBindingFlags.Field);
         }
 
         public object GetOrCreateContent()
         {
-            return obj ?? (obj = FormatterServices.GetUninitializedObject(ContentType));
+            return obj ??= FormatterServices.GetUninitializedObject(ContentType);
         }
 
         public object GetContent(bool isFinish)

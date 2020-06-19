@@ -321,18 +321,7 @@ namespace Swifter.Reflection
         /// <summary>
         /// 获取该对象读写器的成员名称集合。
         /// </summary>
-        public IEnumerable<string> Keys
-        {
-            get
-            {
-                var fields = xTypeInfo.rwFields;
-
-                for (int i = 0; i < fields.Count; i++)
-                {
-                    yield return fields[i].Key;
-                }
-            }
-        }
+        public IEnumerable<string> Keys => xTypeInfo.rwFields.Keys;
 
         /// <summary>
         /// 获取该对象读写器的成员名称的数量

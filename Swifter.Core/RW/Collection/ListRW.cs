@@ -4,6 +4,7 @@ using Swifter.Tools;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Swifter.RW
 {
@@ -22,7 +23,7 @@ namespace Swifter.RW
 
         IValueReader IDataReader<int>.this[int key] => this[key];
 
-        public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
+        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
 
         public int Count => content.Count;
 

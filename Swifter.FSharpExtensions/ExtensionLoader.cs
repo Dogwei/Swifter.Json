@@ -1,4 +1,5 @@
-﻿using Swifter.FSharpExtensions;
+﻿
+using Swifter.FSharpExtensions;
 using Swifter.RW;
 
 namespace Swifter
@@ -8,7 +9,7 @@ namespace Swifter
     /// </summary>
     static class ExtensionLoader
     {
-        static ExtensionLoader()
+        public static void Load()
         {
             ValueInterface.AddMaper(new FSharpInterfaceMaper());
         }

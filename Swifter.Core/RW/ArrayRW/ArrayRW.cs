@@ -3,6 +3,7 @@ using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
@@ -54,7 +55,7 @@ namespace Swifter.RW
         /// 获取所有索引。
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
+        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
 
         /// <summary>
         /// 获取数组长度。

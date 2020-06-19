@@ -26,6 +26,8 @@ namespace Swifter.Json
         public const string RefKey = "$ref";
         public const string RefKeyString = "\"$ref\"";
         public const string RefKeyChars = "'$ref'";
+        public const char RefSeparater = '/';
+        public const char RefEscape = '%';
 
         public const string ReferenceRegexText = "((^|/)(?<Name>[^/\\[]*))|(\\[(?<Name>[^\\]]+)\\])";
         public const string ReferenceRegexItemName = "Name";
@@ -89,6 +91,18 @@ namespace Swifter.Json
         public const char MaxEscapeChar = (char)0x5c;
 
         public const char DollarChar = '$';
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IsGeneralChar(char chr)
+        {
+            return chr != FixString && chr != FixEscape && chr >= 0x20;
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool IsRefGeneralChar(char chr)
+        {
+            return chr != FixString && chr != FixEscape && chr != RefSeparater && chr != RefEscape && chr > 0x20;
+        }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static char Descape(ref char* chars)
@@ -273,6 +287,7 @@ namespace Swifter.Json
             return default;
         }
 
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static RWPathInfo ParseReference(char* chars, int length)
         {
@@ -287,9 +302,9 @@ namespace Swifter.Json
                 {
                     switch (chars[i])
                     {
-                        case '/':
+                        case RefSeparater:
                             break;
-                        case '%':
+                        case RefEscape:
 
                             if (i + 2 < length)
                             {
@@ -350,7 +365,7 @@ namespace Swifter.Json
 
                 for (int i = start, j = 0; i < end; i++)
                 {
-                    if (chars[i] == '%')
+                    if (chars[i] == RefEscape)
                     {
                         bytes[j++] = (byte)((GetDigital(chars[++i]) << 4) | GetDigital(chars[++i]));
                     }
@@ -364,11 +379,11 @@ namespace Swifter.Json
                 {
                     for (int i = start, j = 0, k = 0; i < end; i++)
                     {
-                        if (chars[i] == '%')
+                        if (chars[i] == RefEscape)
                         {
                             var l = 1;
 
-                            for (i += 3; i < end && chars[i] == '%'; i += 3, ++l) ;
+                            for (i += 3; i < end && chars[i] == RefEscape; i += 3, ++l) ;
 
                             --i;
 

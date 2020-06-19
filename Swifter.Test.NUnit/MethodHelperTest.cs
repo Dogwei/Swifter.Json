@@ -70,7 +70,7 @@ namespace Swifter.Test
         [Test]
         public void OverrideTest()
         {
-            var @delegate = DynamicAssembly.DefineDynamicMethod<Func<int, int, int>>((dynamicMethod, ilGenerator) =>
+            var @delegate = DynamicAssembly.BuildDynamicMethod<Func<int, int, int>>((dynamicMethod, ilGenerator) =>
             {
                 ilGenerator.LoadArgument(0);
                 ilGenerator.LoadArgument(1);

@@ -13,7 +13,7 @@ namespace Swifter.RW
         /// <summary>
         /// 表示此枚举是否是标识符。
         /// </summary>
-        public static readonly bool IsFlags = TypeHelper.GetDefinedAttributes<FlagsAttribute>(typeof(T), false)?.Length >= 1;
+        public static readonly bool IsFlags = typeof(T).IsDefined(typeof(FlagsAttribute), false);
 
         /// <summary>
         /// 枚举值和名称的集合。

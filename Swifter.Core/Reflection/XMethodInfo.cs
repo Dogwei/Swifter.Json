@@ -1,7 +1,9 @@
 ﻿using Swifter.Tools;
 using System;
-using System.Buffers;
+using System.Linq;
 using System.Reflection;
+
+using static Swifter.Reflection.ThrowHelpers;
 
 namespace Swifter.Reflection
 {
@@ -22,15 +24,17 @@ namespace Swifter.Reflection
             return new XMethodInfo(methodInfo, flags);
         }
 
-        readonly Type declaringType;
+        readonly Type firstParameterType;
 
-        internal XMethodInfo(MethodInfo methodInfo, XBindingFlags flags)
+        XMethodInfo(MethodInfo methodInfo, XBindingFlags flags)
         {
             MethodInfo = methodInfo;
 
             Delegate = MethodHelper.CreateDelegate(methodInfo);
 
-            declaringType = methodInfo.DeclaringType;
+            firstParameterType = MethodInfo.IsStatic
+                ? MethodInfo.GetParameters().FirstOrDefault()?.ParameterType
+                : MethodInfo.DeclaringType;
         }
 
         /// <summary>
@@ -52,9 +56,9 @@ namespace Swifter.Reflection
         /// <returns>返回该方法的返回值。如果返回值类型为 Void，则返回 Null</returns>
         public object Invoke(object obj, object[] parameters)
         {
-            if (!declaringType.IsInstanceOfType(obj))
+            if (firstParameterType is null || !firstParameterType.IsInstanceOfType(obj))
             {
-                throw new TargetException(nameof(obj));
+                ThrowTargetException(nameof(obj), firstParameterType);
             }
 
             return Delegate.DynamicInvoke(ArrayHelper.Merge(obj, parameters));

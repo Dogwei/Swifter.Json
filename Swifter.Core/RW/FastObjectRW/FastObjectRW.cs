@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using static Swifter.RW.FastObjectRW;
 
@@ -90,7 +91,8 @@ namespace Swifter.RW
         /// FastObjectRW 全局默认配置。
         /// </summary>
         public static
-            FastObjectRWOptions DefaultOptions { get; set; } =
+            FastObjectRWOptions DefaultOptions
+        { get; set; } =
             // FastObjectRWOptions.NotFoundException |
             // FastObjectRWOptions.CannotGetException |
             // FastObjectRWOptions.CannotSetException |
@@ -105,12 +107,12 @@ namespace Swifter.RW
     /// FastObjectRW 基于 Emit 实现的几乎完美效率的对象读写器。
     /// </summary>
     /// <typeparam name="T">数据源对象的类型</typeparam>
-    public abstract partial class FastObjectRW<T> : IDataRW<string>, IDataRW<Ps<char>>, IDataRW<Ps<Utf8Byte>>, IDataRW<int>
+    public abstract unsafe partial class FastObjectRW<T> : IDataRW<string>, IDataRW<Ps<char>>, IDataRW<Ps<Utf8Byte>>, IDataRW<int>
     {
         /// <summary>
         /// 获取当前类型的读写接口是否为 FastObjectInterface。
         /// </summary>
-        public static bool IsFastObjectInterface => 
+        public static bool IsFastObjectInterface =>
             ValueInterface<T>.Content is IFastObjectRWCreater<T>/* || ValueInterface<T>.Content is FastObjectInterface<T>*/;
 
         /// <summary>
@@ -279,12 +281,12 @@ namespace Swifter.RW
         /// <summary>
         /// 获取该类型所有的成员。
         /// </summary>
-        public IEnumerable<string> Keys => StaticFastObjectRW<T>.StringKeys;
+        public IEnumerable<string> Keys => StaticFastObjectRW<T>.Keys;
 
         /// <summary>
         /// 获取该类型所有的成员的数量。
         /// </summary>
-        public int Count => StaticFastObjectRW<T>.StringKeys.Length;
+        public int Count => StaticFastObjectRW<T>.Keys.Length;
 
         /// <summary>
         /// 将指定名称的成员的值写入到值写入器中。
@@ -392,7 +394,7 @@ namespace Swifter.RW
         /// <param name="name">返回字段名称</param>
         public void GetKey(int ordinal, out string name)
         {
-            name = StaticFastObjectRW<T>.StringKeys[ordinal];
+            name = StaticFastObjectRW<T>.Keys[ordinal];
         }
 
         /// <summary>
@@ -435,23 +437,23 @@ namespace Swifter.RW
         /// </summary>
         public Type ContentType => typeof(T);
 
-        IEnumerable<Ps<char>> IDataRW<Ps<char>>.Keys => StaticFastObjectRW<T>.UTF16Keys;
+        IEnumerable<Ps<char>> IDataRW<Ps<char>>.Keys => Enumerable.Range(0, Count).Select(i => StaticFastObjectRW<T>.UTF16Keys[i]);
 
-        IEnumerable<Ps<char>> IDataReader<Ps<char>>.Keys => StaticFastObjectRW<T>.UTF16Keys;
+        IEnumerable<Ps<char>> IDataReader<Ps<char>>.Keys => ((IDataRW<Ps<char>>)this).Keys;
 
-        IEnumerable<Ps<char>> IDataWriter<Ps<char>>.Keys => StaticFastObjectRW<T>.UTF16Keys;
+        IEnumerable<Ps<char>> IDataWriter<Ps<char>>.Keys => ((IDataRW<Ps<char>>)this).Keys;
 
-        IEnumerable<Ps<Utf8Byte>> IDataRW<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.UTF8Keys;
+        IEnumerable<Ps<Utf8Byte>> IDataRW<Ps<Utf8Byte>>.Keys => Enumerable.Range(0, Count).Select(i => StaticFastObjectRW<T>.UTF8Keys[i]);
 
-        IEnumerable<Ps<Utf8Byte>> IDataReader<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.UTF8Keys;
+        IEnumerable<Ps<Utf8Byte>> IDataReader<Ps<Utf8Byte>>.Keys => ((IDataRW<Ps<Utf8Byte>>)this).Keys;
 
-        IEnumerable<Ps<Utf8Byte>> IDataWriter<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.UTF8Keys;
+        IEnumerable<Ps<Utf8Byte>> IDataWriter<Ps<Utf8Byte>>.Keys => ((IDataRW<Ps<Utf8Byte>>)this).Keys;
 
-        IEnumerable<int> IDataRW<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+        IEnumerable<int> IDataRW<int>.Keys => Enumerable.Range(0, Count);
 
-        IEnumerable<int> IDataReader<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+        IEnumerable<int> IDataReader<int>.Keys => ((IDataRW<int>)this).Keys;
 
-        IEnumerable<int> IDataWriter<int>.Keys => ArrayHelper.CreateLengthIterator(Count);
+        IEnumerable<int> IDataWriter<int>.Keys => ((IDataRW<int>)this).Keys;
 
         IValueWriter IDataWriter<int>.this[int key] => this[key];
 

@@ -149,6 +149,8 @@ namespace Swifter.Data
                         value = dbDataReader[0];
                     }
 
+                    state = ReadState.Finish;
+
                     break;
                 case ReadState.Row:
                     value = dbDataReader[0];
@@ -261,6 +263,8 @@ namespace Swifter.Data
 
                         dt.Rows.Add(row);
                     }
+
+                    state = ReadState.Finish;
 
                     return dt;
                 case ReadState.Row:

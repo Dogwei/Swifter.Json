@@ -153,11 +153,7 @@ namespace Swifter.Json
                     RWPathInfo.SetPath(Reference, key);
                 }
 
-                AppendKeyBefore();
-
-                InternalWriteString(key);
-
-                AppendKeyAfter();
+                WritePropertyName(key);
 
                 return this;
             }
@@ -735,47 +731,9 @@ namespace Swifter.Json
 
         public void WriteChar(char value)
         {
-            Expand(6);
+            WriteValueBefore();
 
-            Append(FixString);
-
-
-            switch (value)
-            {
-                case FixString:
-                    Append(FixEscape);
-                    Append(FixString);
-                    break;
-                case FixEscape:
-                    Append(FixEscape);
-                    Append(FixEscape);
-                    break;
-                case WhiteChar2:
-                    Append(FixEscape);
-                    Append(EscapedWhiteChar2);
-                    break;
-                case WhiteChar3:
-                    Append(FixEscape);
-                    Append(EscapedWhiteChar3);
-                    break;
-                case WhiteChar4:
-                    Append(FixEscape);
-                    Append(EscapedWhiteChar4);
-                    break;
-                case WhiteChar5:
-                    Append(FixEscape);
-                    Append(EscapedWhiteChar5);
-                    break;
-                case WhiteChar6:
-                    Append(FixEscape);
-                    Append(EscapedWhiteChar6);
-                    break;
-                default:
-                    Append(value);
-                    break;
-            }
-
-            Append(FixString);
+            InternalWriteString(ref value, 1);
 
             AppendValueAfter();
         }
@@ -784,7 +742,7 @@ namespace Swifter.Json
         {
             WriteValueBefore();
 
-            Expand(DateTimeHelper.ISOStringMaxLength);
+            Expand(DateTimeHelper.ISOStringMaxLength + 4);
 
             Append(FixString);
 
@@ -981,7 +939,6 @@ namespace Swifter.Json
             AppendValueAfter();
         }
 
-
         public void WriteString(string value)
         {
             if (value is null)
@@ -1090,7 +1047,7 @@ namespace Swifter.Json
         {
             WriteValueBefore();
 
-            Expand(NumberHelper.GuidStringWithSeparatorsLength);
+            Expand(NumberHelper.GuidStringWithSeparatorsLength + 4);
 
             Append(FixString);
 
@@ -1105,7 +1062,7 @@ namespace Swifter.Json
         {
             WriteValueBefore();
 
-            Expand(DateTimeHelper.ISOStringMaxLength);
+            Expand(DateTimeHelper.ISOStringMaxLength + 4);
 
             Append(FixString);
 
@@ -1205,9 +1162,9 @@ namespace Swifter.Json
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void InternalWriteString(string value)
+        public void InternalWriteString(ref char firstChar, int length)
         {
-            var expand = value.Length + 5;
+            var expand = length + 5;
 
             Expand(expand);
 
@@ -1215,56 +1172,71 @@ namespace Swifter.Json
 
             var current = this.current;
 
-            for (int i = 0; i < value.Length; i++)
+            for (; length > 0; --length)
             {
-                switch (value[i])
+                var chr = firstChar;
+
+                if (IsGeneralChar(chr))
                 {
-                    case FixString:
-                        *current = FixEscape; ++current;
-                        *current = FixString; ++current;
-                        goto Expand;
-                    case FixEscape:
-                        *current = FixEscape; ++current;
-                        *current = FixEscape; ++current;
-                        goto Expand;
-                    case WhiteChar2:
-                        *current = FixEscape; ++current;
-                        *current = EscapedWhiteChar2; ++current;
-                        goto Expand;
-                    case WhiteChar3:
-                        *current = FixEscape; ++current;
-                        *current = EscapedWhiteChar3; ++current;
-                        goto Expand;
-                    case WhiteChar4:
-                        *current = FixEscape; ++current;
-                        *current = EscapedWhiteChar4; ++current;
-                        goto Expand;
-                    case WhiteChar5:
-                        *current = FixEscape; ++current;
-                        *current = EscapedWhiteChar5; ++current;
-                        goto Expand;
-                    case WhiteChar6:
-                        *current = FixEscape; ++current;
-                        *current = EscapedWhiteChar6; ++current;
-
-                        Expand:
-
-                        ++expand;
-
-                        if (this.current + expand > hGCache.Last)
-                        {
-                            var offset = current - this.current;
-
-                            InternalExpand(expand);
-
-                            current = this.current + offset;
-                        }
-
-                        break;
-                    case var other:
-                        *current = other; ++current;
-                        break;
+                    *current = chr; ++current;
                 }
+                else
+                {
+                    switch (chr)
+                    {
+                        case FixString:
+                            *current = FixEscape; ++current;
+                            *current = FixString; ++current;
+                            break;
+                        case FixEscape:
+                            *current = FixEscape; ++current;
+                            *current = FixEscape; ++current;
+                            break;
+                        case WhiteChar2:
+                            *current = FixEscape; ++current;
+                            *current = EscapedWhiteChar2; ++current;
+                            break;
+                        case WhiteChar3:
+                            *current = FixEscape; ++current;
+                            *current = EscapedWhiteChar3; ++current;
+                            break;
+                        case WhiteChar4:
+                            *current = FixEscape; ++current;
+                            *current = EscapedWhiteChar4; ++current;
+                            break;
+                        case WhiteChar5:
+                            *current = FixEscape; ++current;
+                            *current = EscapedWhiteChar5; ++current;
+                            break;
+                        case WhiteChar6:
+                            *current = FixEscape; ++current;
+                            *current = EscapedWhiteChar6; ++current;
+                            break;
+                        default:
+                            expand += 4;
+
+                            *current = FixEscape; ++current;
+                            *current = FixunicodeEscape; ++current;
+                            *current = FixNumberMin; ++current;
+                            *current = FixNumberMin; ++current;
+
+                            NumberHelper.Hex.AppendD2(current, chr); current += 2;
+                            break;
+                    }
+
+                    ++expand;
+
+                    if (this.current + expand > hGCache.Last)
+                    {
+                        var offset = current - this.current;
+
+                        InternalExpand(expand);
+
+                        current = this.current + offset;
+                    }
+                }
+
+                firstChar = ref Underlying.Add(ref firstChar, 1);
             }
 
             this.current = current;
@@ -1272,10 +1244,30 @@ namespace Swifter.Json
             Append(FixString);
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWriteString(string value)
+        {
+            InternalWriteString(ref StringHelper.GetRawStringData(value), value.Length);
+        }
+
+        public void InternalWriteStringWithCamelCase(string value)
+        {
+            // TODO: Fast
+            var offset = Offset;
+
+            InternalWriteString(value);
+
+            ref var firstChar = ref current[(offset - Offset) + 1];
+
+            firstChar = char.ToLower(firstChar);
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void InternalWriteDoubleString(double value)
         {
             // NaN, PositiveInfinity, NegativeInfinity, Or Other...
+
+            // TODO: Fast
             InternalWriteString(value.ToString());
         }
 
@@ -1429,37 +1421,21 @@ namespace Swifter.Json
             }
             else
             {
-                var name = key.ToString();
+                var strKey = Convert.ToString(key);
 
-                Expand(name.Length * 3);
+                Expand(strKey.Length * 3);
 
-                for (int i = 0; i < name.Length; i++)
+                foreach (var item in strKey)
                 {
-                    var c = name[i];
-
-                    switch (c)
+                    if (IsRefGeneralChar(item))
                     {
-                        case '\\':
-                            // %5C
-                            Append('%');
-                            Append('5');
-                            Append('C');
-                            break;
-                        case '/':
-                            // %2F
-                            Append('%');
-                            Append('2');
-                            Append('F');
-                            break;
-                        case '"':
-                            // %22
-                            Append('%');
-                            Append('2');
-                            Append('2');
-                            break;
-                        default:
-                            Append(c);
-                            break;
+                        Append(item);
+                    }
+                    else
+                    {
+                        Append(RefEscape);
+
+                        NumberHelper.Hex.AppendD2(current, item); current += 2;
                     }
                 }
             }
@@ -1537,11 +1513,19 @@ namespace Swifter.Json
             AppendValueAfter();
         }
 
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void WritePropertyName(string name)
         {
             AppendKeyBefore();
 
-            InternalWriteString(name);
+            if (On(CamelCaseWhenSerialize) && name.Length > 0 && char.IsUpper(name[0]))
+            {
+                InternalWriteStringWithCamelCase(name);
+            }
+            else
+            {
+                InternalWriteString(name);
+            }
 
             AppendKeyAfter();
         }

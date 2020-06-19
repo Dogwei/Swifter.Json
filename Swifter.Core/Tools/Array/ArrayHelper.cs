@@ -18,72 +18,6 @@ namespace Swifter.Tools
     public static unsafe class ArrayHelper
     {
         /// <summary>
-        /// 创建 Int32 范围迭代器。
-        /// </summary>
-        /// <param name="start">起始值（包含）</param>
-        /// <param name="end">结束值（不包含）</param>
-        /// <returns>返回一个 yield 关键字实现的迭代器</returns>
-        public static IEnumerable<int> CreateRangeIterator(int start, int end)
-        {
-            while (start < end)
-            {
-                yield return start;
-
-                ++start;
-            }
-        }
-
-        /// <summary>
-        /// 创建 Int32 长度迭代器。
-        /// </summary>
-        /// <param name="length">长度</param>
-        /// <returns>返回一个 yield 关键字实现的迭代器</returns>
-        public static IEnumerable<int> CreateLengthIterator(int length) => CreateRangeIterator(0, length);
-
-        /// <summary>
-        /// 创建 String 表格的字段名称迭代器。
-        /// </summary>
-        /// <param name="dataTable">表格</param>
-        /// <returns>返回一个 yield 关键字实现的迭代器</returns>
-        public static IEnumerable<string> CreateNamesIterator(DataTable dataTable)
-        {
-            foreach (DataColumn item in dataTable.Columns)
-            {
-                yield return item.ColumnName;
-            }
-        }
-
-        /// <summary>
-        /// 创建 String 系统数据读取器的字段名称迭代器。
-        /// </summary>
-        /// <param name="dbDataReader">系统数据读取器</param>
-        /// <returns>返回一个 yield 关键字实现的迭代器</returns>
-        public static IEnumerable<string> CreateNamesIterator(System.Data.IDataReader dbDataReader)
-        {
-            var length = dbDataReader.FieldCount;
-
-            for (int i = 0; i < length; i++)
-            {
-                yield return dbDataReader.GetName(i);
-            }
-        }
-
-        /// <summary>
-        /// 创建 XConvert 类型转换迭代器。
-        /// </summary>
-        /// <typeparam name="TIn">输入类型</typeparam>
-        /// <typeparam name="TOut">输出类型</typeparam>
-        /// <param name="input">输入迭代器</param>
-        /// <returns>返回一个 yield 关键字实现的迭代器</returns>
-        public static IEnumerable<TOut> CreateConvertIterator<TIn, TOut>(IEnumerable<TIn> input)
-        {
-            foreach (var item in input)
-            {
-                yield return XConvert<TOut>.Convert(item);
-            }
-        }
-
-        /// <summary>
         /// 合并一个数组和一个元素。
         /// </summary>
         /// <typeparam name="T">元素类型</typeparam>
@@ -575,6 +509,29 @@ namespace Swifter.Tools
             }
 
             return outputs;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="ts"></param>
+        /// <param name="length"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static int IndexOf<T>(T* ts, int length, T value) where T : unmanaged
+        {
+            var equalityComparer = EqualityComparer<T>.Default;
+
+            for (int i = 0; i < length; i++)
+            {
+                if (equalityComparer.Equals(ts[i], value))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         static class ListRaw<T>

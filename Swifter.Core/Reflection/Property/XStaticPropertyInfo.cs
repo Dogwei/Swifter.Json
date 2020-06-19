@@ -30,7 +30,6 @@ namespace Swifter.Reflection
 
         XStaticPropertyInfo()
         {
-
         }
 
         private protected override void InitializeByValue(PropertyInfo propertyInfo, XBindingFlags flags)
@@ -46,6 +45,8 @@ namespace Swifter.Reflection
                 if (getMethod != null)
                 {
                     _get = MethodHelper.CreateDelegate<XStaticGetValueHandler<TValue>>(getMethod, false);
+
+                    // TODO: AOTCheck
                 }
             }
 
@@ -56,6 +57,8 @@ namespace Swifter.Reflection
                 if (setMethod != null)
                 {
                     _set = MethodHelper.CreateDelegate<XStaticSetValueHandler<TValue>>(setMethod, false);
+
+                    // TODO: AOTCheck
                 }
             }
         }

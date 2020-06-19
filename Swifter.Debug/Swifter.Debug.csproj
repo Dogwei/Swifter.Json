@@ -8,13 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="2.1.115" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="2.0.0-preview4.20142.4" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
-  </ItemGroup>
-
-    <ItemGroup>
-     <ProjectReference Include="..\Swifter.Data\Swifter.Data.csproj" />
-     <ProjectReference Include="..\Swifter.Test.WPF\Swifter.Test.WPF.csproj" />
+    <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
+    <ProjectReference Include="..\Swifter.Json\Swifter.Json.csproj" />
+    <ProjectReference Include="..\Swifter.MessagePack\Swifter.MessagePack.csproj" />
   </ItemGroup>
 </Project>

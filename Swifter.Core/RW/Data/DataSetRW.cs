@@ -4,21 +4,22 @@ using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 
 namespace Swifter.RW
 {
     /// <summary>
     /// System.Data.DataSet Reader impl.
     /// </summary>
-    internal sealed class DataSetRW<T> : IDataRW<int> where T:DataSet
+    internal sealed class DataSetRW<T> : IDataRW<int> where T : DataSet
     {
         public IValueRW this[int key] => new ValueCopyer<int>(this, key);
 
         IValueReader IDataReader<int>.this[int key] => this[key];
 
-        IValueWriter IDataWriter<int>.this[int key]=> this[key];
+        IValueWriter IDataWriter<int>.this[int key] => this[key];
 
-        public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
+        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
 
         public int Count => dataset.Tables.Count;
 

@@ -116,15 +116,12 @@ namespace Swifter.MessagePack
 
                 WriteUtf8String(key);
 
-                return this;
-            }
-        }
+                if (On(CamelCaseWhenSerialize) && key.Length > 0)
+                {
+                    ref var firstChar = ref current[-key.Length];
 
-        public IValueWriter this[int key]
-        {
-            get
-            {
-                ++fieldCount;
+                    firstChar = StringHelper.ToLower(firstChar);
+                }
 
                 return this;
             }
@@ -142,7 +139,24 @@ namespace Swifter.MessagePack
 
                 ++fieldCount;
 
-                WriteUnicodeString(ref StringHelper.GetRawStringData(key), key.Length);
+                var bytesLength = WriteUnicodeString(ref StringHelper.GetRawStringData(key), key.Length);
+
+                if (On(CamelCaseWhenSerialize) && bytesLength > 0)
+                {
+                    ref var firstChar = ref current[-bytesLength];
+
+                    firstChar = StringHelper.ToLower(firstChar);
+                }
+
+                return this;
+            }
+        }
+
+        public IValueWriter this[int key]
+        {
+            get
+            {
+                ++fieldCount;
 
                 return this;
             }
@@ -1152,7 +1166,7 @@ namespace Swifter.MessagePack
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteUnicodeString(ref char first, int length)
+        public int WriteUnicodeString(ref char first, int length)
         {
             Expand(StringHelper.GetUtf8MaxBytesLength(length) + 5);
 
@@ -1173,6 +1187,8 @@ namespace Swifter.MessagePack
             WriteStringHead(bytesLength);
 
             current += bytesLength;
+
+            return bytesLength;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]

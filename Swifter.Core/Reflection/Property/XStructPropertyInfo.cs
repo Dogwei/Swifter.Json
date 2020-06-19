@@ -6,6 +6,8 @@ using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+#pragma warning disable
+
 namespace Swifter.Reflection
 {
     /// <summary>
@@ -13,33 +15,39 @@ namespace Swifter.Reflection
     /// </summary>
     /// <typeparam name="TStruct"></typeparam>
     /// <typeparam name="TValue"></typeparam>
-    public sealed class XStructPropertyInfo<TStruct, TValue> : XPropertyInfo, IXFieldRW where TStruct : struct
+    public sealed unsafe class XStructPropertyInfo<TStruct, TValue> : XPropertyInfo, IXFieldRW where TStruct : struct
     {
-        XStructGetValueHandler<TStruct, TValue> _get;
-        XStructSetValueHandler<TStruct, TValue> _set;
+        delegate ref TValue RefValueHandler(ref TStruct obj);
+        delegate TValue GetValueHandler(ref TStruct obj);
+        delegate void SetValueHandler(ref TStruct obj, TValue value);
+
+        GetValueHandler _get;
+        SetValueHandler _set;
 
         XStructPropertyInfo()
         {
-
         }
 
         private protected override void InitializeByValue(PropertyInfo propertyInfo, XBindingFlags flags)
         {
             base.InitializeByValue(propertyInfo, flags);
 
-            if ((flags & XBindingFlags.RWAutoPropertyDirectRW) != 0 && TypeHelper.IsAutoProperty(propertyInfo, out var fieldInfo) && fieldInfo != null)
+            if ((flags & XBindingFlags.RWAutoPropertyDirectRW) != 0/* || !VersionDifferences.IsSupportEmit */)
             {
-                try
+                if (TypeHelper.IsAutoProperty(propertyInfo, out var fieldInfo) && fieldInfo != null)
                 {
-                    var offset = TypeHelper.OffsetOf(fieldInfo);
+                    try
+                    {
+                        var offset = TypeHelper.OffsetOf(fieldInfo);
 
-                    _get = (ref TStruct obj) => Underlying.AddByteOffset(ref Underlying.As<TStruct, TValue>(ref obj), offset);
-                    _set = (ref TStruct obj, TValue value) => Underlying.AddByteOffset(ref Underlying.As<TStruct, TValue>(ref obj), offset) = value;
+                        _get = (ref TStruct obj) => Underlying.AddByteOffset(ref Underlying.As<TStruct, TValue>(ref obj), offset);
+                        _set = (ref TStruct obj, TValue value) => Underlying.AddByteOffset(ref Underlying.As<TStruct, TValue>(ref obj), offset) = value;
 
-                    return;
-                }
-                catch
-                {
+                        return;
+                    }
+                    catch
+                    {
+                    }
                 }
             }
 
@@ -49,7 +57,35 @@ namespace Swifter.Reflection
 
                 if (getMethod != null)
                 {
-                    _get = MethodHelper.CreateDelegate<XStructGetValueHandler<TStruct, TValue>>(getMethod, false);
+                    var __get = MethodHelper.CreateDelegate<GetValueHandler>(getMethod);
+
+                    _get = VersionDifferences.IsSupportEmit ? __get : AOTCheck;
+
+                    TValue AOTCheck(ref TStruct obj)
+                    {
+                        try
+                        {
+                            return __get(ref obj);
+                        }
+                        catch (ExecutionEngineException)
+                        {
+                            __get = AOT;
+
+                            return AOT(ref obj);
+                        }
+                        finally
+                        {
+                            _get = __get;
+                        }
+                    }
+
+                    TValue AOT(ref TStruct obj)
+                    {
+                        fixed (byte* ptr = &Underlying.As<TStruct, byte>(ref obj))
+                        {
+                            return (TValue)getMethod.Invoke(TypeHelper.CamouflageBox(ptr), null);
+                        }
+                    }
                 }
             }
 
@@ -59,7 +95,35 @@ namespace Swifter.Reflection
 
                 if (setMethod != null)
                 {
-                    _set = MethodHelper.CreateDelegate<XStructSetValueHandler<TStruct, TValue>>(setMethod, false);
+                    var __set = (SetValueHandler)Delegate.CreateDelegate(typeof(SetValueHandler), setMethod);
+
+                    _set = VersionDifferences.IsSupportEmit ? __set : AOTCheck;
+
+                    void AOTCheck(ref TStruct obj, TValue value)
+                    {
+                        try
+                        {
+                            __set(ref obj, value);
+                        }
+                        catch (ExecutionEngineException)
+                        {
+                            __set = AOT;
+
+                            AOT(ref obj, value);
+                        }
+                        finally
+                        {
+                            _set = __set;
+                        }
+                    }
+
+                    void AOT(ref TStruct obj, TValue value)
+                    {
+                        fixed (byte* ptr = &Underlying.As<TStruct, byte>(ref obj))
+                        {
+                            setMethod.Invoke(TypeHelper.CamouflageBox(ptr), new object[] { value });
+                        }
+                    }
                 }
             }
         }
@@ -74,7 +138,7 @@ namespace Swifter.Reflection
 
                 if (getMethod != null)
                 {
-                    var _ref = MethodHelper.CreateDelegate<XStructRefValueHandler<TStruct, TValue>>(getMethod, false);
+                    var _ref = (RefValueHandler)Delegate.CreateDelegate(typeof(RefValueHandler), getMethod);
 
                     _get = (ref TStruct obj) =>
                     {
@@ -85,6 +149,8 @@ namespace Swifter.Reflection
                     {
                         _ref(ref obj) = value;
                     };
+
+                    // TODO: AOTCheck
                 }
             }
         }

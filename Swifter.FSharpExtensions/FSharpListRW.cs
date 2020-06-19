@@ -1,10 +1,10 @@
 ﻿
 
-using System;
-using System.Collections.Generic;
 using Microsoft.FSharp.Collections;
 using Swifter.RW;
-using Swifter.Tools;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Swifter.FSharpExtensions
 {
@@ -18,7 +18,7 @@ namespace Swifter.FSharpExtensions
 
         IValueWriter IDataWriter<int>.this[int key] => this[key];
 
-        public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
+        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
 
         public int Count => content.Length;
 

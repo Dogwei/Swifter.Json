@@ -69,28 +69,33 @@
         OutOfDepthException = 0x400,
 
         /// <summary>
+        /// 序列化对象时，字段名使用驼峰命名法。即：如果字段名首字母为大写，则将首字母写入为小写字母。
+        /// </summary>
+        CamelCaseWhenSerialize = 0x800,
+
+        /// <summary>
         /// 对象元素启用筛选。
         /// </summary>
-        OnFilter = 0x800,
+        OnFilter = 0x1000,
 
         /// <summary>
-        /// 启用筛选并筛选掉 Null 值
+        /// 在序列化或反序列化时忽略 Null 值。
         /// </summary>
-        IgnoreNull = 0x1000,
+        IgnoreNull = 0x2000,
 
         /// <summary>
-        /// 启用筛选并筛选掉 0 值
+        /// 在序列化或反序列化时忽略 0 值。
         /// </summary>
-        IgnoreZero = 0x2000,
+        IgnoreZero = 0x4000,
 
         /// <summary>
-        /// 启用筛选并筛选掉 "" 值 (空字符串)
+        /// 在序列化时忽略 ""(空字符串) 值。
         /// </summary>
-        IgnoreEmptyString = 0x4000,
+        IgnoreEmptyString = 0x8000,
 
         /// <summary>
         /// 数组元素启用筛选
         /// </summary>
-        ArrayOnFilter = 0x8000,
+        ArrayOnFilter = 0x10000,
     }
 }

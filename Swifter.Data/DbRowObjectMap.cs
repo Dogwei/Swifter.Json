@@ -4,6 +4,7 @@ using System;
 
 namespace Swifter.Data
 {
+    [Serializable]
     sealed class DbRowObjectMap : Cache<string, ValueInterface>, IEquatable<DbRowObjectMap>
     {
         public DbRowsFlags flags;

@@ -3,6 +3,7 @@ using Swifter.RW;
 using Swifter.Tools;
 
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.Reflection
 {
@@ -24,13 +25,34 @@ namespace Swifter.Reflection
         static readonly IntPtr TypeHandle = TypeHelper.GetTypeHandle(typeof(T));
 
         /// <summary>
+        /// 读取或设置默认的绑定标识。
+        /// </summary>
+        public static XBindingFlags DefaultBindingFlags { get; set; } = XObjectRW.DefaultBindingFlags;
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        static XBindingFlags GetBindingFlags(object valueRW)
+        {
+            var flags = valueRW is ITargetedBind targeted && targeted.TargetedId != 0
+                ? targeted.GetXObjectRWFlags()
+                : XBindingFlags.UseDefault;
+
+            if (flags == XBindingFlags.UseDefault)
+            {
+                flags = DefaultBindingFlags;
+            }
+
+            return flags;
+        }
+
+        /// <summary>
         /// 在值读取器中读取该类型的实例。
         /// </summary>
         /// <param name="valueReader">值读取器</param>
         /// <returns>返回该类型的实例</returns>
         public T ReadValue(IValueReader valueReader)
         {
-            var objectRW = XObjectRW.Create<T>(valueReader is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.UseDefault);
+            var objectRW = XObjectRW.Create<T>(GetBindingFlags(valueReader));
+
 
             valueReader.ReadObject(objectRW);
 
@@ -56,7 +78,7 @@ namespace Swifter.Reflection
             }
             else
             {
-                var objectRW = XObjectRW.Create<T>(valueWriter is ITargetedBind targeted && targeted.TargetedId != 0 ? targeted.GetXObjectRWFlags() : XBindingFlags.UseDefault);
+                var objectRW = XObjectRW.Create<T>(GetBindingFlags(valueWriter));
 
                 objectRW.Initialize(value);
 

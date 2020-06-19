@@ -2,6 +2,7 @@
 using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Swifter.RW
 {
@@ -16,7 +17,7 @@ namespace Swifter.RW
 
         public IValueWriter this[TIn key] => dataWriter[XConvert<TOut>.Convert(key)];
 
-        public IEnumerable<TIn> Keys => ArrayHelper.CreateConvertIterator<TOut, TIn>(dataWriter.Keys);
+        public IEnumerable<TIn> Keys => dataWriter.Keys.Select(key => XConvert.Convert<TOut, TIn>(key));
 
         public int Count => dataWriter.Count;
 

@@ -9,6 +9,7 @@ namespace Swifter.Data
     /// <summary>
     /// 表示一个数据库结果集的行对象。
     /// </summary>
+    [Serializable]
     public sealed partial class DbRowObject : IDataReader<string>
     {
         internal static DbRowObjectMap CreateMap(DbDataReader dbDataReader)

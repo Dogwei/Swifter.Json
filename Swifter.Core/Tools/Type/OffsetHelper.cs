@@ -49,7 +49,7 @@ namespace Swifter.Tools
         {
             var fields = TypeHelper.GetFields(type, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
 
-            DynamicAssembly.DefineDynamicMethod<Action>((_, ilGen) =>
+            DynamicAssembly.BuildDynamicMethod<Action>((_, ilGen) =>
             {
                 var obj_address = ilGen.DeclareLocal(typeof(IntPtr));
                 var gc_static_base_address = ilGen.DeclareLocal(typeof(IntPtr));

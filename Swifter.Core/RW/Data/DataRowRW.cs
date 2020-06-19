@@ -4,6 +4,7 @@ using Swifter.Tools;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
@@ -29,7 +30,7 @@ namespace Swifter.RW
 
         public IValueRW this[int key] => new ValueCopyer<int>(this, key);
 
-        public IEnumerable<string> Keys => ArrayHelper.CreateNamesIterator(datarow.Table);
+        public IEnumerable<string> Keys => datarow.Table.Columns.Cast<DataColumn>().Select(column => column.ColumnName);
 
         IEnumerable<int> IDataRW<int>.Keys => null;
 

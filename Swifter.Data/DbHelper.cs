@@ -25,7 +25,8 @@ namespace Swifter.Data
         {
             ProviderTypesCache = new Dictionary<string, DbProviderFactory>();
             SqlBuilderFactories = new Dictionary<string, SqlBuilderFactory>();
-
+            
+            RegisterSqlBuilderFactory(new SqlServer.MicrosoftSqlBuilderFactory());
             RegisterSqlBuilderFactory(new SqlServer.SqlBuilderFactory());
             RegisterSqlBuilderFactory(new MySql.SqlBuilderFactory());
         }

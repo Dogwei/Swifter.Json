@@ -11,7 +11,7 @@ namespace Swifter.Test.WPF.Serializers
 
         public override TObject Deserialize<TObject>(byte[] symbols)
         {
-            return MessagePackFormatter.DeserializeObject<TObject>(symbols);
+            return MessagePackFormatter.DeserializeObject<TObject>(symbols, MessagePackFormatterOptions.IgnoreNull | MessagePackFormatterOptions.IgnoreZero);
         }
 
         public override byte[] Serialize<TObject>(TObject obj)

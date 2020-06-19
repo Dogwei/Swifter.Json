@@ -2,6 +2,8 @@
 using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
@@ -42,27 +44,25 @@ namespace Swifter.RW
 
         static ValueInterface()
         {
-            if (!StaticConstructorInvoked)
+            try
             {
-                GetInterface(typeof(int));
+                RuntimeHelpers.RunClassConstructor(typeof(ValueInterface).TypeHandle);
+            }
+            catch
+            {
             }
 
             try
             {
                 RuntimeHelpers.RunClassConstructor(typeof(T).TypeHandle);
             }
-            catch (Exception)
+            catch
             {
             }
 
             IsNotModified = true;
 
             if (Content != null)
-            {
-                return;
-            }
-
-            if (StaticConstructorInvoking)
             {
                 return;
             }
@@ -242,8 +242,6 @@ namespace Swifter.RW
     {
         internal static readonly List<IValueInterfaceMaper> Mapers;
         internal static readonly object MapersLock;
-        internal static readonly bool StaticConstructorInvoked = false;
-        internal static readonly bool StaticConstructorInvoking = false;
         internal static readonly Dictionary<IntPtr, ValueInterface> TypedCache;
 
         internal static Type defaultObjectInterfaceType;
@@ -314,57 +312,86 @@ namespace Swifter.RW
             ValueInterface<T>.SetInterface(new SetValueFormatInterface<T>(ValueInterface<T>.Content, format));
         }
 
+        static void LoadExtensionAssembly()
+        {
+            try
+            {
+                var fileInfo = new FileInfo(typeof(ValueInterface).Assembly.Location);
+
+                foreach (var assemblyFile in fileInfo.Directory.GetFiles().Where(file => file.Name.StartsWith("Swifter") && file.Name.EndsWith($"Extensions{fileInfo.Extension}")))
+                {
+                    try
+                    {
+                        Assembly.LoadFile(assemblyFile.FullName)?.GetType("Swifter.ExtensionLoader")?.GetMethod("Load", Type.EmptyTypes)?.Invoke(null, null);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+
+        }
+
         static ValueInterface()
         {
-            StaticConstructorInvoked = true;
-            StaticConstructorInvoking = true;
-
-            Mapers = new List<IValueInterfaceMaper>();
-            MapersLock = new object();
-
-            if (VersionDifferences.IsSupportEmit)
+            lock (typeof(ValueInterface))
             {
-                defaultObjectInterfaceType = typeof(FastObjectInterface<>);
+                if (MapersLock !=null)
+                {
+                    return;
+                }
+
+                Mapers = new List<IValueInterfaceMaper>();
+                MapersLock = new object();
+
+                if (VersionDifferences.IsSupportEmit)
+                {
+                    defaultObjectInterfaceType = typeof(FastObjectInterface<>);
+                }
+                else
+                {
+                    defaultObjectInterfaceType = typeof(XObjectInterface<>);
+                }
+
+                TypedCache = new Dictionary<IntPtr, ValueInterface>();
+
+                ValueInterface<bool>.Content = new BooleanInterface();
+                ValueInterface<sbyte>.Content = new SByteInterface();
+                ValueInterface<short>.Content = new Int16Interface();
+                ValueInterface<int>.Content = new Int32Interface();
+                ValueInterface<long>.Content = new Int64Interface();
+                ValueInterface<byte>.Content = new ByteInterface();
+                ValueInterface<ushort>.Content = new UInt16Interface();
+                ValueInterface<uint>.Content = new UInt32Interface();
+                ValueInterface<ulong>.Content = new UInt64Interface();
+                ValueInterface<char>.Content = new CharInterface();
+                ValueInterface<float>.Content = new SingleInterface();
+                ValueInterface<double>.Content = new DoubleInterface();
+                ValueInterface<decimal>.Content = new DecimalInterface();
+                ValueInterface<string>.Content = new StringInterface();
+                ValueInterface<object>.Content = new ObjectInterface();
+                ValueInterface<DateTime>.Content = new DateTimeInterface();
+                ValueInterface<DateTimeOffset>.Content = new DateTimeOffsetInterface();
+                ValueInterface<TimeSpan>.Content = new TimeSpanInterface();
+                ValueInterface<IntPtr>.Content = new IntPtrInterface();
+                ValueInterface<Version>.Content = new VersionInterface();
+                ValueInterface<DBNull>.Content = new DbNullInterface();
+                ValueInterface<Uri>.Content = new UriInterface();
+
+                Mapers.Add(new BasicInterfaceMaper());
+                Mapers.Add(new TaskInterfaceMaper());
+                Mapers.Add(new CollectionInterfaceMaper());
+                Mapers.Add(new GenericCollectionInterfaceMapper());
+                Mapers.Add(new DataInterfaceMaper());
+                Mapers.Add(new TupleInterfaceMaper());
+                Mapers.Add(new ArrayInterfaceMaper());
+
+                LoadExtensionAssembly();
             }
-            else
-            {
-                defaultObjectInterfaceType = typeof(XObjectInterface<>);
-            }
-
-            TypedCache = new Dictionary<IntPtr, ValueInterface>();
-
-            ValueInterface<bool>.Content = new BooleanInterface();
-            ValueInterface<sbyte>.Content = new SByteInterface();
-            ValueInterface<short>.Content = new Int16Interface();
-            ValueInterface<int>.Content = new Int32Interface();
-            ValueInterface<long>.Content = new Int64Interface();
-            ValueInterface<byte>.Content = new ByteInterface();
-            ValueInterface<ushort>.Content = new UInt16Interface();
-            ValueInterface<uint>.Content = new UInt32Interface();
-            ValueInterface<ulong>.Content = new UInt64Interface();
-            ValueInterface<char>.Content = new CharInterface();
-            ValueInterface<float>.Content = new SingleInterface();
-            ValueInterface<double>.Content = new DoubleInterface();
-            ValueInterface<decimal>.Content = new DecimalInterface();
-            ValueInterface<string>.Content = new StringInterface();
-            ValueInterface<object>.Content = new ObjectInterface();
-            ValueInterface<DateTime>.Content = new DateTimeInterface();
-            ValueInterface<DateTimeOffset>.Content = new DateTimeOffsetInterface();
-            ValueInterface<TimeSpan>.Content = new TimeSpanInterface();
-            ValueInterface<IntPtr>.Content = new IntPtrInterface();
-            ValueInterface<Version>.Content = new VersionInterface();
-            ValueInterface<DBNull>.Content = new DbNullInterface();
-            ValueInterface<Uri>.Content = new UriInterface();
-
-            Mapers.Add(new BasicInterfaceMaper());
-            Mapers.Add(new TaskInterfaceMaper());
-            Mapers.Add(new CollectionInterfaceMaper());
-            Mapers.Add(new GenericCollectionInterfaceMapper());
-            Mapers.Add(new DataInterfaceMaper());
-            Mapers.Add(new TupleInterfaceMaper());
-            Mapers.Add(new ArrayInterfaceMaper());
-
-            StaticConstructorInvoking = false;
         }
 
         /// <summary>

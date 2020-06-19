@@ -11,7 +11,7 @@ namespace Swifter.Test.WPF.Serializers
 
         public override TObject Deserialize<TObject>(string symbols)
         {
-            return JsonFormatter.DeserializeObject<TObject>(symbols);
+            return JsonFormatter.DeserializeObject<TObject>(symbols, JsonFormatterOptions.IgnoreZero | JsonFormatterOptions.IgnoreNull);
         }
 
         public override string Serialize<TObject>(TObject obj)

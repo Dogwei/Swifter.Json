@@ -1,6 +1,7 @@
 ﻿using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
@@ -29,7 +30,7 @@ namespace Swifter.RW
 
             IValueWriter IDataWriter<int>.this[int key] => this[key];
 
-            public IEnumerable<int> Keys => ArrayHelper.CreateLengthIterator(Count);
+            public IEnumerable<int> Keys => Enumerable.Range(0, Count);
 
             public abstract int Count { get; }
 

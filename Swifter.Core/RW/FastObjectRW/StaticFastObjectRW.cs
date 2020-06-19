@@ -1,152 +1,65 @@
 ﻿using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using static Swifter.RW.StaticFastObjectRW;
 using static Swifter.Tools.MethodHelper;
 
 namespace Swifter.RW
 {
-    internal static class StaticFastObjectRW
+    internal sealed unsafe partial class StaticFastObjectRW<T>
     {
         public const BindingFlags StaticDeclaredOnly = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
-        public static readonly MethodInfo IValueFilterFilterMethod = typeof(IValueFilter<string>).GetMethod(nameof(IValueFilter<string>.Filter));
-        public static readonly MethodInfo ValueCopyerWriteToMethod = typeof(ValueCopyer).GetMethod(nameof(ValueCopyer.WriteTo));
-        //public static readonly MethodInfo IDataReaderIndexerGetMethod = typeof(IDataReader<string>).GetProperty(new Type[] { typeof(string) }).GetGetMethod(true);
-        //public static readonly MethodInfo IDataWriterIndexerGetMethod = typeof(IDataWriter<string>).GetProperty(new Type[] { typeof(string) }).GetGetMethod(true);
-
-        public static readonly MethodInfo GetTypeHandle_Object = typeof(TypeHelper).GetMethod(nameof(TypeHelper.GetTypeHandle), new Type[] { typeof(object) });
-        public static readonly MethodInfo GetInterface_Object = typeof(ValueInterface).GetMethod(nameof(ValueInterface.GetInterface), new Type[] { typeof(object) });
-        public static readonly MethodInfo Write_IValueWriter_Object = typeof(ValueInterface).GetMethod(nameof(ValueInterface.Write), new Type[] { typeof(IValueWriter), typeof(object) });
-
-        public static readonly ConstructorInfo MemberAccessException_String_Constructor = typeof(MemberAccessException).GetConstructor(new Type[] { typeof(string) });
-        public static readonly ConstructorInfo MissingMemberException_String_String_Constructor = typeof(MissingMemberException).GetConstructor(new Type[] { typeof(string), typeof(string) });
-        public static readonly ConstructorInfo MissingMemberException_Constructor = typeof(MissingMemberException).GetConstructor(new Type[] { });
-
-
-
-
-        public static readonly bool DynamicAssemblyCanAccessNonPublicTypes;
-        public static readonly bool DynamicAssemblyCanAccessNonPublicMembers;
-
-        public static readonly Random RandomInstance = new Random();
-
-        static StaticFastObjectRW()
-        {
-            try
-            {
-                DynamicAssembly.DefineType(nameof(TestClass) + 1, TypeAttributes.Public, typeof(TestClass)).CreateTypeInfo();
-
-                DynamicAssemblyCanAccessNonPublicTypes = true;
-            }
-            catch (Exception)
-            {
-                DynamicAssemblyCanAccessNonPublicTypes = false;
-            }
-
-            try
-            {
-                var dynamicMethodName = nameof(TestClass.TestMethod);
-
-                var TypeBuilder = DynamicAssembly.DefineType(nameof(TestClass) + 2, TypeAttributes.Public);
-
-                var methodBuilder = TypeBuilder.DefineMethod(
-                    dynamicMethodName,
-                    MethodAttributes.Public | MethodAttributes.Static,
-                    CallingConventions.Standard,
-                    typeof(void),
-                    Type.EmptyTypes);
-
-                var ilGen = methodBuilder.GetILGenerator();
-
-                ilGen.Call(typeof(TestClass).GetMethod(nameof(TestClass.TestMethod), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance));
-                ilGen.Return();
-
-                var method = TypeBuilder.CreateTypeInfo().GetMethod(dynamicMethodName);
-
-                method.Invoke(null, null);
-
-                DynamicAssemblyCanAccessNonPublicMembers = true;
-            }
-            catch (Exception)
-            {
-                DynamicAssemblyCanAccessNonPublicMembers = false;
-            }
-        }
-
-        private class TestClass
-        {
-            internal static void TestMethod()
-            {
-
-            }
-        }
-    }
-
-    internal sealed unsafe partial class StaticFastObjectRW<T>
-    {
-        public static readonly string[] StringKeys;
-        public static readonly Ps<char>[] UTF16Keys;
-        public static readonly Ps<Utf8Byte>[] UTF8Keys;
-
-
         public static readonly BaseField[] Fields;
+
+        public static readonly string[] Keys;
+        public static readonly Ps<char>* UTF16Keys;
+        public static readonly Ps<Utf8Byte>* UTF8Keys;
+
 
         public static readonly IFastObjectRWCreater<T> Creater;
 
         public static readonly FastObjectRWOptions Options;
 
-        public static bool HaveNonPublicReadMember;
-        public static bool HaveNonPublicWriteMember;
+        public static readonly bool IsVisibleTo;
 
+        public static TypeBuilder TypeBuilder;
 
-        public static FieldInfo StringKeysField => typeof(StaticFastObjectRW<T>).GetField(nameof(StringKeys));
+        public static FieldInfo StringKeysField 
+            => typeof(StaticFastObjectRW<T>).GetField(nameof(Keys));
 
-        public static FieldInfo UTF16KeysField => typeof(StaticFastObjectRW<T>).GetField(nameof(UTF16Keys));
+        public static FieldInfo UTF16KeysField 
+            => typeof(StaticFastObjectRW<T>).GetField(nameof(UTF16Keys));
 
-        public static FieldInfo UTF8KeysField => typeof(StaticFastObjectRW<T>).GetField(nameof(UTF8Keys));
+        public static FieldInfo UTF8KeysField 
+            => typeof(StaticFastObjectRW<T>).GetField(nameof(UTF8Keys));
 
-        public static MethodInfo GetValueInterfaceInstanceMethod => typeof(FastObjectRW<T>).GetMethod(nameof(FastObjectRW<T>.GetValueInterfaceInstance), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        public static MethodInfo GetValueInterfaceInstanceMethod 
+            => typeof(FastObjectRW<T>).GetMethod(nameof(FastObjectRW<T>.GetValueInterfaceInstance), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
 
-        public static FieldInfo ContentField
-        {
-            get
-            {
-                return typeof(T).IsExternalVisible() || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers)
-                    ? typeof(FastObjectRW<T>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                    : TypeBuilder.GetField(TypeBuilder.BaseType, typeof(FastObjectRW<>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic));
-            }
-        }
+        public static FieldInfo ContentField 
+            => typeof(FastObjectRW<T>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
-        public static Type ContentType
-        {
-            get
-            {
-                if (typeof(T).IsExternalVisible() || DynamicAssemblyCanAccessNonPublicTypes)
-                {
-                    return typeof(T);
-                }
-                else if (TypeBuilder.IsGenericTypeDefinition && TypeBuilder.GetGenericArguments() is Type[] genericArgs && genericArgs.Length == 1)
-                {
-                    return genericArgs[0];
-                }
+        public static MethodInfo GetTypeHandle_Object 
+            => typeof(TypeHelper).GetMethod(nameof(TypeHelper.GetTypeHandle), new Type[] { typeof(object) });
 
-                return typeof(T);
-            }
-        }
+        public static MethodInfo GetInterface_Object 
+            => typeof(ValueInterface).GetMethod(nameof(ValueInterface.GetInterface), new Type[] { typeof(object) });
 
-        public static FieldInfo RTContentField
-        {
-            get
-            {
-                return typeof(FastObjectRW<T>).GetField(nameof(FastObjectRW<T>.content), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            }
-        }
+        public static MethodInfo Write_IValueWriter_Object 
+            => typeof(ValueInterface).GetMethod(nameof(ValueInterface.Write), new Type[] { typeof(IValueWriter), typeof(object) });
+
+        public static ConstructorInfo MemberAccessException_String_Constructor 
+            => typeof(MemberAccessException).GetConstructor(new Type[] { typeof(string) });
+
+        public static ConstructorInfo MissingMemberException_String_String_Constructor 
+            => typeof(MissingMemberException).GetConstructor(new Type[] { typeof(string), typeof(string) });
 
         public static BaseField ChooseField(BaseField field1, BaseField field2)
         {
@@ -217,21 +130,11 @@ namespace Swifter.RW
                     {
                         foreach (var attribute in attributes)
                         {
-                            var attributedField = new FastField(item, (RWFieldAttribute)attribute);
+                            var attributedField = new FastField(item, attribute);
 
                             if (attributedField.CanRead || attributedField.CanWrite)
                             {
                                 SaveField(attributedField);
-
-                                if (attributedField.CanRead && !attributedField.IsPublicGet)
-                                {
-                                    HaveNonPublicReadMember = true;
-                                }
-
-                                if (attributedField.CanWrite && !attributedField.IsPublicSet)
-                                {
-                                    HaveNonPublicWriteMember = true;
-                                }
                             }
                         }
                     }
@@ -242,16 +145,6 @@ namespace Swifter.RW
                         if (field.CanRead || field.CanWrite)
                         {
                             SaveField(field);
-
-                            if (field.CanRead && !field.IsPublicGet)
-                            {
-                                HaveNonPublicReadMember = true;
-                            }
-
-                            if (field.CanWrite && !field.IsPublicSet)
-                            {
-                                HaveNonPublicWriteMember = true;
-                            }
                         }
                     }
                 }
@@ -289,21 +182,11 @@ namespace Swifter.RW
                     {
                         foreach (var attribute in attributes)
                         {
-                            var attributedField = new FastProperty(item, (RWFieldAttribute)attribute);
+                            var attributedField = new FastProperty(item, attribute);
 
                             if (attributedField.CanRead || attributedField.CanWrite)
                             {
                                 SaveField(attributedField);
-
-                                if (attributedField.CanRead && !attributedField.IsPublicGet)
-                                {
-                                    HaveNonPublicReadMember = true;
-                                }
-
-                                if (attributedField.CanWrite && !attributedField.IsPublicSet)
-                                {
-                                    HaveNonPublicWriteMember = true;
-                                }
                             }
                         }
                     }
@@ -314,16 +197,6 @@ namespace Swifter.RW
                         if (field.CanRead || field.CanWrite)
                         {
                             SaveField(field);
-
-                            if (field.CanRead && !field.IsPublicGet)
-                            {
-                                HaveNonPublicReadMember = true;
-                            }
-
-                            if (field.CanWrite && !field.IsPublicSet)
-                            {
-                                HaveNonPublicWriteMember = true;
-                            }
                         }
                     }
                 }
@@ -358,20 +231,22 @@ namespace Swifter.RW
             }
         }
 
-        public static void SetUTF16Keys()
+        public static Ps<char>* GetUTF16Keys()
         {
             var total_length = 0;
 
-            foreach (var item in StringKeys)
+            foreach (var item in Keys)
             {
                 total_length += item.Length;
             }
 
-            var hGChars = (char*)Marshal.AllocHGlobal(sizeof(char) * total_length);
+            var UTF16Keys = (Ps<char>*)Marshal.AllocHGlobal(Keys.Length * sizeof(Ps<char>) + sizeof(char) * total_length);
 
-            for (int i = 0; i < UTF16Keys.Length; i++)
+            var hGChars = (char*)(UTF16Keys + Keys.Length);
+
+            for (int i = 0; i < Keys.Length; i++)
             {
-                var item = StringKeys[i];
+                var item = Keys[i];
 
                 for (int j = 0; j < item.Length; j++)
                 {
@@ -382,27 +257,35 @@ namespace Swifter.RW
 
                 hGChars += item.Length;
             }
+
+            return UTF16Keys;
         }
 
-        public static void SetUTF8Keys()
+        public static Ps<Utf8Byte>* GetUTF8Keys()
         {
             var total_length = 0;
 
-            for (int i = 0; i < UTF8Keys.Length; i++)
+            foreach (var item in Keys)
             {
-                total_length += StringHelper.GetUtf8BytesLength(ref StringHelper.GetRawStringData(StringKeys[i]), StringKeys[i].Length);
+                total_length += StringHelper.GetUtf8BytesLength(ref StringHelper.GetRawStringData(item), item.Length);
             }
 
-            var hGChars = (Utf8Byte*)Marshal.AllocHGlobal(sizeof(Utf8Byte) * total_length);
+            var UTF8Keys = (Ps<Utf8Byte>*)Marshal.AllocHGlobal(Keys.Length * sizeof(Ps<Utf8Byte>) + sizeof(Utf8Byte) * total_length);
 
-            for (int i = 0; i < UTF8Keys.Length; i++)
+            var hGChars = (Utf8Byte*)(UTF8Keys + Keys.Length);
+
+            for (int i = 0; i < Keys.Length; i++)
             {
-                int length = StringHelper.GetUtf8Bytes(ref StringHelper.GetRawStringData(StringKeys[i]), StringKeys[i].Length, (byte*)hGChars);
+                var item = Keys[i];
+
+                int length = StringHelper.GetUtf8Bytes(ref StringHelper.GetRawStringData(item), item.Length, (byte*)hGChars);
 
                 UTF8Keys[i] = new Ps<Utf8Byte>(hGChars, length);
 
                 hGChars += length;
             }
+
+            return UTF8Keys;
         }
 
         public static void LoadContent(ILGenerator ilGen)
@@ -411,11 +294,11 @@ namespace Swifter.RW
 
             if (typeof(T).IsValueType)
             {
-                ilGen.LoadFieldAddress(RTContentField);
+                ilGen.LoadFieldAddress(ContentField);
             }
             else
             {
-                ilGen.LoadField(RTContentField);
+                ilGen.LoadField(ContentField);
             }
         }
 
@@ -423,15 +306,15 @@ namespace Swifter.RW
         {
             if (typeof(TKey) == typeof(Ps<char>))
             {
-                return Underlying.As<TKey[]>(UTF16Keys)[index];
+                return Underlying.As<Ps<char>, TKey>(ref UTF16Keys[index]);
             }
             else if (typeof(TKey) == typeof(Ps<Utf8Byte>))
             {
-                return Underlying.As<TKey[]>(UTF8Keys)[index];
+                return Underlying.As<Ps<Utf8Byte>, TKey>(ref UTF8Keys[index]);
             }
             else if (typeof(TKey) == typeof(string))
             {
-                return Underlying.As<TKey[]>(StringKeys)[index];
+                return Underlying.As<string, TKey>(ref Keys[index]);
             }
             else if (typeof(TKey) == typeof(int))
             {
@@ -447,15 +330,15 @@ namespace Swifter.RW
         {
             if (typeof(TKey) == typeof(Ps<char>))
             {
-                return Array.IndexOf(UTF16Keys, Underlying.As<TKey, Ps<char>>(ref key));
+                return ArrayHelper.IndexOf(UTF16Keys, Keys.Length, Underlying.As<TKey, Ps<char>>(ref key));
             }
             else if (typeof(TKey) == typeof(Ps<Utf8Byte>))
             {
-                return Array.IndexOf(UTF8Keys, Underlying.As<TKey, Ps<Utf8Byte>>(ref key));
+                return ArrayHelper.IndexOf(UTF8Keys, Keys.Length, Underlying.As<TKey, Ps<Utf8Byte>>(ref key));
             }
             else if (typeof(TKey) == typeof(string))
             {
-                return Array.IndexOf(StringKeys, Underlying.As<TKey, string>(ref key));
+                return Array.IndexOf(Keys, Underlying.As<TKey, string>(ref key));
             }
             else if (typeof(TKey) == typeof(int))
             {
@@ -504,7 +387,7 @@ namespace Swifter.RW
             }
             else if (typeof(TKey) == typeof(string))
             {
-                ilGen.LoadString(StringKeys[index]);
+                ilGen.LoadString(Keys[index]);
             }
             else if (typeof(TKey) == typeof(int))
             {
@@ -614,31 +497,94 @@ namespace Swifter.RW
 
                     Fields = fields.ToArray();
 
-                    StringKeys = Fields.Select(item => item.Name).ToArray();
+                    IsVisibleTo = DynamicAssembly.IsInternalsVisibleTo(typeof(T).Assembly);
 
-                    UTF16Keys = new Ps<char>[StringKeys.Length];
+                    var isVisible = typeof(T).IsExternalVisible();
 
-                    UTF8Keys = new Ps<Utf8Byte>[StringKeys.Length];
+#if DEBUG
+                    Console.WriteLine($"{nameof(FastObjectRW)} : \"{typeof(T)}\" IsVisible : {isVisible}");
+                    Console.WriteLine($"{nameof(FastObjectRW)} : \"{typeof(T)}\" IsVisibleTo : {IsVisibleTo}");
+#endif
 
-                    GCHandle.Alloc(UTF16Keys, GCHandleType.Pinned);
+                    var isCanAccess = isVisible || IsVisibleTo;
 
-                    GCHandle.Alloc(UTF8Keys, GCHandleType.Pinned);
+                    if (!isCanAccess)
+                    {
+                        DynamicAssembly.IgnoresAccessChecksTo(typeof(T).Assembly);
 
-                    SetUTF16Keys();
+                        isCanAccess = DynamicAssembly.IsIgnoresAccessChecksTo(typeof(T).Assembly);
+                    }
 
-                    SetUTF8Keys();
+                    foreach (var field in Fields)
+                    {
+                        var before = field.BeforeType;
+                        var after = field.AfterType;
 
-                    Creater = CreateCreater();
+                        var beforeIsVisible = before.IsExternalVisible() || DynamicAssembly.IsInternalsVisibleTo(before.Assembly);
+                        var afterIsVisible = after.IsExternalVisible() || DynamicAssembly.IsInternalsVisibleTo(after.Assembly);
+#if DEBUG
+                        Console.WriteLine($"{nameof(FastObjectRW)} : \"{typeof(T)}.{field.Name}\" \t " +
+                            $"CanRead : {field.CanRead}, " +
+                            $"CanWrite : {field.CanWrite}, " +
+                            $"IsPublicGet : {field.IsPublicGet}, " +
+                            $"IsPublicSet : {field.IsPublicSet}, " +
+                            $"BeforeIsVisible : {beforeIsVisible}, " +
+                            $"AfterIsVisible : {afterIsVisible}");
+#endif
+                        if (isCanAccess && ((field.CanRead && !field.IsPublicGet) || (field.CanWrite && !field.IsPublicSet)))
+                        {
+                            isCanAccess = DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo;
+                        }
+
+                        if (isCanAccess && !beforeIsVisible)
+                        {
+                            DynamicAssembly.IgnoresAccessChecksTo(before.Assembly);
+
+                            isCanAccess = DynamicAssembly.IsIgnoresAccessChecksTo(before.Assembly);
+                        }
+
+                        if (isCanAccess && after != before && !afterIsVisible)
+                        {
+                            DynamicAssembly.IgnoresAccessChecksTo(after.Assembly);
+
+                            isCanAccess = DynamicAssembly.IsIgnoresAccessChecksTo(after.Assembly);
+                        }
+                    }
+
+#if DEBUG
+                    Console.WriteLine($"{nameof(FastObjectRW)} : \"{typeof(T)}\" IsCanAssess : {isCanAccess}");
+#endif
+
+                    Keys = Fields.Select(item => item.Name).ToArray();
+
+                    UTF16Keys = GetUTF16Keys();
+
+                    UTF8Keys = GetUTF8Keys();
+
+                    if (isCanAccess)
+                    {
+                        Creater = CreateCreater();
+                    }
+                    else
+                    {
+                        Creater = new NonPublicFastObjectCreater<T>();
+                    }
+
+                    if (Creater is IValueInterface<T> valueInterface && ValueInterface<T>.Content is FastObjectInterface<T>)
+                    {
+                        ValueInterface<T>.Content = valueInterface;
+                    }
                 }
                 catch (Exception e)
                 {
                     Creater = new ErrorFastObjectRWCreater<T>(e);
                 }
+                finally
+                {
+                    TypeBuilder = null;
+                }
             }
         }
-
-
-        public static TypeBuilder TypeBuilder;
 
         public static string GetReadValueMethodName(Type type)
         {
@@ -652,46 +598,30 @@ namespace Swifter.RW
                 return null;
             }
 
-            switch (Type.GetTypeCode(type))
-            {
-                case TypeCode.Boolean:
-                    return ValueInterface<bool>.IsNotModified ? nameof(IValueReader.ReadBoolean) : null;
-                case TypeCode.Char:
-                    return ValueInterface<char>.IsNotModified ? nameof(IValueReader.ReadChar) : null;
-                case TypeCode.SByte:
-                    return ValueInterface<sbyte>.IsNotModified ? nameof(IValueReader.ReadSByte) : null;
-                case TypeCode.Byte:
-                    return ValueInterface<byte>.IsNotModified ? nameof(IValueReader.ReadByte) : null;
-                case TypeCode.Int16:
-                    return ValueInterface<short>.IsNotModified ? nameof(IValueReader.ReadInt16) : null;
-                case TypeCode.UInt16:
-                    return ValueInterface<ushort>.IsNotModified ? nameof(IValueReader.ReadUInt16) : null;
-                case TypeCode.Int32:
-                    return ValueInterface<int>.IsNotModified ? nameof(IValueReader.ReadInt32) : null;
-                case TypeCode.UInt32:
-                    return ValueInterface<uint>.IsNotModified ? nameof(IValueReader.ReadUInt32) : null;
-                case TypeCode.Int64:
-                    return ValueInterface<long>.IsNotModified ? nameof(IValueReader.ReadInt64) : null;
-                case TypeCode.UInt64:
-                    return ValueInterface<ulong>.IsNotModified ? nameof(IValueReader.ReadUInt64) : null;
-                case TypeCode.Single:
-                    return ValueInterface<float>.IsNotModified ? nameof(IValueReader.ReadSingle) : null;
-                case TypeCode.Double:
-                    return ValueInterface<double>.IsNotModified ? nameof(IValueReader.ReadDouble) : null;
-                case TypeCode.Decimal:
-                    return ValueInterface<decimal>.IsNotModified ? nameof(IValueReader.ReadDecimal) : null;
-                case TypeCode.DateTime:
-                    return ValueInterface<DateTime>.IsNotModified ? nameof(IValueReader.ReadDateTime) : null;
-                case TypeCode.String:
-                    return ValueInterface<string>.IsNotModified ? nameof(IValueReader.ReadString) : null;
-            }
-
             if (type.IsValueType && Nullable.GetUnderlyingType(type) != null && ValueInterface.GetInterface(type).InterfaceIsNotModified)
             {
                 return nameof(IValueReader.ReadNullable);
             }
 
-            return null;
+            return (Type.GetTypeCode(type)) switch
+            {
+                TypeCode.Boolean => ValueInterface<bool>.IsNotModified ? nameof(IValueReader.ReadBoolean) : null,
+                TypeCode.Char => ValueInterface<char>.IsNotModified ? nameof(IValueReader.ReadChar) : null,
+                TypeCode.SByte => ValueInterface<sbyte>.IsNotModified ? nameof(IValueReader.ReadSByte) : null,
+                TypeCode.Byte => ValueInterface<byte>.IsNotModified ? nameof(IValueReader.ReadByte) : null,
+                TypeCode.Int16 => ValueInterface<short>.IsNotModified ? nameof(IValueReader.ReadInt16) : null,
+                TypeCode.UInt16 => ValueInterface<ushort>.IsNotModified ? nameof(IValueReader.ReadUInt16) : null,
+                TypeCode.Int32 => ValueInterface<int>.IsNotModified ? nameof(IValueReader.ReadInt32) : null,
+                TypeCode.UInt32 => ValueInterface<uint>.IsNotModified ? nameof(IValueReader.ReadUInt32) : null,
+                TypeCode.Int64 => ValueInterface<long>.IsNotModified ? nameof(IValueReader.ReadInt64) : null,
+                TypeCode.UInt64 => ValueInterface<ulong>.IsNotModified ? nameof(IValueReader.ReadUInt64) : null,
+                TypeCode.Single => ValueInterface<float>.IsNotModified ? nameof(IValueReader.ReadSingle) : null,
+                TypeCode.Double => ValueInterface<double>.IsNotModified ? nameof(IValueReader.ReadDouble) : null,
+                TypeCode.Decimal => ValueInterface<decimal>.IsNotModified ? nameof(IValueReader.ReadDecimal) : null,
+                TypeCode.DateTime => ValueInterface<DateTime>.IsNotModified ? nameof(IValueReader.ReadDateTime) : null,
+                TypeCode.String => ValueInterface<string>.IsNotModified ? nameof(IValueReader.ReadString) : null,
+                _ => null,
+            };
         }
 
         public static string GetWriteValueMethodName(Type type)
@@ -706,69 +636,33 @@ namespace Swifter.RW
                 return null;
             }
 
-            switch (Type.GetTypeCode(type))
+            return (Type.GetTypeCode(type)) switch
             {
-                case TypeCode.Boolean:
-                    return ValueInterface<bool>.IsNotModified ? nameof(IValueWriter.WriteBoolean) : null;
-                case TypeCode.Char:
-                    return ValueInterface<char>.IsNotModified ? nameof(IValueWriter.WriteChar) : null;
-                case TypeCode.SByte:
-                    return ValueInterface<sbyte>.IsNotModified ? nameof(IValueWriter.WriteSByte) : null;
-                case TypeCode.Byte:
-                    return ValueInterface<byte>.IsNotModified ? nameof(IValueWriter.WriteByte) : null;
-                case TypeCode.Int16:
-                    return ValueInterface<short>.IsNotModified ? nameof(IValueWriter.WriteInt16) : null;
-                case TypeCode.UInt16:
-                    return ValueInterface<ushort>.IsNotModified ? nameof(IValueWriter.WriteUInt16) : null;
-                case TypeCode.Int32:
-                    return ValueInterface<int>.IsNotModified ? nameof(IValueWriter.WriteInt32) : null;
-                case TypeCode.UInt32:
-                    return ValueInterface<uint>.IsNotModified ? nameof(IValueWriter.WriteUInt32) : null;
-                case TypeCode.Int64:
-                    return ValueInterface<long>.IsNotModified ? nameof(IValueWriter.WriteInt64) : null;
-                case TypeCode.UInt64:
-                    return ValueInterface<ulong>.IsNotModified ? nameof(IValueWriter.WriteUInt64) : null;
-                case TypeCode.Single:
-                    return ValueInterface<float>.IsNotModified ? nameof(IValueWriter.WriteSingle) : null;
-                case TypeCode.Double:
-                    return ValueInterface<double>.IsNotModified ? nameof(IValueWriter.WriteDouble) : null;
-                case TypeCode.Decimal:
-                    return ValueInterface<decimal>.IsNotModified ? nameof(IValueWriter.WriteDecimal) : null;
-                case TypeCode.DateTime:
-                    return ValueInterface<DateTime>.IsNotModified ? nameof(IValueWriter.WriteDateTime) : null;
-                case TypeCode.String:
-                    return ValueInterface<string>.IsNotModified ? nameof(IValueWriter.WriteString) : null;
-            }
-
-            return null;
+                TypeCode.Boolean => ValueInterface<bool>.IsNotModified ? nameof(IValueWriter.WriteBoolean) : null,
+                TypeCode.Char => ValueInterface<char>.IsNotModified ? nameof(IValueWriter.WriteChar) : null,
+                TypeCode.SByte => ValueInterface<sbyte>.IsNotModified ? nameof(IValueWriter.WriteSByte) : null,
+                TypeCode.Byte => ValueInterface<byte>.IsNotModified ? nameof(IValueWriter.WriteByte) : null,
+                TypeCode.Int16 => ValueInterface<short>.IsNotModified ? nameof(IValueWriter.WriteInt16) : null,
+                TypeCode.UInt16 => ValueInterface<ushort>.IsNotModified ? nameof(IValueWriter.WriteUInt16) : null,
+                TypeCode.Int32 => ValueInterface<int>.IsNotModified ? nameof(IValueWriter.WriteInt32) : null,
+                TypeCode.UInt32 => ValueInterface<uint>.IsNotModified ? nameof(IValueWriter.WriteUInt32) : null,
+                TypeCode.Int64 => ValueInterface<long>.IsNotModified ? nameof(IValueWriter.WriteInt64) : null,
+                TypeCode.UInt64 => ValueInterface<ulong>.IsNotModified ? nameof(IValueWriter.WriteUInt64) : null,
+                TypeCode.Single => ValueInterface<float>.IsNotModified ? nameof(IValueWriter.WriteSingle) : null,
+                TypeCode.Double => ValueInterface<double>.IsNotModified ? nameof(IValueWriter.WriteDouble) : null,
+                TypeCode.Decimal => ValueInterface<decimal>.IsNotModified ? nameof(IValueWriter.WriteDecimal) : null,
+                TypeCode.DateTime => ValueInterface<DateTime>.IsNotModified ? nameof(IValueWriter.WriteDateTime) : null,
+                TypeCode.String => ValueInterface<string>.IsNotModified ? nameof(IValueWriter.WriteString) : null,
+                _ => null,
+            };
         }
 
         public static IFastObjectRWCreater<T> CreateCreater()
         {
             TypeBuilder = DynamicAssembly.DefineType(
-                $"{nameof(FastObjectRW)}_{typeof(T).Name}_{Guid.NewGuid().ToString("N")}",
-                TypeAttributes.Sealed | TypeAttributes.Public);
-
-            Type tType;
-
-            if (typeof(T).IsExternalVisible() || DynamicAssemblyCanAccessNonPublicTypes)
-            {
-                TypeBuilder.SetParent(typeof(FastObjectRW<T>));
-
-                TypeBuilder.AddInterfaceImplementation(typeof(IFastObjectRWCreater<T>));
-                TypeBuilder.AddInterfaceImplementation(typeof(IValueInterface<T>));
-
-                tType = typeof(T);
-            }
-            else
-            {
-                tType = TypeBuilder.DefineGenericParameters("T")[0];
-
-                TypeBuilder.SetParent(typeof(FastObjectRW<>).MakeGenericType(tType));
-
-                TypeBuilder.AddInterfaceImplementation(typeof(IFastObjectRWCreater<>).MakeGenericType(tType));
-                TypeBuilder.AddInterfaceImplementation(typeof(IValueInterface<>).MakeGenericType(tType));
-            }
+                $"{"FastObjectRW"}_{typeof(T).Name}_{Guid.NewGuid():N}",
+                TypeAttributes.Sealed | TypeAttributes.Public,
+                typeof(FastObjectRW<T>));
 
             ImplInitialize();
 
@@ -813,7 +707,17 @@ namespace Swifter.RW
 
             ImplOnWriteAll<int>();
 
-            var defaultConstructor = TypeBuilder.DefineDefaultConstructor(MethodAttributes.Public);
+
+
+            var defaultConstructor = TypeBuilder.CreateTypeInfo().GetConstructor(Type.EmptyTypes);
+
+            TypeBuilder = DynamicAssembly.DefineType(
+                $"{"FastObjectRWCreater"}_{typeof(T).Name}_{Guid.NewGuid():N}",
+                TypeAttributes.Sealed | TypeAttributes.Public);
+
+            TypeBuilder.AddInterfaceImplementation(typeof(IFastObjectRWCreater<T>));
+            TypeBuilder.AddInterfaceImplementation(typeof(IValueInterface<T>));
+
 
             ImplCreate(defaultConstructor);
 
@@ -821,21 +725,7 @@ namespace Swifter.RW
 
             ImplWriteValue(defaultConstructor);
 
-            Type rtType = TypeBuilder.CreateTypeInfo();
-
-            if (rtType.IsGenericTypeDefinition)
-            {
-                rtType = rtType.MakeGenericType(typeof(T));
-            }
-
-            var creater = (IFastObjectRWCreater<T>)Activator.CreateInstance(rtType);
-
-            if (ValueInterface<T>.Content is FastObjectInterface<T>)
-            {
-                ValueInterface<T>.SetInterface((IValueInterface<T>)creater);
-            }
-
-            return creater;
+            return (IFastObjectRWCreater<T>)TypeBuilder.CreateTypeInfo().GetConstructor(Type.EmptyTypes).Invoke(new object[] { });
         }
 
         public static void ImplInitialize()
@@ -859,27 +749,7 @@ namespace Swifter.RW
                 typeof(void),
                 new Type[] { typeof(TKey), typeof(IValueReader) });
 
-            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicWriteMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplOnWriteValue<TKey>(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var dynamicMethod = new DynamicMethod(
-                    $"{TypeBuilder.Name}_{nameof(ImplOnWriteValue)}",
-                    typeof(void),
-                    new Type[] { typeof(FastObjectRW<T>), typeof(TKey), typeof(IValueReader) },
-                    typeof(FastObjectRW<T>).Module, true);
-
-                ImplOnWriteValue<TKey>(dynamicMethod.GetILGenerator());
-
-                methodBuilder.GetILGenerator()
-                    .LoadArgument(0)
-                    .LoadArgument(1)
-                    .LoadArgument(2)
-                    .Calli(dynamicMethod)
-                    .Return();
-            }
+            ImplOnWriteValue<TKey>(methodBuilder.GetILGenerator());
         }
 
         public static void ImplOnReadAll<TKey>()
@@ -891,27 +761,7 @@ namespace Swifter.RW
                 typeof(void),
                 new Type[] { typeof(IDataWriter<TKey>) });
 
-            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplOnReadAll<TKey>(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var dynamicMethod = new DynamicMethod(
-                    $"{TypeBuilder.Name}_{nameof(ImplOnReadAll)}",
-                    typeof(void),
-                    new Type[] { typeof(FastObjectRW<T>), typeof(IDataWriter<TKey>) },
-                    typeof(FastObjectRW<T>).Module,
-                    true);
-
-                ImplOnReadAll<TKey>(dynamicMethod.GetILGenerator());
-
-                methodBuilder.GetILGenerator()
-                    .LoadArgument(0)
-                    .LoadArgument(1)
-                    .Calli(dynamicMethod)
-                    .Return();
-            }
+            ImplOnReadAll<TKey>(methodBuilder.GetILGenerator());
         }
 
         public static void ImplOnWriteAll<TKey>()
@@ -923,27 +773,7 @@ namespace Swifter.RW
                 typeof(void),
                 new Type[] { typeof(IDataReader<TKey>) });
 
-
-            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicWriteMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplOnWriteAll<TKey>(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var dynamicMethod = new DynamicMethod(
-                    $"{TypeBuilder.Name}_{nameof(ImplOnWriteAll)}",
-                    typeof(void),
-                    new Type[] { typeof(FastObjectRW<T>), typeof(IDataReader<TKey>) },
-                    typeof(FastObjectRW<T>).Module, true);
-
-                ImplOnWriteAll<TKey>(dynamicMethod.GetILGenerator());
-
-                methodBuilder.GetILGenerator()
-                    .LoadArgument(0)
-                    .LoadArgument(1)
-                    .Calli(dynamicMethod)
-                    .Return();
-            }
+            ImplOnWriteAll<TKey>(methodBuilder.GetILGenerator());
         }
 
         public static void ImplOnReadValue<TKey>()
@@ -955,27 +785,7 @@ namespace Swifter.RW
                 typeof(void),
                 new Type[] { typeof(TKey), typeof(IValueWriter) });
 
-            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplOnReadValue<TKey>(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var dynamicMethod = new DynamicMethod(
-                    $"{TypeBuilder.Name}_{nameof(ImplOnReadValue)}",
-                    typeof(void),
-                    new Type[] { typeof(FastObjectRW<T>), typeof(TKey), typeof(IValueWriter) },
-                    typeof(FastObjectRW<T>).Module, true);
-
-                ImplOnReadValue<TKey>(dynamicMethod.GetILGenerator());
-
-                methodBuilder.GetILGenerator()
-                    .LoadArgument(0)
-                    .LoadArgument(1)
-                    .LoadArgument(2)
-                    .Calli(dynamicMethod)
-                    .Return();
-            }
+            ImplOnReadValue<TKey>(methodBuilder.GetILGenerator());
         }
 
         public static void ImplGetOrdinal<TKey>()
@@ -987,35 +797,16 @@ namespace Swifter.RW
                 typeof(int),
                 new Type[] { typeof(TKey) });
 
-            if ((typeof(T).IsExternalVisible() && (!HaveNonPublicReadMember)) || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-            {
-                ImplGetOrdinal<TKey>(methodBuilder.GetILGenerator());
-            }
-            else
-            {
-                var dynamicMethod = new DynamicMethod(
-                    $"{TypeBuilder.Name}_{nameof(ImplGetOrdinal)}",
-                    typeof(int),
-                    new Type[] { typeof(FastObjectRW<T>), typeof(TKey) },
-                    typeof(FastObjectRW<T>).Module, true);
-
-                ImplGetOrdinal<TKey>(dynamicMethod.GetILGenerator());
-
-                methodBuilder.GetILGenerator()
-                    .LoadArgument(0)
-                    .LoadArgument(1)
-                    .Calli(dynamicMethod)
-                    .Return();
-            }
+            ImplGetOrdinal<TKey>(methodBuilder.GetILGenerator());
         }
 
-        public static void ImplCreate(ConstructorBuilder defaultConstructor)
+        public static void ImplCreate(ConstructorInfo defaultConstructor)
         {
             var methodBuilder = TypeBuilder.DefineMethod(
                nameof(IFastObjectRWCreater<T>.Create),
                MethodAttributes.Public | MethodAttributes.Virtual,
                CallingConventions.HasThis,
-               TypeBuilder.BaseType,
+               typeof(FastObjectRW<T>),
                Type.EmptyTypes);
 
             var ilGen = methodBuilder.GetILGenerator();
@@ -1024,14 +815,14 @@ namespace Swifter.RW
             ilGen.Return();
         }
 
-        public static void ImplWriteValue(ConstructorBuilder defaultConstructor)
+        public static void ImplWriteValue(ConstructorInfo defaultConstructor)
         {
             var methodBuilder = TypeBuilder.DefineMethod(
             nameof(IValueInterface<T>.WriteValue),
             MethodAttributes.Public | MethodAttributes.Virtual,
             CallingConventions.HasThis,
             typeof(void),
-            new Type[] { typeof(IValueWriter), ContentType });
+            new Type[] { typeof(IValueWriter), typeof(T) });
 
             var ilGen = methodBuilder.GetILGenerator();
 
@@ -1074,19 +865,19 @@ namespace Swifter.RW
             ilGen.Return();
         }
 
-        public static void ImplReadValue(ConstructorBuilder defaultConstructor)
+        public static void ImplReadValue(ConstructorInfo defaultConstructor)
         {
             var methodBuilder = TypeBuilder.DefineMethod(
                nameof(IValueInterface<T>.ReadValue),
                MethodAttributes.Public | MethodAttributes.Virtual,
                CallingConventions.HasThis,
-               ContentType,
+               typeof(T),
                new Type[] { typeof(IValueReader) });
 
             var ilGen = methodBuilder.GetILGenerator();
 
             // var rw = new FastObjectRW_T();
-            var local_rw = ilGen.DeclareLocal(TypeBuilder);
+            var local_rw = ilGen.DeclareLocal(typeof(FastObjectRW<T>));
             ilGen.NewObject(defaultConstructor);
             ilGen.StoreLocal(local_rw);
 
@@ -1106,7 +897,7 @@ namespace Swifter.RW
         {
             if (typeof(T).IsValueType)
             {
-                var local = ilGen.DeclareLocal(ContentType);
+                var local = ilGen.DeclareLocal(typeof(T));
 
                 ilGen.LoadArgument(0);
                 ilGen.LoadLocal(local);
@@ -1118,53 +909,27 @@ namespace Swifter.RW
             {
                 ilGen.LoadArgument(0);
 
-                ilGen.LoadType(ContentType);
+                ilGen.LoadType(typeof(T));
 
                 ilGen.Call(MethodOf<Type, object>(TypeHelper.Allocate));
 
                 ilGen.StoreField(ContentField);
                 ilGen.Return();
             }
+            else if(typeof(T).GetConstructor(Type.EmptyTypes) is ConstructorInfo constructor && (constructor.IsExternalVisible() || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo))
+            {
+                ilGen.LoadArgument(0);
+                ilGen.NewObject(constructor);
+                ilGen.StoreField(ContentField);
+                ilGen.Return();
+            }
             else
             {
-                var constructor = typeof(T).GetConstructor(Type.EmptyTypes);
-
-                if (constructor is null)
-                {
-                    ilGen.LoadArgument(0);
-                    ilGen.LoadType(ContentType);
-                    ilGen.Call(MethodOf<Type, object>(Activator.CreateInstance));
-                    ilGen.StoreField(ContentField);
-                    ilGen.Return();
-
-                    return;
-                }
-
-                if (typeof(T).IsExternalVisible() || (DynamicAssemblyCanAccessNonPublicTypes && DynamicAssemblyCanAccessNonPublicMembers))
-                {
-                    ilGen.LoadArgument(0);
-                    ilGen.NewObject(constructor);
-                    ilGen.StoreField(ContentField);
-                    ilGen.Return();
-                }
-                else
-                {
-                    var dynamicMethod = new DynamicMethod(
-                        $"{TypeBuilder.Name}_{nameof(ImplInitialize)}",
-                        typeof(void),
-                        new Type[] { typeof(FastObjectRW<T>) },
-                        typeof(FastObjectRW<T>).Module, true);
-
-                    dynamicMethod.GetILGenerator()
-                        .LoadArgument(0)
-                        .NewObject(constructor)
-                        .StoreField(RTContentField)
-                        .Return();
-
-                    ilGen.LoadArgument(0);
-                    ilGen.Calli(dynamicMethod);
-                    ilGen.Return();
-                }
+                ilGen.LoadArgument(0);
+                ilGen.LoadType(typeof(T));
+                ilGen.Call(MethodOf<Type, object>(Activator.CreateInstance));
+                ilGen.StoreField(ContentField);
+                ilGen.Return();
             }
         }
 
