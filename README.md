@@ -212,7 +212,7 @@ First, reference the latest version of Swifter.Extensions.AspNetCore package on 
         }
     }
     
-In this way, when the client use the application/json headers request,
+In this way, when the client use the application/json header request,
 it will use Swifter.Json serialize results and deserialize parameters.
 Or you can use the JsonResult to explicitly return Json content.
 这样配置后，当客户端使用 application/json 头请求时，就会使用 Swifter.Json 序列化返回值或反序列化参数。
