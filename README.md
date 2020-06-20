@@ -1,7 +1,7 @@
 # Swifter.Json
 #### A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.
 
-### Easy to use 简单实用
+### Easy to use 简单使用
 ```C#
 public class Demo
 {
@@ -22,15 +22,6 @@ public class Demo
 bool, byte, sbyte, short, ushort, char, int, uint, long, ulong, IntPtr, UIntPtr,
 float, double, decimal, string, enum, DateTime, DateTimeOffset, TimeSpan, Guid,
 BigInteger, Complex, DBNull, Nullable<T>, Tuple<...>, ValueTuple<...>, Version,
-Uri, Assembly, Type, MemberInfo, MethodInfo, FieldInfo, PropertyInfo, ConstructorInfo,
-EventInfo, Array, Multidimensional-Arrays, IList, IList<T>, ICollection, ICollection<T>,
-IDictionary, IDictionary<TKey, TValue>, IEnumerable, IEnumerable<T>, DataSet, DataTable,
-DataRow, DbRowObject, DbDataReader...
-
-Other types are treated as object 其他类型当作对象处理
-```
-
-## Supported platforms and runtimes 支持的平台和运行时
 ```
 .NET Framework 2.0+, .NET Core 2.0+, .NET Standard 2.0+, MONO, MONO AOT, MONO FULL-AOT,
 Unity, Xamarin.iOS, Xamarin.Android
@@ -40,7 +31,7 @@ Uncertain：Unity IL2CPP
 Unsupported: Sliverlight
 
 Note:
-    .NET Core uses the Core version, and other platforms use the Framework version or Standard version.
+    .NET Core use the Core version, and other platforms use the Framework version or Standard version.
     Because the Core version is performance-optimized.
     the Framework version and Standard version are optimized for compatibility.
     the Framework version and Standard version can run directly on AOT platforms.
@@ -86,3 +77,135 @@ For more features, please see Swifter.Json.JsonFormatterOptions enum.
 ## Performance 性能
 ![Performance](performance.png)
 ###### ServiceStack.Json, Jil, LitJson, NetJson and etc libraries are not shown because there are too many errors; if necessary, you can clone the test program on GitHub and run. Most of the Json serialization libraries of .NET have been included.
+
+## Demos 示例
+##### (1) Deserialize to dynamic 反序列化为 dynamic
+```C#
+        var list = new List<object>
+        {
+            { new Dictionary<string, object>() { { "Id", 1}, { "Name", "Dogwei" } }},
+            { new Dictionary<string, object>() { { "Id", 2}, { "Name", "sg" } }},
+            { new Dictionary<string, object>() { { "Id", 3}, { "Name", "cxw" } }},
+            { new Dictionary<string, object>() { { "Id", 4}, { "Name", "eway" } }},
+            {
+                new Dictionary<string, object>() { 
+                    { "Id", 5}, 
+                    { "Name", "Xinwei Chen" }, 
+                    { "Data", new Dictionary<string, object> { { "Age", 21 }, { "Sex", "Male" } } }
+                }
+            },
+        };
+
+        var json = JsonFormatter.SerializeObject(list);
+
+        dynamic dym = JsonFormatter.DeserializeObject<JsonValue>(json);
+
+        Console.WriteLine(dym[0].Name); // Dogwei
+        Console.WriteLine(dym[1].Name); // sg
+        Console.WriteLine(dym[2].Id); // 3
+        Console.WriteLine(dym[3].Id); // 4
+        Console.WriteLine(dym[4].Data.Age); // 21
+```
+##### (2) Attributes 特性
+```C#
+[RWObject(SkipDefaultValue = RWBoolean.Yes)]
+public class Demo
+{
+    public int Id;
+    public string Name;
+    [RWField("Age")]
+    private int age;
+    [RWField(SkipDefaultValue = RWBoolean.No)]
+    public int? Sex;
+    [RWFormat("yyyy-MM-dd")]
+    public DateTime Birthday { get; set; }
+
+    public static void Main()
+    {
+        var obj = new Demo { Name = "Dogwei", age = 24, Birthday = DateTime.Parse("1996-01-08") };
+        var json = JsonFormatter.SerializeObject(obj);
+        var dest = JsonFormatter.DeserializeObject<Demo>(json);
+
+        Console.WriteLine(json);
+        // {"Age":24,"Birthday":"1996-01-08","Name":"Dogwei","Sex":null}
+    }
+}
+```
+##### (3) Advanced 进阶用法
+```C#
+    var datatable = ValueCopyer.ValueOf(new[] {
+        new { Id = 1, Guid = Guid.NewGuid(), Name = "Dogwei" },
+        new { Id = 2, Guid = Guid.NewGuid(), Name = "cxw" },
+        new { Id = 3, Guid = Guid.NewGuid(), Name = "sg" },
+        new { Id = 4, Guid = Guid.NewGuid(), Name = "eway" },
+    }).ReadDataTable();
+    
+    var jsonFormatter = new JsonFormatter(JsonFormatterOptions.Indented);
+    jsonFormatter.SetDataTableRWOptions(DataTableRWOptions.WriteToArrayFromBeginningSecondRows);
+    jsonFormatter.SetValueFormat<Guid>("N");
+
+    var json = jsonFormatter.Serialize(datatable);
+    var dest = JsonFormatter.DeserializeObject<DataTable>(json);
+
+    Console.WriteLine(json);
+```
+```C#
+    var dic = new Dictionary<string, object>
+    {
+        { "Id", 123 },
+        { "SystemNo", "9110" },
+        { "IMEI", 31415926535897UL }
+    };
+    
+    var jsonFormatter = new JsonFormatter();
+    jsonFormatter.SetValueInterface(new MyUInt64Interface());
+
+    var json = jsonFormatter.Serialize(dic);
+    var obj = new { Id = 0, SystemNo = "", IMEI = 0UL, SIMId = 999 };
+
+    jsonFormatter.DeserializeTo(json, RWHelper.CreateWriter(obj));
+
+    Console.WriteLine(json); // {"Id":123,"SystemNo":"9110","IMEI":"0x1C92972436D9"}
+
+    Console.WriteLine(obj.Id); // 123
+    Console.WriteLine(obj.IMEI); // 31415926535897
+    Console.WriteLine(obj.SIMId); // 999
+
+    public class MyUInt64Interface : IValueInterface<ulong>
+    {
+        public unsafe ulong ReadValue(IValueReader valueReader)
+        {
+            var str = valueReader.ReadString();
+
+            fixed (char* chars = str)
+            {
+                return NumberHelper.GetNumberInfo(chars, str.Length).ToUInt64(16);
+            }
+        }
+
+        public void WriteValue(IValueWriter valueWriter, ulong value)
+        {
+            valueWriter.WriteString($"0x{value:X}");
+        }
+    }
+```
+##### (4) Use Swifter.Json on AspNetCore 在 AspNetCore 上使用 Swifter.Json
+```C#
+First, reference the latest version of Swifter.Extensions.AspNetCore package on Nuget. And configure as follows.
+首先在 Nuget 上引用最新的 Swifter.Extensions.AspNetCore 包。并如下配置。
+
+
+    /** Configure */
+    public class Startup
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.ConfigureJsonFormatter();
+        }
+    }
+    
+In this way, when the client use the application/json headers request, it will use Swifter.Json serialize results and deserialize parameters.
+Or you can use the JsonResult to explicitly return Json content.
+这样配置后，当客户端使用 application/json 头请求时，就会使用 Swifter.Json 序列化返回值或反序列化参数。
+或者您可以使用 JsonResult 显式的返回 Json 内容。
+```
