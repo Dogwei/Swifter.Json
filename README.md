@@ -1,6 +1,9 @@
 # Swifter.Json
 #### A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.
 
+### If you want to use Swifter.Json, please download or install the latest version on [Nuget](https://www.nuget.org/packages/Swifter.Json).
+### 如果您想使用 Swifter.Json，请在 [Nuget](https://www.nuget.org/packages/Swifter.Json) 上下载或安装最新版本。
+
 ### Easy to use 简单使用
 ```C#
 public class Demo
