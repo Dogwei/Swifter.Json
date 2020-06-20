@@ -22,6 +22,14 @@ public class Demo
 bool, byte, sbyte, short, ushort, char, int, uint, long, ulong, IntPtr, UIntPtr,
 float, double, decimal, string, enum, DateTime, DateTimeOffset, TimeSpan, Guid,
 BigInteger, Complex, DBNull, Nullable<T>, Tuple<...>, ValueTuple<...>, Version,
+Uri, Assembly, Type, MemberInfo, MethodInfo, FieldInfo, PropertyInfo, ConstructorInfo,	
+EventInfo, Array, Multidimensional-Arrays, IList, IList<T>, ICollection, ICollection<T>,	
+IDictionary, IDictionary<TKey, TValue>, IEnumerable, IEnumerable<T>, DataSet, DataTable,	
+DataRow, DbRowObject, DbDataReader...	
+Other types are treated as object 其他类型当作对象处理	
+```	
+
+## Supported platforms and runtimes 支持的平台和运行时
 ```
 .NET Framework 2.0+, .NET Core 2.0+, .NET Standard 2.0+, MONO, MONO AOT, MONO FULL-AOT,
 Unity, Xamarin.iOS, Xamarin.Android
