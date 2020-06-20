@@ -189,7 +189,7 @@ public class Demo
         }
     }
 ```
-##### (4) Use Swifter.Json on AspNetCore 在 AspNetCore 上使用 Swifter.Json
+##### (4) Use Swifter.Json on AspNetCore. 在 AspNetCore 上使用 Swifter.Json
 ```C#
 First, reference the latest version of Swifter.Extensions.AspNetCore package on Nuget. And configure as follows.
 首先在 Nuget 上引用最新的 Swifter.Extensions.AspNetCore 包。并如下配置。
