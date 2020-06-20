@@ -72,8 +72,8 @@ Indented
     序列化时对 Json 进行缩进和换行，让 Json 变得好看。
     
 CamelCaseWhenSerialize
-    Convert name to camel case when serializing objects. ::: new { Name = "Dogwei" } -> { "name": "Dogwei" }
-    序列化对象时，将对象的名称转换为骆驼命名法。 
+    Convert the fields name in the object to camel case during serialization. 
+    序列化时，将对象中的字段名称转换为骆驼命名法。 ::: new { Name = "Dogwei" } -> { "name": "Dogwei" }
     
 IgnoreNull | IgnoreZero | IgnoreEmptyString
     Null, 0, "" values are ignored during serialization. 
@@ -91,13 +91,13 @@ For more features, please see Swifter.Json.JsonFormatterOptions enum.
 ```C#
         var list = new List<object>
         {
-            { new Dictionary<string, object>() { { "Id", 1}, { "Name", "Dogwei" } }},
-            { new Dictionary<string, object>() { { "Id", 2}, { "Name", "sg" } }},
-            { new Dictionary<string, object>() { { "Id", 3}, { "Name", "cxw" } }},
-            { new Dictionary<string, object>() { { "Id", 4}, { "Name", "eway" } }},
+            { new Dictionary<string, object>() { { "Id", 1 }, { "Name", "Dogwei" } }},
+            { new Dictionary<string, object>() { { "Id", 2 }, { "Name", "sg" } }},
+            { new Dictionary<string, object>() { { "Id", 3 }, { "Name", "cxw" } }},
+            { new Dictionary<string, object>() { { "Id", 4 }, { "Name", "eway" } }},
             {
                 new Dictionary<string, object>() { 
-                    { "Id", 5}, 
+                    { "Id", 5 }, 
                     { "Name", "Xinwei Chen" }, 
                     { "Data", new Dictionary<string, object> { { "Age", 21 }, { "Sex", "Male" } } }
                 }
@@ -156,6 +156,30 @@ public class Demo
     var dest = JsonFormatter.DeserializeObject<DataTable>(json);
 
     Console.WriteLine(json);
+    /*
+    [
+      {
+        "Guid": "1615527f673c499fac8de16847ad8783",
+        "Id": 1,
+        "Name": "Dogwei"
+      },
+      [
+        "a23d1980185749118796fb5db7fb57a1",
+        2,
+        "cxw"
+      ],
+      [
+        "9f76a802148d420da52716cf8a90b13d",
+        3,
+        "sg"
+      ],
+      [
+        "ba03739cd44a49fab7b3de2558f84ebe",
+        4,
+        "eway"
+      ]
+    ]
+    */
 ```
 ```C#
     var dic = new Dictionary<string, object>
@@ -201,7 +225,6 @@ public class Demo
 ```C#
 First, reference the latest version of Swifter.Extensions.AspNetCore package on Nuget. And configure as follows.
 首先在 Nuget 上引用最新的 Swifter.Extensions.AspNetCore 包，并如下配置。
-
 
     /** Configure */
     public class Startup
