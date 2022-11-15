@@ -7,8 +7,8 @@
 ### 1.6.0 Release Notes
 
 1. Fix known bugs.
-2. Remove dependency on Swiffer.Underlying component.
-3. Remove sensitive structures: MethodTable and FieldDesc.
+2. Remove dependency: Swiffer.Underlying.
+3. Remove sensitive structures: MethodTable and FieldDesc. (Fast reflection for static fields is no longer supported, but has no effect on json.)
 4. Supports serialization and deserialization of very large files.
 
 
