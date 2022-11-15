@@ -6,7 +6,7 @@ namespace Swifter.RW
 {
     internal sealed class DataInterfaceMaper : IValueInterfaceMaper
     {
-        public IValueInterface<T> TryMap<T>()
+        public IValueInterface<T>? TryMap<T>()
         {
             var type = typeof(T);
 
@@ -34,7 +34,7 @@ namespace Swifter.RW
 
             static IValueInterface<T> CreateInstance(Type type)
             {
-                return (IValueInterface<T>)Activator.CreateInstance(type);
+                return (IValueInterface<T>)Activator.CreateInstance(type)!;
             }
         }
     }

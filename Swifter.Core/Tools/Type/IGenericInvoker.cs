@@ -8,21 +8,7 @@
         /// <summary>
         /// 泛型执行方法。
         /// </summary>
-        /// <typeparam name="TKey">泛型</typeparam>
-        void Invoke<TKey>();
-    }
-
-    /// <summary>
-    /// 带返回值的泛型执行器。
-    /// </summary>
-    /// <typeparam name="TResult">返回值类型</typeparam>
-    public interface IGenericInvoker<TResult>
-    {
-        /// <summary>
-        /// 泛型执行方法。
-        /// </summary>
-        /// <typeparam name="TKey">泛型</typeparam>
-        /// <returns>返回一个泛型值</returns>
-        TResult Invoke<TKey>();
+        /// <typeparam name="T">泛型</typeparam>
+        void Invoke<T>();
     }
 }

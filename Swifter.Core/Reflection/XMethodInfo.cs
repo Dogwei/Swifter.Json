@@ -1,77 +1,55 @@
 ﻿using Swifter.Tools;
 using System;
-using System.Linq;
 using System.Reflection;
-
-using static Swifter.Reflection.ThrowHelpers;
 
 namespace Swifter.Reflection
 {
     /// <summary>
-    /// XMethodInfo 方法信息。
-    /// 此方法提供的动态调用都比 .Net 自带的要快很多。
+    /// 方法信息。
     /// </summary>
     public sealed class XMethodInfo
     {
         /// <summary>
-        /// 创建 XMethodInfo 方法信息。
+        /// 创建方法信息。
         /// </summary>
-        /// <param name="methodInfo">.Net 自带 MethodInfo 方法信息</param>
+        /// <param name="methodInfo">.Net 自带方法信息</param>
         /// <param name="flags">绑定标识</param>
-        /// <returns>返回一个 XMethodInfo 方法信息。</returns>
+        /// <returns>返回一个方法信息。</returns>
         public static XMethodInfo Create(MethodInfo methodInfo, XBindingFlags flags)
         {
             return new XMethodInfo(methodInfo, flags);
         }
 
-        readonly Type firstParameterType;
+        /// <summary>
+        /// 获取 .Net 自带的方法信息。
+        /// </summary>
+        public readonly MethodInfo MethodInfo;
 
-        XMethodInfo(MethodInfo methodInfo, XBindingFlags flags)
+        /// <summary>
+        /// 获取该方法的参数信息集合。
+        /// </summary>
+        public readonly XMethodParameters Parameters;
+
+        /// <summary>
+        /// 获取该方法的名称。
+        /// </summary>
+        public string Name => MethodInfo.Name;
+
+        XMethodInfo(MethodInfo methodInfo, XBindingFlags _)
         {
             MethodInfo = methodInfo;
-
-            Delegate = MethodHelper.CreateDelegate(methodInfo);
-
-            firstParameterType = MethodInfo.IsStatic
-                ? MethodInfo.GetParameters().FirstOrDefault()?.ParameterType
-                : MethodInfo.DeclaringType;
+            Parameters = new(methodInfo.GetParameters());
         }
 
         /// <summary>
-        /// 获取 .Net 自带的 MethodInfo 方法信息。
+        /// 执行此方法。
         /// </summary>
-        public MethodInfo MethodInfo { get; private set; }
-
-        /// <summary>
-        /// 获取该方法的委托。
-        /// 该委托比普通的委托占用更大的内存，但动态执行的效率更高。
-        /// </summary>
-        public Delegate Delegate { get; private set; }
-
-        /// <summary>
-        /// 以实例方式动态执行方法。
-        /// </summary>
-        /// <param name="obj">调用实例</param>
+        /// <param name="obj">调用实例；如果是静态方法，则置为 <see langword="null"/></param>
         /// <param name="parameters">方法的参数</param>
-        /// <returns>返回该方法的返回值。如果返回值类型为 Void，则返回 Null</returns>
-        public object Invoke(object obj, object[] parameters)
+        /// <returns>返回返回值。如果返回值类型为 <see cref="void"/>，则返回 <see langword="null"/></returns>
+        public unsafe object? Invoke(object? obj, object?[]? parameters)
         {
-            if (firstParameterType is null || !firstParameterType.IsInstanceOfType(obj))
-            {
-                ThrowTargetException(nameof(obj), firstParameterType);
-            }
-
-            return Delegate.DynamicInvoke(ArrayHelper.Merge(obj, parameters));
-        }
-
-        /// <summary>
-        /// 以静态方式动态执行方法。
-        /// </summary>
-        /// <param name="parameters">方法的参数</param>
-        /// <returns>返回该方法的返回值。如果返回值类型为 Void，则返回 Null</returns>
-        public object Invoke(object[] parameters)
-        {
-            return Delegate.DynamicInvoke(parameters);
+            return MethodInfo.Invoke(obj, parameters);
         }
     }
 }

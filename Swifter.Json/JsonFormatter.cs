@@ -2,9 +2,11 @@
 using Swifter.RW;
 using Swifter.Tools;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 
 namespace Swifter.Json
 {
@@ -12,9 +14,10 @@ namespace Swifter.Json
     /// JSON 文档格式化器。
     /// 此类所有的静态方法和实例方法都是线程安全的。
     /// </summary>
-    public sealed unsafe partial class JsonFormatter : IBinaryFormatter, ITextFormatter, ITargetedBind
+    public sealed unsafe partial class JsonFormatter : IBinaryFormatter, ITextFormatter, ITargetableValueRWSource
     {
-        const JsonFormatterOptions ComplexOptions =
+#if !NO_OPTIONS
+        internal const JsonFormatterOptions ComplexOptions =
             JsonFormatterOptions.IgnoreEmptyString |
             JsonFormatterOptions.IgnoreNull |
             JsonFormatterOptions.IgnoreZero |
@@ -22,23 +25,23 @@ namespace Swifter.Json
             JsonFormatterOptions.ArrayOnFilter |
             JsonFormatterOptions.Indented;
 
-        const JsonFormatterOptions ReferenceOptions =
+        internal const JsonFormatterOptions ReferenceOptions =
             JsonFormatterOptions.LoopReferencingException |
             JsonFormatterOptions.LoopReferencingNull |
             JsonFormatterOptions.MultiReferencingNull |
             JsonFormatterOptions.MultiReferencingReference;
 
-        const JsonFormatterOptions ModeOptions =
+        internal const JsonFormatterOptions ModeOptions =
             JsonFormatterOptions.MultiReferencingReference |
             JsonFormatterOptions.DeflateDeserialize |
             JsonFormatterOptions.StandardDeserialize |
             JsonFormatterOptions.VerifiedDeserialize;
+#endif
 
         /// <summary>
         /// JsonFormatter 的全局针对目标的 Id。
         /// </summary>
         public const long GlobalTargetedId = unchecked((long)0x96F9A1AB7FE15EE6);
-
 
         /// <summary>
         /// 获取 JsonFormatter 使用的全局缓存池。
@@ -46,11 +49,30 @@ namespace Swifter.Json
         public static readonly HGlobalCachePool<char> CharsPool = HGlobalCacheExtensions.CharsPool;
 
         /// <summary>
+        /// 获取或设置默认对象读写接口。
+        /// 设置此值可以改变反序列化时的默认对象类型。
+        /// </summary>
+        public static ValueInterface DefaultObjectValueInterface = ValueInterface<Dictionary<string, object>>.Instance;
+
+        /// <summary>
+        /// 获取或设置默认数组读写接口。
+        /// 设置此值可以改变反序列化时的默认数组类型。
+        /// </summary>
+        public static ValueInterface DefaultArrayValueInterface = ValueInterface<List<object>>.Instance;
+
+#if !NO_OPTIONS
+        /// <summary>
         /// 默认最大结构深度。
         /// 可以通过枚举 <see cref="JsonFormatterOptions.OutOfDepthException"/> 来配置序列化或反序列化时 Json 结构深度超出该值时选择抛出异常还是不解析超出部分。
         /// </summary>
+#else
+        /// <summary>
+        /// 默认最大结构深度。
+        /// </summary>
+#endif
         public const int DefaultMaxDepth = 20;
 
+#if !NO_OPTIONS
         /// <summary>
         /// 默认缩进符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
         /// </summary>
@@ -59,18 +81,27 @@ namespace Swifter.Json
         /// <summary>
         /// 默认换行符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
         /// </summary>
-        public const string DefaultLineCharsBreak = "\n";
+        public const string DefaultLineBreakChars = "\n";
 
         /// <summary>
         /// 默认 Key 与 Value 之间的分隔符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
         /// </summary>
         public const string DefaultMiddleChars = " ";
+#endif
 
+#if !NO_OPTIONS
         /// <summary>
         /// 读取或设置最大结构深度。
         /// 可以通过枚举 <see cref="JsonFormatterOptions.OutOfDepthException"/> 来配置序列化或反序列化时 Json 结构深度超出该值时选择抛出异常还是不解析超出部分。
         /// </summary>
+#else
+        /// <summary>
+        /// 读取或设置最大结构深度。
+        /// </summary>
+#endif
         public int MaxDepth { get; set; } = DefaultMaxDepth;
+
+#if !NO_OPTIONS
 
         /// <summary>
         /// 读取或设置缩进符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
@@ -80,25 +111,37 @@ namespace Swifter.Json
         /// <summary>
         /// 读取或设置换行符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
         /// </summary>
-        public string LineBreakChars { get; set; } = DefaultLineCharsBreak;
+        public string LineBreakChars { get; set; } = DefaultLineBreakChars;
 
         /// <summary>
-        /// 读取或设置默认 Key 与 Value 之间的分隔符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
+        /// 读取或设置 Key 与 Value 之间的分隔符，仅在枚举 JsonFormatterOptions 配置为 Indented (缩进美化) 时有效。
         /// </summary>
         public string MiddleChars { get; set; } = DefaultMiddleChars;
 
+#endif
         /// <summary>
-        /// JSON 格式化器配置项。
+        /// 获取或设置对象读写接口。
         /// </summary>
-        public JsonFormatterOptions Options { get; set; }
+        public ValueInterface? ObjectValueInterface;
+
+        /// <summary>
+        /// 获取或设置数组读写接口。
+        /// </summary>
+        public ValueInterface? ArrayValueInterface;
 
         /// <summary>
         /// 获取或设置字符编码。
         /// </summary>
         public Encoding Encoding { get; set; }
 
-        JsonEventHandler<JsonFilteringEventArgs<string>> objectFiltering;
-        JsonEventHandler<JsonFilteringEventArgs<int>> arrayFiltering;
+#if !NO_OPTIONS
+        /// <summary>
+        /// JSON 格式化器配置项。
+        /// </summary>
+        public JsonFormatterOptions Options { get; set; }
+
+        JsonEventHandler<JsonFilteringEventArgs<string>>? objectFiltering;
+        JsonEventHandler<JsonFilteringEventArgs<int>>? arrayFiltering;
 
         /// <summary>
         /// 当序列化对象字段时触发。
@@ -107,16 +150,33 @@ namespace Swifter.Json
         {
             add
             {
+
                 Options |= JsonFormatterOptions.OnFilter;
 
-                objectFiltering += value;
+            Loop:
+
+                var comparand = Volatile.Read(ref objectFiltering);
+
+                if (!ReferenceEquals(Interlocked.CompareExchange(ref objectFiltering, comparand + value, comparand), comparand))
+                {
+                    goto Loop;
+                }
             }
 
             remove
             {
-                objectFiltering -= value;
 
-                if (objectFiltering is null)
+            Loop:
+
+                var comparand = Volatile.Read(ref objectFiltering);
+                var newValue = comparand - value;
+
+                if (!ReferenceEquals(Interlocked.CompareExchange(ref objectFiltering, newValue, comparand), comparand))
+                {
+                    goto Loop;
+                }
+
+                if (newValue is null)
                 {
                     Options &= ~JsonFormatterOptions.OnFilter;
                 }
@@ -146,7 +206,7 @@ namespace Swifter.Json
             }
         }
 
-        internal bool OnObjectFilter(IJsonWriter jsonWriter, ValueFilterInfo<string> valueInfo, bool result)
+        internal bool OnObjectFilter(JsonSerializer jsonWriter, ValueFilterInfo<string> valueInfo, bool result)
         {
             if (objectFiltering is null)
             {
@@ -161,7 +221,7 @@ namespace Swifter.Json
         }
 
 
-        internal bool OnArrayFilter(IJsonWriter jsonWriter, ValueFilterInfo<int> valueInfo, bool result)
+        internal bool OnArrayFilter(JsonSerializer jsonWriter, ValueFilterInfo<int> valueInfo, bool result)
         {
             if (arrayFiltering is null)
             {
@@ -174,12 +234,10 @@ namespace Swifter.Json
 
             return args.Result;
         }
+        
+#endif
 
-        /// <summary>
-        /// 作为自定义值读写接口的 Id。
-        /// </summary>
-        internal long targeted_id;
-
+#if !NO_OPTIONS
         /// <summary>
         /// 初始化具有指定编码和指定配置项的 Json 格式化器。
         /// </summary>
@@ -198,19 +256,25 @@ namespace Swifter.Json
         {
 
         }
+#else
+        /// <summary>
+        /// 初始化具有指定编码和指定配置项的 Json 格式化器。
+        /// </summary>
+        /// <param name="encoding">指定编码</param>
+        public JsonFormatter(Encoding encoding)
+        {
+            Encoding = encoding ?? throw new ArgumentNullException(nameof(encoding));
+        }
 
         /// <summary>
-        /// 释放对象时移除读写接口实例。
+        /// 初始化默认编码 (UTF-8) 和指定配置项的 Json 格式化器。
         /// </summary>
-        ~JsonFormatter()
+        public JsonFormatter() : this(Encoding.UTF8)
         {
-            if (targeted_id != 0)
-            {
-                ValueInterface.RemoveTargetedInterface(this);
 
-                targeted_id = 0;
-            }
         }
+#endif
+
 
         /// <summary>
         /// 将指定类型的实例序列化到 Json 缓存中。
@@ -219,9 +283,9 @@ namespace Swifter.Json
         /// <param name="value">指定类型的实例</param>
         /// <param name="hGCache">Json 缓存</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void SerializeObject<T>(T value, HGlobalCache<char> hGCache)
+        public static void SerializeObject<T>(T? value, HGlobalCache<char> hGCache)
         {
-            var jsonSerializer = new JsonSerializer<JsonSerializeModes.SimpleMode>(hGCache, DefaultMaxDepth);
+            var jsonSerializer = new JsonSerializer(hGCache);
 
             ValueInterface<T>.WriteValue(jsonSerializer, value);
 
@@ -235,308 +299,1235 @@ namespace Swifter.Json
         /// <param name="value">指定类型的实例</param>
 		/// <param name="textWriter">Json 写入器</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void SerializeObject<T>(T value, TextWriter textWriter)
+        public static void SerializeObject<T>(T? value, TextWriter textWriter)
         {
             var hGChars = CharsPool.Rent();
 
-            var jsonSerializer = new JsonSerializer<JsonSerializeModes.SimpleMode>(hGChars, DefaultMaxDepth, textWriter);
+            var jsonSerializer = new JsonSerializer(
+                new JsonSegmentedContent(textWriter, hGChars, false)
+                );
 
-            ValueInterface<T>.WriteValue(jsonSerializer, value);
+            ValueInterface.WriteValue(jsonSerializer, value);
 
             jsonSerializer.Flush();
-
-            hGChars.WriteTo(textWriter);
 
             CharsPool.Return(hGChars);
         }
 
+        /// <summary>
+        /// 将指定类型的实例序列化为 Json 字符串。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static void SerializeObject<T, TMode>(T value, HGlobalCache<char> hGCache, JsonFormatterOptions options) where TMode : struct
+        public static string SerializeObject<T>(T? value)
         {
-            var jsonSerializer = new JsonSerializer<TMode>(hGCache, DefaultMaxDepth, options);
+            var hGChars = CharsPool.Rent();
 
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-            {
-                jsonSerializer.References = new JsonReferenceWriter();
-            }
+            SerializeObject(value, hGChars);
 
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode) || typeof(TMode) == typeof(JsonSerializeModes.ComplexMode))
-            {
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.IndentedChars = DefaultIndentedChars;
-                    jsonSerializer.LineBreakChars = DefaultLineCharsBreak;
-                    jsonSerializer.MiddleChars = DefaultMiddleChars;
-                }
-            }
+            var ret = hGChars.ToStringEx();
 
-            ValueInterface<T>.WriteValue(jsonSerializer, value);
+            CharsPool.Return(hGChars);
 
-            jsonSerializer.Flush();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static void SerializeObject<T, TMode>(T value, HGlobalCache<char> hGCache, TextWriter textWriter, JsonFormatterOptions options) where TMode : struct
-        {
-            var jsonSerializer = new JsonSerializer<TMode>(hGCache, DefaultMaxDepth, textWriter, options);
-
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-            {
-                jsonSerializer.References = new JsonReferenceWriter();
-            }
-
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode) || typeof(TMode) == typeof(JsonSerializeModes.ComplexMode))
-            {
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.IndentedChars = DefaultIndentedChars;
-                    jsonSerializer.LineBreakChars = DefaultLineCharsBreak;
-                    jsonSerializer.MiddleChars = DefaultMiddleChars;
-                }
-            }
-
-            ValueInterface<T>.WriteValue(jsonSerializer, value);
-
-            jsonSerializer.Flush();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        void Serialize<T, TMode>(T value, HGlobalCache<char> hGCache, JsonFormatterOptions options) where TMode : struct
-        {
-            var jsonSerializer = new JsonSerializer<TMode>(this, hGCache, MaxDepth, options);
-
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-            {
-                jsonSerializer.References = new JsonReferenceWriter();
-            }
-
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode) || typeof(TMode) == typeof(JsonSerializeModes.ComplexMode))
-            {
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.IndentedChars = IndentedChars;
-                    jsonSerializer.LineBreakChars = LineBreakChars;
-                    jsonSerializer.MiddleChars = MiddleChars;
-                }
-            }
-
-            ValueInterface<T>.WriteValue(jsonSerializer, value);
-
-
-            jsonSerializer.Flush();
-        }
-
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        void Serialize<T, TMode>(T value, HGlobalCache<char> hGCache, TextWriter textWriter, JsonFormatterOptions options) where TMode : struct
-        {
-            var jsonSerializer = new JsonSerializer<TMode>(this, hGCache, MaxDepth, textWriter, options);
-
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode))
-            {
-                jsonSerializer.References = new JsonReferenceWriter();
-            }
-
-            if (typeof(TMode) == typeof(JsonSerializeModes.ReferenceMode) || typeof(TMode) == typeof(JsonSerializeModes.ComplexMode))
-            {
-                if ((options & JsonFormatterOptions.Indented) != 0)
-                {
-                    jsonSerializer.IndentedChars = IndentedChars;
-                    jsonSerializer.LineBreakChars = LineBreakChars;
-                    jsonSerializer.MiddleChars = MiddleChars;
-                }
-            }
-
-            ValueInterface<T>.WriteValue(jsonSerializer, value);
-
-
-            jsonSerializer.Flush();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static T DeserializeObject<T>(char* chars, int length)
-        {
-            return ValueInterface<T>.ReadValue(new JsonDeserializer<JsonDeserializeModes.Verified>(chars, length, DefaultMaxDepth));
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static object DeserializeObject(Type type, char* chars, int length)
-        {
-            return ValueInterface.GetInterface(type).Read(new JsonDeserializer<JsonDeserializeModes.Verified>(chars, length, DefaultMaxDepth));
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static T DeserializeObject<T>(char* chars, int length, JsonFormatterOptions options)
-        {
-            return (options & ModeOptions) switch
-            {
-                JsonFormatterOptions.MultiReferencingReference => DeserializeObject<T, JsonDeserializeModes.Reference>(chars, length, options),
-                JsonFormatterOptions.DeflateDeserialize => DeserializeObject<T, JsonDeserializeModes.Deflate>(chars, length, options),
-                JsonFormatterOptions.StandardDeserialize => DeserializeObject<T, JsonDeserializeModes.Standard>(chars, length, options),
-                _ => DeserializeObject<T, JsonDeserializeModes.Verified>(chars, length, options),
-            };
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static object DeserializeObject(Type type, char* chars, int length, JsonFormatterOptions options)
-        {
-            return (options & ModeOptions) switch
-            {
-                JsonFormatterOptions.MultiReferencingReference => DeserializeObject<JsonDeserializeModes.Reference>(type, chars, length, options),
-                JsonFormatterOptions.DeflateDeserialize => DeserializeObject<JsonDeserializeModes.Deflate>(type, chars, length, options),
-                JsonFormatterOptions.StandardDeserialize => DeserializeObject<JsonDeserializeModes.Standard>(type, chars, length, options),
-                _ => DeserializeObject<JsonDeserializeModes.Verified>(type, chars, length, options),
-            };
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static T DeserializeObject<T, TMode>(char* chars, int length, JsonFormatterOptions options) where TMode : struct
-        {
-            return ValueInterface<T>.ReadValue(new JsonDeserializer<TMode>(chars, length, DefaultMaxDepth, options));
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        static object DeserializeObject<TMode>(Type type, char* chars, int length, JsonFormatterOptions options) where TMode : struct
-        {
-            return ValueInterface.GetInterface(type).Read(new JsonDeserializer<TMode>(chars, length, DefaultMaxDepth, options));
+            return ret;
         }
 
         /// <summary>
-        /// 创建 JSON 文档读取器。注意：在读取器中，每个值都必须读且只读一次！
+        /// 将指定类型的实例序列化为 Json 字节数组。
         /// </summary>
-        /// <param name="chars">JSON 字符串</param>
-        /// <param name="length">JSON 字符串长度</param>
-        /// <returns>返回一个 JSON 文档读取器</returns>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="encoding">指定编码</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IJsonReader CreateJsonReader(char* chars, int length)
+        public static byte[] SerializeObject<T>(T? value, Encoding encoding)
         {
-            return new JsonDeserializer<JsonDeserializeModes.Verified>(chars, length, DefaultMaxDepth);
+            var hGChars = CharsPool.Rent();
+
+            SerializeObject(value, hGChars);
+
+            var ret = hGChars.ToBytes(encoding);
+
+            CharsPool.Return(hGChars);
+
+            return ret;
         }
 
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 字节缓存中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="encoding">指定编码</param>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        T Deserialize<T>(char* chars, int length)
+        public static void SerializeObject<T>(T? value, HGlobalCache<byte> hGCache, Encoding encoding)
         {
-            var options = Options;
+            var hGChars = CharsPool.Rent();
 
-            return (options & ModeOptions) switch
+            SerializeObject(value, hGChars);
+
+            hGCache.ReadFrom(hGChars, encoding);
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 输出流中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="stream">Json 输出流</param>
+        /// <param name="encoding">指定编码</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void SerializeObject<T>(T? value, Stream stream, Encoding encoding)
+        {
+            var streamWriter = new StreamWriter(stream, encoding);
+
+            SerializeObject(value, streamWriter);
+
+            streamWriter.Flush();
+        }
+
+
+        /// <summary>
+        /// 将指定类型的实例序列化为 Json 字符串。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public string Serialize<T>(T? value)
+        {
+            var hGChars = CharsPool.Rent();
+
+            Serialize(value, hGChars);
+
+            var ret = hGChars.ToStringEx();
+
+            CharsPool.Return(hGChars);
+
+            return ret;
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 缓存中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="hGCache">Json 缓存</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Serialize<T>(T? value, HGlobalCache<char> hGCache)
+        {
+            var jsonSerializer = new JsonSerializer(this, hGCache);
+
+            ValueInterface.WriteValue(jsonSerializer, value);
+
+            jsonSerializer.Flush();
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 写入器中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="textWriter">Json 写入器</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Serialize<T>(T? value, TextWriter textWriter)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var jsonSerializer = new JsonSerializer(this, new JsonSegmentedContent(textWriter, hGChars, false));
+
+            ValueInterface.WriteValue(jsonSerializer, value);
+
+            jsonSerializer.Flush();
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 字节数组中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="bytes">Json 字节数组</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Serialize<T>(T? value, out byte[] bytes)
+        {
+            var hGChars = CharsPool.Rent();
+
+            Serialize(value, hGChars);
+
+            bytes = hGChars.ToBytes(Encoding);
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 字节缓存中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="hGCache">Json 字节缓存</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Serialize<T>(T? value, HGlobalCache<byte> hGCache)
+        {
+            var hGChars = CharsPool.Rent();
+
+            Serialize(value, hGChars);
+
+            hGCache.ReadFrom(hGChars, Encoding);
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 输出流中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="stream">Json 输出流</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Serialize<T>(T? value, Stream stream)
+        {
+            var streamWriter = new StreamWriter(stream, Encoding);
+
+            Serialize(value, streamWriter);
+
+            streamWriter.Flush();
+        }
+
+        /// <summary>
+        /// 将 Json 字符串反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="text">Json 字符串</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe T? DeserializeObject<T>(string text)
+        {
+            fixed (char* chars = text)
             {
-                JsonFormatterOptions.MultiReferencingReference => Deserialize<T, JsonDeserializeModes.Reference>(chars, length, options),
-                JsonFormatterOptions.DeflateDeserialize => Deserialize<T, JsonDeserializeModes.Deflate>(chars, length, options),
-                JsonFormatterOptions.StandardDeserialize => Deserialize<T, JsonDeserializeModes.Standard>(chars, length, options),
-                _ => Deserialize<T, JsonDeserializeModes.Verified>(chars, length, options),
-            };
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        object Deserialize(Type type, char* chars, int length)
-        {
-            var options = Options;
-
-            return (options & ModeOptions) switch
-            {
-                JsonFormatterOptions.MultiReferencingReference => Deserialize<JsonDeserializeModes.Reference>(type, chars, length, options),
-                JsonFormatterOptions.DeflateDeserialize => Deserialize<JsonDeserializeModes.Deflate>(type, chars, length, options),
-                JsonFormatterOptions.StandardDeserialize => Deserialize<JsonDeserializeModes.Standard>(type, chars, length, options),
-                _ => Deserialize<JsonDeserializeModes.Verified>(type, chars, length, options),
-            };
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        T Deserialize<T, TMode>(char* chars, int length, JsonFormatterOptions options) where TMode : struct
-        {
-            return ValueInterface<T>.ReadValue(new JsonDeserializer<TMode>(this, chars, length, MaxDepth, options));
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        object Deserialize<TMode>(Type type, char* chars, int length, JsonFormatterOptions options) where TMode : struct
-        {
-            return ValueInterface.GetInterface(type).Read(new JsonDeserializer<TMode>(this, chars, length, MaxDepth, options));
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        void DeserializeTo<TMode>(char* chars, int length, JsonFormatterOptions options, IDataWriter dataWriter) where TMode : struct
-        {
-            var jsonDeserializer = new JsonDeserializer<TMode>(this, chars, length, MaxDepth, options);
-
-            switch (jsonDeserializer.GetToken())
-            {
-                case JsonToken.Object:
-                    if (dataWriter is IDataWriter<string> && dataWriter is IDataWriter<Ps<char>> fastWriter)
-                    {
-                        jsonDeserializer.FastReadObject(fastWriter);
-                    }
-                    else
-                    {
-                        jsonDeserializer.SlowReadObject(dataWriter.As<string>());
-                    }
-                    break;
-                case JsonToken.Array:
-                    jsonDeserializer.SlowReadArray(dataWriter.As<int>());
-                    break;
-                default:
-                    dataWriter.Content = XConvert.Cast(jsonDeserializer.DirectRead(), dataWriter.ContentType);
-                    break;
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        void DeserializeTo(char* chars, int length, IDataWriter dataWriter)
-        {
-            var options = Options;
-
-            switch (options & ModeOptions)
-            {
-                case JsonFormatterOptions.MultiReferencingReference:
-                    DeserializeTo<JsonDeserializeModes.Reference>(chars, length, options, dataWriter);
-                    break;
-                case JsonFormatterOptions.DeflateDeserialize:
-                    DeserializeTo<JsonDeserializeModes.Deflate>(chars, length, options, dataWriter);
-                    break;
-                case JsonFormatterOptions.StandardDeserialize:
-                    DeserializeTo<JsonDeserializeModes.Standard>(chars, length, options, dataWriter);
-                    break;
-                default:
-                    DeserializeTo<JsonDeserializeModes.Verified>(chars, length, options, dataWriter);
-                    break;
+                return ValueInterface<T>.ReadValue(
+                    new JsonDeserializer(chars, text.Length)
+                    );
             }
         }
 
         /// <summary>
-        /// 创建 JSON 文档读取器。注意：在读取器中，每个值都必须读且只读一次！
+        /// 将 Json 字符串反序列化为指定类型的实例。
         /// </summary>
-        /// <param name="hGCache">JSON 内容缓存</param>
-        /// <returns>返回一个 JSON 文档读取器</returns>
+        /// <param name="text">Json 字符串</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IJsonReader CreateJsonReader(HGlobalCache<char> hGCache)
+        public static unsafe object? DeserializeObject(string text, Type type)
         {
-            return CreateJsonReader(hGCache.First, hGCache.Count);
-        }
-
-        /// <summary>
-        /// 创建 JSON 文档写入器。注意：在写入器中请遵守规则写入，否则生成的 JSON 将不正常。
-        /// </summary>
-        /// <returns>返回一个 JSON 文档写入器</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IJsonWriter CreateJsonWriter(HGlobalCache<char> hGCache)
-        {
-            return new JsonSerializer<JsonSerializeModes.SimpleMode>(hGCache, DefaultMaxDepth);
-        }
-
-        long ITargetedBind.TargetedId => targeted_id;
-
-        void ITargetedBind.MakeTargetedId()
-        {
-            if (targeted_id == 0)
+            fixed (char* chars = text)
             {
-                targeted_id = (long)Underlying.AsPointer(ref Underlying.AsRef(this));
+                return ValueInterface.ReadValue(
+                    new JsonDeserializer(chars, text.Length),
+                    type
+                    );
             }
         }
 
+        /// <summary>
+        /// 将 Json 缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(HGlobalCache<char> hGCache, Type type)
+        {
+            return ValueInterface.ReadValue(
+                new JsonDeserializer(hGCache.First, hGCache.Count),
+                type
+                );
+        }
+
+        /// <summary>
+        /// 将 Json 缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(HGlobalCache<char> hGCache)
+        {
+            return ValueInterface<T>.ReadValue(
+                new JsonDeserializer(hGCache.First, hGCache.Count)
+                );
+        }
+
+        /// <summary>
+        /// 将 Json 读取器反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="textReader">Json 读取器</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(TextReader textReader)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var value = ValueInterface<T>.ReadValue(
+                new JsonDeserializer(
+                    JsonSegmentedContent.CreateAndInitialize(textReader, hGChars)
+                    )
+                );
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 读取器反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="textReader">Json 读取器</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(TextReader textReader, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var value = ValueInterface.ReadValue(
+                new JsonDeserializer(
+                    JsonSegmentedContent.CreateAndInitialize(textReader, hGChars)
+                    ),
+                type
+                );
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(ArraySegment<byte> bytes, Encoding encoding, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject(hGChars, type);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(byte[] bytes, Encoding encoding, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject(hGChars, type);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字节缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(HGlobalCache<byte> hGCache, Encoding encoding, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(hGCache, encoding);
+
+            var value = DeserializeObject(hGChars, type);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 输入流反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="stream">Json 输入流</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(Stream stream, Encoding encoding, Type type)
+        {
+            return DeserializeObject(new StreamReader(stream, encoding), type);
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(ArraySegment<byte> bytes, Encoding encoding)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject<T>(hGChars);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(byte[] bytes, Encoding encoding)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject<T>(hGChars);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字节缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(HGlobalCache<byte> hGCache, Encoding encoding)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(hGCache, encoding);
+
+            var value = DeserializeObject<T>(hGChars);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 输入流反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="stream">Json 输入流</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(Stream stream, Encoding encoding)
+        {
+            return DeserializeObject<T>(new StreamReader(stream, encoding));
+        }
+
+        /// <summary>
+        /// 将 Json 缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? Deserialize(HGlobalCache<char> hGCache, Type type)
+        {
+            return ValueInterface.ReadValue(
+                new JsonDeserializer(this, hGCache.First, hGCache.Count),
+                type
+                );
+
+        }
+
+        /// <summary>
+        /// 将 Json 读取器反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="textReader">Json 读取器</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? Deserialize(TextReader textReader, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var value = ValueInterface.ReadValue(
+                new JsonDeserializer(
+                    this,
+                    JsonSegmentedContent.CreateAndInitialize(textReader, hGChars)
+                    ),
+                type
+                );
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字符串反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="text">Json 字符串</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T? Deserialize<T>(string text)
+        {
+            fixed (char* chars = text)
+            {
+                return ValueInterface<T>.ReadValue(
+                    new JsonDeserializer(this, chars, text.Length)
+                    );
+            }
+        }
+
+        /// <summary>
+        /// 将 Json 缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T? Deserialize<T>(HGlobalCache<char> hGCache)
+        {
+            return ValueInterface<T>.ReadValue(
+                new JsonDeserializer(this, hGCache.First, hGCache.Count)
+                );
+
+        }
+
+        /// <summary>
+        /// 将 Json 读取器反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="textReader">Json 读取器</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T? Deserialize<T>(TextReader textReader)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var value = ValueInterface<T>.ReadValue(
+                new JsonDeserializer(
+                    this, 
+                    JsonSegmentedContent.CreateAndInitialize(textReader, hGChars)
+                    )
+                );
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字符串反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="text">Json 字符串</param>
+		/// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? Deserialize(string text, Type type)
+        {
+            fixed (char* chars = text)
+            {
+                return ValueInterface.ReadValue(
+                    new JsonDeserializer(this, chars, text.Length),
+                    type
+                    );
+            }
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+		/// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? Deserialize(ArraySegment<byte> bytes, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, Encoding);
+
+            var value = Deserialize(hGChars, type);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? Deserialize(byte[] bytes, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, Encoding);
+
+            var value = Deserialize(hGChars, type);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? Deserialize(HGlobalCache<byte> hGCache, Type type)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(hGCache, Encoding);
+
+            var value = Deserialize(hGChars, type);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 输入流反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="stream">Json 输入流</param>
+        /// <param name="type">指定类型</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? Deserialize(Stream stream, Type type)
+        {
+            return Deserialize(new StreamReader(stream, Encoding), type);
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T? Deserialize<T>(ArraySegment<byte> bytes)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, Encoding);
+
+            var value = Deserialize<T>(hGChars);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T? Deserialize<T>(byte[] bytes)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, Encoding);
+
+            var value = Deserialize<T>(hGChars);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T? Deserialize<T>(HGlobalCache<byte> hGCache)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(hGCache, Encoding);
+
+            var value = Deserialize<T>(hGChars);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 输入流反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="stream">Json 输入流</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T? Deserialize<T>(Stream stream)
+        {
+            return Deserialize<T>(new StreamReader(stream, Encoding));
+
+        }
+
+        /// <summary>
+        /// 将 Json 字符串反序列化到指定的数据写入器中。
+        /// </summary>
+        /// <param name="text">Json 字符串</param>
+        /// <param name="dataWriter">数据写入器</param>
+        public void DeserializeTo(string text, IDataWriter dataWriter)
+        {
+            fixed (char* chars = text)
+            {
+                new JsonDeserializer(this, chars, text.Length)
+                    .DeserializeTo(dataWriter);
+            }
+        }
+
+        /// <summary>
+        /// 将 Json 缓存反序列化到指定的数据写入器中。
+        /// </summary>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <param name="dataWriter">数据写入器</param>
+        public void DeserializeTo(HGlobalCache<char> hGCache, IDataWriter dataWriter)
+        {
+            new JsonDeserializer(this, hGCache.First, hGCache.Count)
+                .DeserializeTo(dataWriter);
+        }
+
+        /// <summary>
+        /// 将 Json 读取器反序列化到指定的数据写入器中。
+        /// </summary>
+        /// <param name="textReader">Json 读取器</param>
+        /// <param name="dataWriter">数据写入器</param>
+        public void DeserializeTo(TextReader textReader, IDataWriter dataWriter)
+        {
+            var hGChars = CharsPool.Rent();
+
+            new JsonDeserializer(
+                this,
+                JsonSegmentedContent.CreateAndInitialize(textReader, hGChars)
+                )
+                .DeserializeTo(dataWriter);
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化到指定的数据写入器中。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="dataWriter">数据写入器</param>
+        public void DeserializeTo(ArraySegment<byte> bytes, IDataWriter dataWriter)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, Encoding);
+
+            DeserializeTo(hGChars, dataWriter);
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将 Json 字节缓存反序列化到指定的数据写入器中。
+        /// </summary>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="dataWriter">数据写入器</param>
+        public void DeserializeTo(HGlobalCache<byte> hGCache, IDataWriter dataWriter)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(hGCache, Encoding);
+
+            DeserializeTo(hGChars, dataWriter);
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将 Json 输入流反序列化到指定的数据写入器中。
+        /// </summary>
+        /// <param name="stream">Json 输入流</param>
+        /// <param name="dataWriter">数据写入器</param>
+        public void DeserializeTo(Stream stream, IDataWriter dataWriter)
+        {
+            DeserializeTo(new StreamReader(stream, Encoding), dataWriter);
+        }
+
+#if !NO_OPTIONS
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 写入器中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="textWriter">Json 写入器</param>
+        /// <param name="options">指定配置项</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void SerializeObject<T>(T? value, TextWriter textWriter, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var jsonSerializer = new JsonSerializer(
+                new JsonSegmentedContent(textWriter, hGChars, false),
+                options
+                );
+
+            ValueInterface.WriteValue(jsonSerializer, value);
+
+            jsonSerializer.Flush();
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化为 Json 字符串。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="options">指定配置项</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static string SerializeObject<T>(T? value, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            SerializeObject(value, hGChars, options);
+
+            var ret = hGChars.ToStringEx();
+
+            CharsPool.Return(hGChars);
+
+            return ret;
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 缓存中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <param name="options">指定配置项</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void SerializeObject<T>(T? value, HGlobalCache<char> hGCache, JsonFormatterOptions options)
+        {
+            var jsonSerializer = new JsonSerializer(hGCache, options);
+
+            ValueInterface.WriteValue(jsonSerializer, value);
+
+            jsonSerializer.Flush();
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化为 Json 字节数组。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="options">指定配置项</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static byte[] SerializeObject<T>(T? value, Encoding encoding, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            SerializeObject(value, hGChars, options);
+
+            var ret = hGChars.ToBytes(encoding);
+
+            CharsPool.Return(hGChars);
+
+            return ret;
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 字节缓存中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="options">指定配置项</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void SerializeObject<T>(T? value, HGlobalCache<byte> hGCache, Encoding encoding, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            SerializeObject(value, hGChars, options);
+
+            hGCache.ReadFrom(hGChars, encoding);
+
+            CharsPool.Return(hGChars);
+        }
+
+        /// <summary>
+        /// 将指定类型的实例序列化到 Json 输出流中。
+        /// </summary>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="value">指定类型的实例</param>
+        /// <param name="stream">Json 输出流</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="options">指定配置项</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void SerializeObject<T>(T? value, Stream stream, Encoding encoding, JsonFormatterOptions options)
+        {
+            var streamWriter = new StreamWriter(stream, encoding);
+
+            SerializeObject(value, streamWriter, options);
+
+            streamWriter.Flush();
+        }
+
+        /// <summary>
+        /// 将 Json 字符串反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="text">Json 字符串</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(string text, JsonFormatterOptions options)
+        {
+            fixed (char* chars = text)
+            {
+                return ValueInterface<T>.ReadValue(
+                    new JsonDeserializer(chars, text.Length, options)
+                    );
+            }
+        }
+
+        /// <summary>
+        /// 将 Json 字符串反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="text">Json 字符串</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(string text, Type type, JsonFormatterOptions options)
+        {
+            fixed (char* chars = text)
+            {
+                return ValueInterface.ReadValue(
+                    new JsonDeserializer(chars, text.Length, options),
+                    type
+                    );
+            }
+        }
+
+        /// <summary>
+        /// 将 Json 缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(HGlobalCache<char> hGCache, Type type, JsonFormatterOptions options)
+        {
+            return ValueInterface.ReadValue(
+                new JsonDeserializer(hGCache.First, hGCache.Count, options),
+                type
+                );
+        }
+
+        /// <summary>
+        /// 将 Json 缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 缓存</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(HGlobalCache<char> hGCache, JsonFormatterOptions options)
+        {
+            return ValueInterface<T>.ReadValue(
+                new JsonDeserializer(hGCache.First, hGCache.Count, options)
+                );
+
+        }
+
+        /// <summary>
+        /// 将 Json 读取器反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="textReader">Json 读取器</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(TextReader textReader, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var value = ValueInterface<T>.ReadValue(
+                new JsonDeserializer(
+                    JsonSegmentedContent.CreateAndInitialize(textReader, hGChars),
+                    options
+                    )
+                );
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 读取器反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="textReader">Json 读取器</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(TextReader textReader, Type type, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            var value = ValueInterface.ReadValue(
+                new JsonDeserializer(
+                    JsonSegmentedContent.CreateAndInitialize(textReader, hGChars),
+                    options
+                    ),
+                type
+                );
+
+            CharsPool.Return(hGChars);
+
+            return value;
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(ArraySegment<byte> bytes, Encoding encoding, Type type, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject(hGChars, type, options);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(byte[] bytes, Encoding encoding, Type type, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject(hGChars, type, options);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(HGlobalCache<byte> hGCache, Encoding encoding, Type type, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(hGCache, encoding);
+
+            var value = DeserializeObject(hGChars, type, options);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 输入流反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="stream">Json 输入流</param>
+        /// <param name="encoding">指定编码</param>
+        /// <param name="type">指定类型</param>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static object? DeserializeObject(Stream stream, Encoding encoding, Type type, JsonFormatterOptions options)
+        {
+            return DeserializeObject(new StreamReader(stream, encoding), type, options);
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(ArraySegment<byte> bytes, Encoding encoding, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject<T>(hGChars, options);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节数组反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="bytes">Json 字节数组</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(byte[] bytes, Encoding encoding, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(bytes, encoding);
+
+            var value = DeserializeObject<T>(hGChars, options);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 字节缓存反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="hGCache">Json 字节缓存</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(HGlobalCache<byte> hGCache, Encoding encoding, JsonFormatterOptions options)
+        {
+            var hGChars = CharsPool.Rent();
+
+            hGChars.ReadFrom(hGCache, encoding);
+
+            var value = DeserializeObject<T>(hGChars, options);
+
+            CharsPool.Return(hGChars);
+
+            return value;
+
+        }
+
+        /// <summary>
+        /// 将 Json 输入流反序列化为指定类型的实例。
+        /// </summary>
+        /// <param name="stream">Json 输入流</param>
+        /// <param name="encoding">指定编码</param>
+        /// <typeparam name="T">指定类型</typeparam>
+        /// <param name="options">指定配置项</param>
+        /// <returns>返回指定类型的实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static T? DeserializeObject<T>(Stream stream, Encoding encoding, JsonFormatterOptions options)
+        {
+            return DeserializeObject<T>(new StreamReader(stream, encoding), options);
+        }
+#endif
+
+        #region -- 接口实现 --
+
+        TargetableValueInterfaceMapSource ITargetableValueRWSource.ValueInterfaceMapSource { get; } = new TargetableValueInterfaceMapSource();
+
+#pragma warning disable
         byte[] IBinaryFormatter.Serialize<T>(T value)
         {
             Serialize(value, out var bytes);
 
             return bytes;
         }
+#pragma warning restor
+
+#endregion
     }
 }

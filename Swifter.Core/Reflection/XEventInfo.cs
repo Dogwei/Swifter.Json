@@ -1,8 +1,7 @@
-﻿using Swifter.Tools;
+﻿using InlineIL;
+using Swifter.Tools;
 using System;
 using System.Reflection;
-
-using static Swifter.Reflection.ThrowHelpers;
 
 namespace Swifter.Reflection
 {
@@ -50,20 +49,20 @@ namespace Swifter.Reflection
             Flags = flags;
             EventInfo = eventInfo;
 
-            if (EventInfo.GetAddMethod((Flags & XBindingFlags.NonPublic) != 0) is var addMethod)
+            if (EventInfo.GetAddMethod(Flags.On(XBindingFlags.NonPublic)) is var addMethod && addMethod!=null)
             {
                 _add = addMethod.GetFunctionPointer();
             }
 
-            if (EventInfo.GetRemoveMethod((Flags & XBindingFlags.NonPublic) != 0) is var removeMethod)
+            if (EventInfo.GetRemoveMethod(Flags.On(XBindingFlags.NonPublic)) is var removeMethod && removeMethod != null)
             {
                 _remove = removeMethod.GetFunctionPointer();
             }
 
-            _handler_type = eventInfo.EventHandlerType;
-            _declaring_type = eventInfo.DeclaringType;
+            _handler_type = eventInfo.EventHandlerType!;
+            _declaring_type = eventInfo.DeclaringType!;
 
-            if ((addMethod ?? removeMethod).IsStatic)
+            if (eventInfo.IsStatic())
             {
                 _type = _type_static;
             }
@@ -84,21 +83,23 @@ namespace Swifter.Reflection
         /// <param name="delegate">事件处理器</param>
         public void AddEventHandler(object obj, Delegate @delegate)
         {
-            if (@delegate != null && !_handler_type.IsInstanceOfType(@delegate))
+            if (!_handler_type.IsInstanceOfType(@delegate))
             {
-                ThrowTargetException(nameof(@delegate), _handler_type);
+                throw new TargetException(nameof(@delegate));
             }
 
             if (_add == default)
             {
-                ThrowMissingMethodException("Event", EventInfo.DeclaringType, EventInfo, "add");
+                EventInfo.AddEventHandler(obj, @delegate);
+
+                return;
             }
 
             switch (_type)
             {
                 case _type_static:
 
-                    ThrowInvalidOperationException("event", "instance");
+                    EventInfo.AddEventHandler(obj, @delegate);
 
                     break;
 
@@ -106,11 +107,14 @@ namespace Swifter.Reflection
 
                     if (!_declaring_type.IsInstanceOfType(obj))
                     {
-                        ThrowTargetException(nameof(obj), _declaring_type);
+                        throw new TargetException(nameof(obj));
                     }
 
-                    fixed (byte* ptr = &TypeHelper.Unbox<byte>(obj))
-                        Underlying.Call<IntPtr, Delegate>((IntPtr)ptr, @delegate, _add);
+                    IL.Push(obj);
+                    IL.Emit.Call(MethodRef.Method(typeof(TypeHelper), nameof(TypeHelper.Unbox), 1, typeof(object)).MakeGenericMethod(typeof(byte)));
+                    IL.Push(@delegate);
+                    IL.Push(_add);
+                    IL.Emit.Calli(StandAloneMethodSig.ManagedMethod(CallingConventions.HasThis, typeof(void), typeof(Delegate)));
 
                     break;
 
@@ -118,62 +122,13 @@ namespace Swifter.Reflection
 
                     if (!_declaring_type.IsInstanceOfType(obj))
                     {
-                        ThrowTargetException(nameof(obj), _declaring_type);
+                        throw new TargetException(nameof(obj));
                     }
 
-                    Underlying.Call<object, Delegate>(obj, @delegate, _add);
-
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// 添加该实例事件的处理器。
-        /// </summary>
-        /// <param name="reference">类型的实例引用</param>
-        /// <param name="delegate">事件处理器</param>
-        public void AddEventHandler(TypedReference reference, Delegate @delegate)
-        {
-            if (@delegate != null && !_handler_type.IsInstanceOfType(@delegate))
-            {
-                ThrowTargetException(nameof(@delegate), _handler_type);
-            }
-
-            if (_add == default)
-            {
-                ThrowMissingMethodException("Event", EventInfo.DeclaringType, EventInfo, "add");
-            }
-
-            switch (_type)
-            {
-                case _type_static:
-
-                    ThrowInvalidOperationException("event", "instance");
-
-                    break;
-
-                case _type_struct:
-
-                    if (!_declaring_type.IsSubclassOf(__reftype(reference)))
-                    {
-                        ThrowTargetException(nameof(reference), _declaring_type);
-                    }
-
-                    fixed (byte* ptr = &TypeHelper.RefValue<byte>(reference)) 
-                        Underlying.Call<IntPtr, Delegate>((IntPtr)ptr, @delegate, _add);
-
-                    break;
-
-                case _type_class:
-
-                    var obj = TypeHelper.RefValue<object>(reference);
-
-                    if (!_declaring_type.IsInstanceOfType(obj))
-                    {
-                        ThrowTargetException(nameof(reference), _declaring_type);
-                    }
-
-                    Underlying.Call<object, Delegate>(obj, @delegate, _add);
+                    IL.Push(obj);
+                    IL.Push(@delegate);
+                    IL.Push(_add);
+                    IL.Emit.Calli(StandAloneMethodSig.ManagedMethod(CallingConventions.HasThis, typeof(void), typeof(Delegate)));
 
                     break;
             }
@@ -186,21 +141,23 @@ namespace Swifter.Reflection
         /// <param name="delegate">事件处理器</param>
         public void RemoveEventHandler(object obj, Delegate @delegate)
         {
-            if (@delegate != null && !_handler_type.IsInstanceOfType(@delegate))
+            if (!_handler_type.IsInstanceOfType(@delegate))
             {
-                ThrowTargetException(nameof(@delegate), _handler_type);
+                throw new TargetException(nameof(@delegate));
             }
 
             if (_remove == default)
             {
-                ThrowMissingMethodException("Event", EventInfo.DeclaringType, EventInfo, "remove");
+                EventInfo.RemoveEventHandler(obj, @delegate);
+
+                return;
             }
 
             switch (_type)
             {
                 case _type_static:
 
-                    ThrowInvalidOperationException("event", "instance");
+                    EventInfo.RemoveEventHandler(obj, @delegate);
 
                     break;
 
@@ -208,11 +165,14 @@ namespace Swifter.Reflection
 
                     if (!_declaring_type.IsInstanceOfType(obj))
                     {
-                        ThrowTargetException(nameof(obj), _declaring_type);
+                        throw new TargetException(nameof(obj));
                     }
 
-                    fixed (byte* ptr = &TypeHelper.Unbox<byte>(obj))
-                        Underlying.Call<IntPtr, Delegate>((IntPtr)ptr, @delegate, _remove);
+                    IL.Push(obj);
+                    IL.Emit.Call(MethodRef.Method(typeof(TypeHelper), nameof(TypeHelper.Unbox), 1, typeof(object)).MakeGenericMethod(typeof(byte)));
+                    IL.Push(@delegate);
+                    IL.Push(_remove);
+                    IL.Emit.Calli(StandAloneMethodSig.ManagedMethod(CallingConventions.HasThis, typeof(void), typeof(Delegate)));
 
                     break;
 
@@ -220,62 +180,13 @@ namespace Swifter.Reflection
 
                     if (!_declaring_type.IsInstanceOfType(obj))
                     {
-                        ThrowTargetException(nameof(obj), _declaring_type);
+                        throw new TargetException(nameof(obj));
                     }
 
-                    Underlying.Call<object, Delegate>(obj, @delegate, _remove);
-
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// 移除该实例事件的处理器。
-        /// </summary>
-        /// <param name="reference">类型的实例引用</param>
-        /// <param name="delegate">事件处理器</param>
-        public void RemoveEventHandler(TypedReference reference, Delegate @delegate)
-        {
-            if (@delegate != null && !_handler_type.IsInstanceOfType(@delegate))
-            {
-                ThrowTargetException(nameof(@delegate), _handler_type);
-            }
-
-            if (_remove == default)
-            {
-                ThrowMissingMethodException("Event", EventInfo.DeclaringType, EventInfo, "remove");
-            }
-
-            switch (_type)
-            {
-                case _type_static:
-
-                    ThrowInvalidOperationException("event", "instance");
-
-                    break;
-
-                case _type_struct:
-
-                    if (!_declaring_type.IsSubclassOf(__reftype(reference)))
-                    {
-                        ThrowTargetException(nameof(reference), _declaring_type);
-                    }
-
-                    fixed (byte* ptr = &TypeHelper.RefValue<byte>(reference))
-                        Underlying.Call<IntPtr, Delegate>((IntPtr)ptr, @delegate, _remove);
-
-                    break;
-
-                case _type_class:
-
-                    var obj = TypeHelper.RefValue<object>(reference);
-
-                    if (!_declaring_type.IsInstanceOfType(obj))
-                    {
-                        ThrowTargetException(nameof(reference), _declaring_type);
-                    }
-
-                    Underlying.Call<object, Delegate>(obj, @delegate, _remove);
+                    IL.Push(obj);
+                    IL.Push(@delegate);
+                    IL.Push(_remove);
+                    IL.Emit.Calli(StandAloneMethodSig.ManagedMethod(CallingConventions.HasThis, typeof(void), typeof(Delegate)));
 
                     break;
             }
@@ -287,28 +198,30 @@ namespace Swifter.Reflection
         /// <param name="delegate">事件处理器</param>
         public void AddEventHandler(Delegate @delegate)
         {
-            if (@delegate != null && !_handler_type.IsInstanceOfType(@delegate))
+            if (!_handler_type.IsInstanceOfType(@delegate))
             {
-                ThrowTargetException(nameof(@delegate), _handler_type);
+                throw new TargetException(nameof(@delegate));
             }
 
             if (_add == default)
             {
-                ThrowMissingMethodException("Event", EventInfo.DeclaringType, EventInfo, "add");
+                EventInfo.AddEventHandler(null, @delegate);
+
+                return;
             }
 
             switch (_type)
             {
                 case _type_static:
 
-                    Underlying.Call<Delegate>(@delegate, _add);
+                    ((delegate*<Delegate, void>)_add)(@delegate);
 
                     break;
 
                 case _type_struct:
                 case _type_class:
 
-                    ThrowInvalidOperationException("event", "static");
+                    EventInfo.AddEventHandler(null, @delegate);
 
                     break;
             }
@@ -320,28 +233,30 @@ namespace Swifter.Reflection
         /// <param name="delegate">事件处理器</param>
         public void RemoveEventHandler(Delegate @delegate)
         {
-            if (@delegate != null && !_handler_type.IsInstanceOfType(@delegate))
+            if (!_handler_type.IsInstanceOfType(@delegate))
             {
-                ThrowTargetException(nameof(@delegate), _handler_type);
+                throw new TargetException(nameof(@delegate));
             }
 
             if (_remove == default)
             {
-                ThrowMissingMethodException("Event", EventInfo.DeclaringType, EventInfo, "remove");
+                EventInfo.RemoveEventHandler(null, @delegate);
+
+                return;
             }
 
             switch (_type)
             {
                 case _type_static:
 
-                    Underlying.Call<Delegate>(@delegate, _remove);
+                    ((delegate*<Delegate, void>)_remove)(@delegate);
 
                     break;
 
                 case _type_struct:
                 case _type_class:
 
-                    ThrowInvalidOperationException("event", "static");
+                    EventInfo.RemoveEventHandler(null, @delegate);
 
                     break;
             }

@@ -2,21 +2,21 @@
 {
     internal sealed class MultiDimArrayInterface<TArray, TElement> : IValueInterface<TArray> where TArray : class
     {
-        public TArray ReadValue(IValueReader valueReader)
+        public TArray? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<TArray> reader)
             {
                 return reader.ReadValue();
             }
 
-            var rw = new MultiDimArray<TArray, TElement>.FirstRW();
+            var rw = new MultiDimArrayRW<TArray, TElement>();
 
             valueReader.ReadArray(rw);
 
-            return rw.GetContent();
+            return rw.Content;
         }
 
-        public void WriteValue(IValueWriter valueWriter, TArray value)
+        public void WriteValue(IValueWriter valueWriter, TArray? value)
         {
             if (value is null)
             {
@@ -28,11 +28,10 @@
             }
             else
             {
-                var rw = new MultiDimArray<TArray, TElement>.FirstRW();
-
-                rw.Initialize(value);
-
-                valueWriter.WriteArray(rw);
+                valueWriter.WriteArray(new MultiDimArrayRW<TArray, TElement>
+                {
+                    Content = value
+                });
             }
         }
     }

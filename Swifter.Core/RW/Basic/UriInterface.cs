@@ -6,33 +6,37 @@ namespace Swifter.RW
 {
     internal sealed class UriInterface : IValueInterface<Uri>
     {
-        public Uri ReadValue(IValueReader valueReader)
+        public Uri? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<Uri> reader)
             {
                 return reader.ReadValue();
             }
 
-            return new Uri(valueReader.ReadString());
+            var uriTest = valueReader.ReadString();
+
+            if (uriTest is null)
+            {
+                return null;
+            }
+
+            return new Uri(uriTest);
         }
 
-        public void WriteValue(IValueWriter valueWriter, Uri value)
+        public void WriteValue(IValueWriter valueWriter, Uri? value)
         {
             if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<Uri> writer)
+            else if (valueWriter is IValueWriter<Uri> writer)
             {
                 writer.WriteValue(value);
-
-                return;
             }
-
-            valueWriter.WriteString(value.ToString());
+            else
+            {
+                valueWriter.WriteString(value.ToString());
+            }
         }
     }
 }

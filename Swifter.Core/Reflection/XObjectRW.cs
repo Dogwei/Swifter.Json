@@ -4,6 +4,8 @@ using Swifter.Tools;
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.Reflection
@@ -11,7 +13,7 @@ namespace Swifter.Reflection
     /// <summary>
     /// XObjectRW 一个强大，高效，内存小的对象读写器。
     /// </summary>
-    public sealed class XObjectRW : IDataRW<string>
+    public sealed class XObjectRW : IObjectRW
     {
         /// <summary>
         /// 读取或设置默认的绑定标识。
@@ -28,16 +30,9 @@ namespace Swifter.Reflection
             XBindingFlags.RWIgnoreCase;
 
 
-        private static XBindingFlags GetDefaultBindingFlags(Type type)
+        internal static XBindingFlags GetDefaultBindingFlags(Type type)
         {
-            // 对匿名类型进行 Allocate 和 AutoPropertyDirectRW
-            if (type.IsDefined(typeof(CompilerGeneratedAttribute), false))
-            {
-                return DefaultBindingFlags | XBindingFlags.RWAllocate | XBindingFlags.RWAutoPropertyDirectRW;
-            }
-
-            // 对元组类型进行 Allocate 和 AutoPropertyDirectRW
-            if (type.IsClass && type.IsGenericType && type.Name.Contains("Tuple") && type.GetConstructor(Type.EmptyTypes) is null)
+            if (type.IsRecordType() || type.IsTupleType())
             {
                 return DefaultBindingFlags | XBindingFlags.RWAllocate | XBindingFlags.RWAutoPropertyDirectRW;
             }
@@ -54,12 +49,7 @@ namespace Swifter.Reflection
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static XObjectRW Create(Type type, XBindingFlags flags = XBindingFlags.UseDefault)
         {
-            if (flags == XBindingFlags.UseDefault)
-            {
-                flags = GetDefaultBindingFlags(type);
-            }
-
-            return new XObjectRW(XTypeInfo.Create(type, flags | XTypeInfo.RW));
+            return new XObjectRW(XTypeInfo.Create(type, flags | XTypeInfo.Flags_RW));
         }
 
         /// <summary>
@@ -71,24 +61,19 @@ namespace Swifter.Reflection
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static XObjectRW Create<T>(XBindingFlags flags = XBindingFlags.UseDefault)
         {
-            if (flags == XBindingFlags.UseDefault)
-            {
-                flags = GetDefaultBindingFlags(typeof(T));
-            }
-
-            return new XObjectRW(XTypeInfo.Create<T>(flags | XTypeInfo.RW));
+            return new XObjectRW(XTypeInfo.Create<T>(flags | XTypeInfo.Flags_RW));
         }
 
         /// <summary>
         /// 获取对象读写器所使用的 XTypeInfo 实例。
         /// </summary>
-        public readonly XTypeInfo xTypeInfo;
+        public readonly XTypeInfo XTypeInfo;
 
-        internal object obj;
+        internal object? content;
         
         internal XObjectRW(XTypeInfo xTypeInfo)
         {
-            this.xTypeInfo = xTypeInfo;
+            XTypeInfo = xTypeInfo;
         }
 
         /// <summary>
@@ -96,21 +81,25 @@ namespace Swifter.Reflection
         /// </summary>
         /// <param name="key">成员名称</param>
         /// <returns>返回值的读写器</returns>
-        public XFieldValueRW this[string key]
+        public IValueRW this[string key]
         {
             get
             {
-                if (xTypeInfo.rwFields.TryGetValue(key, out var field))
+                var fields = XTypeInfo.rwFields;
+
+                var index = fields.FindIndex(key);
+
+                if (index >= 0)
                 {
-                    return new XFieldValueRW(obj, field);
+                    return fields[index].Value.CreateValueRW(this);
                 }
 
-                if ((xTypeInfo.flags & XBindingFlags.RWNotFoundException) != 0)
+                if (XTypeInfo.flags.On(XBindingFlags.RWNotFoundException))
                 {
-                    throw new MissingMemberException(xTypeInfo.type.Name, key);
+                    throw new MissingMemberException(XTypeInfo.type.Name, key);
                 }
 
-                return null;
+                return RWHelper.DefaultValueRW;
             }
         }
 
@@ -121,20 +110,20 @@ namespace Swifter.Reflection
         /// <param name="valueWriter">值写入器</param>
         public void OnReadValue(string key, IValueWriter valueWriter)
         {
-            if (xTypeInfo.rwFields.TryGetValue(key, out var field))
+            if (content is null)
             {
-                if (field.CanRead)
-                {
-                    field.OnReadValue(obj, valueWriter);
-                }
-                else if (field.CannotGetException)
-                {
-                    throw new MissingMethodException($"Property '{xTypeInfo.type.Name}.{key}' No define '{"get"}' method or cannot access.");
-                }
+                throw new NullReferenceException(nameof(Content));
             }
-            else if ((xTypeInfo.flags & XBindingFlags.RWNotFoundException) != 0)
+
+            var index = XTypeInfo.rwFields.FindIndex(key);
+
+            if (index >= 0)
             {
-                throw new MissingMemberException(xTypeInfo.type.Name, key);
+                XTypeInfo.rwFields[index].Value.OnReadValue(content, valueWriter);
+            }
+            else if (XTypeInfo.flags.On(XBindingFlags.RWNotFoundException))
+            {
+                throw new MissingMemberException(XTypeInfo.type.Name, key);
             }
             else
             {
@@ -146,68 +135,42 @@ namespace Swifter.Reflection
         /// 将数据源中的所有成员的名称和值写入到数据写入器中。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        public void OnReadAll(IDataWriter<string> dataWriter)
+        /// <param name="stopToken">停止令牌</param>
+        public void OnReadAll(IDataWriter<string> dataWriter, RWStopToken stopToken = default)
         {
-            if ((xTypeInfo.flags & XBindingFlags.RWMembersOptIn) != 0)
+            if (content is null)
             {
-                MembersOptIn();
+                throw new NullReferenceException(nameof(Content));
+            }
+
+            var fields = XTypeInfo.rwFields;
+
+            int i = 0;
+
+            if (stopToken.CanBeStopped)
+            {
+                if (stopToken.PopState() is int index)
+                {
+                    i = index;
+                }
+
+                for (; i < fields.Count; i++)
+                {
+                    if (stopToken.IsStopRequested)
+                    {
+                        stopToken.SetState(i);
+
+                        return;
+                    }
+
+                    fields[i].Value.OnReadAll(content, dataWriter);
+                }
             }
             else
             {
-                None();
-            }
-
-            void MembersOptIn()
-            {
-                var vc = new ValueCopyer();
-                var fields = xTypeInfo.rwFields;
-
-                for (int i = 0; i < fields.Count; i++)
+                for (; i < fields.Count; i++)
                 {
-                    if (fields[i].Value is XAttributedFieldRW fieldRW && fieldRW.CanRead)
-                    {
-                        if (fieldRW.SkipDefaultValue)
-                        {
-                            fieldRW.OnReadValue(obj, vc);
-
-                            if (!vc.IsEmptyValue())
-                            {
-                                vc.WriteTo(dataWriter[fieldRW.Name]);
-                            }
-                        }
-                        else
-                        {
-                            fieldRW.OnReadValue(obj, dataWriter[fieldRW.Name]);
-                        }
-                    }
-                }
-            }
-
-            void None()
-            {
-                var vc = new ValueCopyer();
-                var fields = xTypeInfo.rwFields;
-
-                for (int i = 0; i < fields.Count; i++)
-                {
-                    var item = fields[i].Value;
-
-                    if (item.CanRead)
-                    {
-                        if (item.SkipDefaultValue)
-                        {
-                            item.OnReadValue(obj, vc);
-
-                            if (!vc.IsEmptyValue())
-                            {
-                                vc.WriteTo(dataWriter[item.Name]);
-                            }
-                        }
-                        else
-                        {
-                            item.OnReadValue(obj, dataWriter[item.Name]);
-                        }
-                    }
+                    fields[i].Value.OnReadAll(content, dataWriter);
                 }
             }
         }
@@ -219,24 +182,68 @@ namespace Swifter.Reflection
         /// <param name="valueReader">值读取器</param>
         public void OnWriteValue(string key, IValueReader valueReader)
         {
-            if (xTypeInfo.rwFields.TryGetValue(key, out var field))
+            if (content is null)
             {
-                if (field.CanWrite)
-                {
-                    field.OnWriteValue(obj, valueReader);
-                }
-                else if (field.CannotSetException)
-                {
-                    throw new MissingMethodException($"Property '{xTypeInfo.type.Name}.{key}' No define '{"set"}' method or cannot access.");
-                }
+                throw new NullReferenceException(nameof(Content));
             }
-            else if ((xTypeInfo.flags & XBindingFlags.RWNotFoundException) != 0)
+
+            var index = XTypeInfo.rwFields.FindIndex(key);
+
+            if (index >= 0)
             {
-                throw new MissingMemberException(xTypeInfo.type.Name, key);
+                XTypeInfo.rwFields[index].Value.OnWriteValue(content, valueReader);
+            }
+            else if (XTypeInfo.flags.On(XBindingFlags.RWNotFoundException))
+            {
+                throw new MissingMemberException(XTypeInfo.type.Name, key);
             }
             else
             {
-                valueReader.DirectRead();
+                valueReader.Pop();
+            }
+        }
+
+        /// <summary>
+        /// 从数据读取器中读取所有数据源字段到数据源的值
+        /// </summary>
+        /// <param name="dataReader">数据读取器</param>
+        /// <param name="stopToken">停止令牌</param>
+        public void OnWriteAll(IDataReader<string> dataReader, RWStopToken stopToken = default)
+        {
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(Content));
+            }
+
+            var fields = XTypeInfo.rwFields;
+
+            int i = 0;
+
+            if (stopToken.CanBeStopped)
+            {
+                if (stopToken.PopState() is int index)
+                {
+                    i = index;
+                }
+
+                for (; i < fields.Count; i++)
+                {
+                    if (stopToken.IsStopRequested)
+                    {
+                        stopToken.SetState(i);
+
+                        return;
+                    }
+
+                    fields[i].Value.OnWriteAll(content, dataReader);
+                }
+            }
+            else
+            {
+                for (; i < fields.Count; i++)
+                {
+                    fields[i].Value.OnWriteAll(content, dataReader);
+                }
             }
         }
 
@@ -245,13 +252,13 @@ namespace Swifter.Reflection
         /// </summary>
         public void Initialize()
         {
-            if ((xTypeInfo.flags & XBindingFlags.RWAllocate) != 0)
+            if (XTypeInfo.flags.On(XBindingFlags.RWAllocate))
             {
-                obj = TypeHelper.Allocate(xTypeInfo.type);
+                content = TypeHelper.Allocate(XTypeInfo.type);
             }
             else
             {
-                obj = Activator.CreateInstance(xTypeInfo.type);
+                content = Activator.CreateInstance(XTypeInfo.type);
             }
         }
 
@@ -265,46 +272,13 @@ namespace Swifter.Reflection
         }
 
         /// <summary>
-        /// 初始化数据源。
-        /// </summary>
-        /// <param name="obj">数据源。</param>
-        public void Initialize(object obj)
-        {
-            if (obj != null && !xTypeInfo.type.IsInstanceOfType(obj))
-            {
-                throw new ArgumentException(nameof(obj));
-            }
-
-            this.obj = obj;
-        }
-
-        /// <summary>
-        /// 从数据读取器中读取所有数据源字段到数据源的值
-        /// </summary>
-        /// <param name="dataReader">数据读取器</param>
-        public void OnWriteAll(IDataReader<string> dataReader)
-        {
-            var fields = xTypeInfo.rwFields;
-
-            for (int i = 0; i < fields.Count; i++)
-            {
-                var item = fields[i].Value;
-
-                if (item.CanWrite)
-                {
-                    item.OnWriteValue(obj, dataReader[item.Name]);
-                }
-            }
-        }
-
-        /// <summary>
         /// 获取指定索引处的字段名称。
         /// </summary>
         /// <param name="ordinal">指定索引</param>
         /// <returns>返回字段名称</returns>
         public string GetKey(int ordinal)
         {
-            return xTypeInfo.rwFields[ordinal].Key;
+            return XTypeInfo.rwFields[ordinal].Key;
         }
 
         /// <summary>
@@ -314,40 +288,41 @@ namespace Swifter.Reflection
         /// <returns>返回序号</returns>
         public int GetOrdinal(string key)
         {
-            return xTypeInfo.rwFields.FindIndex(key);
+            return XTypeInfo.rwFields.FindIndex(key);
         }
-
-
-        /// <summary>
-        /// 获取该对象读写器的成员名称集合。
-        /// </summary>
-        public IEnumerable<string> Keys => xTypeInfo.rwFields.Keys;
 
         /// <summary>
         /// 获取该对象读写器的成员名称的数量
         /// </summary>
-        public int Count => xTypeInfo.rwFields.Count;
+        public int Count => XTypeInfo.rwFields.Count;
 
         /// <summary>
         /// 获取数据源。
         /// </summary>
-        public object Content
+        public object? Content
         {
-            get => obj;
-            set => obj 
-                = ContentType.IsInstanceOfType(value)
+            get => content;
+            set => content
+                = value is null || ContentType.IsInstanceOfType(value)
                 ? value
                 : throw new ArgumentException($"The value is not instance of '{ContentType}'.", nameof(value));
         }
 
-        
-
         /// <summary>
         /// 获取数据源类型。
         /// </summary>
-        public Type ContentType => xTypeInfo.type;
+        public Type ContentType => XTypeInfo.type;
 
-        IValueRW IDataRW<string>.this[string key] => this[key];
+        /// <summary>
+        /// 此值对此读写器无效。
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public Type? ValueType => null;
+
+        /// <summary>
+        /// 成员名称集合。
+        /// </summary>
+        public IEnumerable<string> Keys => XTypeInfo.rwKeys;
 
         IValueReader IDataReader<string>.this[string key] => this[key];
 

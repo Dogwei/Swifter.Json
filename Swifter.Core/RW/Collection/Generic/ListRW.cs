@@ -1,8 +1,11 @@
 ﻿using Swifter.Tools;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
-using System.ComponentModel;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
@@ -11,83 +14,90 @@ namespace Swifter.RW
     /// </summary>
     /// <typeparam name="T">列表类型</typeparam>
     /// <typeparam name="TValue">元素类型</typeparam>
-    public sealed class ListRW<T, TValue> : IDataRW<int>, IArrayCollectionRW where T : IList<TValue>
+    public sealed class ListRW<T, TValue> : IArrayRW, IFastArrayRW where T : IList<TValue?>
     {
         /// <summary>
         /// 默认容量。
         /// </summary>
         public const int DefaultCapacity = 3;
 
-        static readonly bool IsAssignableFromList = typeof(T).IsAssignableFrom(typeof(List<TValue>));
+        static readonly bool IsAssignableFromList = typeof(T).IsAssignableFrom(typeof(List<TValue?>));
+
+        static ArrayAppendingInfo appendingInfo = new ArrayAppendingInfo() { MostClosestMeanCommonlyUsedLength = DefaultCapacity };
+        static ArrayAppendingInfo readFromAppendingInfo = new ArrayAppendingInfo() { MostClosestMeanCommonlyUsedLength = DefaultCapacity };
 
         /// <summary>
         /// 列表实例。
         /// </summary>
-        public T content;
+        T? content;
 
         /// <summary>
         /// 获取指定索引处值的读写器。
         /// </summary>
         /// <param name="key"></param>
         /// <returns></returns>
-        public IValueRW this[int key] => new ValueCopyer<int>(this, key);
-
-        IValueWriter IDataWriter<int>.this[int key] => this[key];
-
-        IValueReader IDataReader<int>.this[int key] => this[key];
-
-        /// <summary>
-        /// 获取所有索引。
-        /// </summary>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
+        public IValueRW this[int key] => new ValueRW(this, key);
 
         /// <summary>
         /// 获取列表长度。
         /// </summary>
-        public int Count => content.Count;
+        public int Count => content?.Count ?? -1;
 
         /// <summary>
         /// 获取或设置数据源。
         /// </summary>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public object Content
+        public T? Content
         {
-            get => content;
-            set => content = (T)value;
+            get
+            {
+                if (content is not null)
+                {
+                    appendingInfo.AddUsedLength(content.Count);
+                }
+                return content;
+            }
+            set => content = value;
         }
 
         /// <summary>
         /// 获取数据源类型。
         /// </summary>
-        [EditorBrowsable(EditorBrowsableState.Never)]
         public Type ContentType => typeof(T);
 
-        IValueRW IDataRW<int>.this[int key] => this[key];
-
+        /// <summary>
+        /// 获取元素类型。
+        /// </summary>
+        public Type ValueType => typeof(TValue);
 
         /// <summary>
         /// 初始化一个具有默认容量的列表。
         /// </summary>
         public void Initialize()
         {
-            Initialize(DefaultCapacity);
+            Initialize(appendingInfo.MostClosestMeanCommonlyUsedLength);
         }
 
         /// <summary>
         /// 初始化一个指定容量的数组。
         /// </summary>
         /// <param name="capacity">指定容量</param>
+        [MemberNotNull(nameof(content))]
         public void Initialize(int capacity)
         {
             if (IsAssignableFromList)
             {
-                Underlying.As<T, List<TValue>>(ref content) = new List<TValue>(capacity);
+                content = TypeHelper.As<List<TValue?>, T>(new List<TValue?>(capacity));
             }
             else
             {
-                // TODO: Capacity
                 content = Activator.CreateInstance<T>();
+
+                if (content is List<TValue?> list)
+                {
+                    list.Capacity = capacity;
+                }
+
+                // TODO: Other Capacity
             }
         }
 
@@ -95,13 +105,42 @@ namespace Swifter.RW
         /// 将所有元素写入到数据写入器中。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        public void OnReadAll(IDataWriter<int> dataWriter)
+        /// <param name="stopToken">停止令牌</param>
+        public void OnReadAll(IDataWriter<int> dataWriter, RWStopToken stopToken = default)
         {
-            int length = content.Count;
-
-            for (int i = 0; i < length; i++)
+            if (content is null)
             {
-                ValueInterface<TValue>.WriteValue(dataWriter[i], content[i]);
+                throw new NullReferenceException(nameof(content));
+            }
+
+            int length = content.Count;
+            int i = 0;
+
+            if (stopToken.CanBeStopped)
+            {
+                if (stopToken.PopState() is int index)
+                {
+                    i = index;
+                }
+
+                for (; i < length; i++)
+                {
+                    if (stopToken.IsStopRequested)
+                    {
+                        stopToken.SetState(i);
+
+                        return;
+                    }
+
+                    ValueInterface<TValue>.WriteValue(dataWriter[i], content[i]);
+                }
+            }
+            else
+            {
+                for (; i < length; i++)
+                {
+                    ValueInterface<TValue>.WriteValue(dataWriter[i], content[i]);
+                }
             }
         }
 
@@ -112,6 +151,11 @@ namespace Swifter.RW
         /// <param name="valueWriter">值写入器</param>
         public void OnReadValue(int key, IValueWriter valueWriter)
         {
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(content));
+            }
+
             ValueInterface<TValue>.WriteValue(valueWriter, content[key]);
         }
 
@@ -122,6 +166,11 @@ namespace Swifter.RW
         /// <param name="valueReader">值读取器</param>
         public void OnWriteValue(int key, IValueReader valueReader)
         {
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(content));
+            }
+
             if (key == Count)
             {
                 content.Add(ValueInterface<TValue>.ReadValue(valueReader));
@@ -136,19 +185,158 @@ namespace Swifter.RW
         /// 在数据读取器中读取所有元素。
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        public void OnWriteAll(IDataReader<int> dataReader)
+        /// <param name="stopToken">取消令牌</param>
+        public void OnWriteAll(IDataReader<int> dataReader, RWStopToken stopToken = default)
         {
-            var length = Count;
-
-            for (int i = 0; i < length; i++)
+            if (content is null)
             {
-                content[i] = ValueInterface<TValue>.ReadValue(dataReader[i]);
+                throw new NullReferenceException(nameof(content));
+            }
+
+            int length = content.Count;
+            int i = 0;
+
+            if (stopToken.CanBeStopped)
+            {
+                if (stopToken.PopState() is int index)
+                {
+                    i = index;
+                }
+
+                for (; i < length; i++)
+                {
+                    if (stopToken.IsStopRequested)
+                    {
+                        stopToken.SetState(i);
+
+                        return;
+                    }
+
+                    content[i] = ValueInterface<TValue>.ReadValue(dataReader[i]);
+                }
+            }
+            else
+            {
+                for (; i < length; i++)
+                {
+                    content[i] = ValueInterface<TValue>.ReadValue(dataReader[i]);
+                }
             }
         }
 
-        void IArrayCollectionRW.InvokeElementType(IGenericInvoker invoker)
+        /// <summary>
+        /// 将当前数据源写入到数组值写入器中。
+        /// </summary>
+        public unsafe void WriteTo(IFastArrayValueWriter writer)
         {
-            invoker.Invoke<TValue>();
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(content));
+            }
+
+            int length = content.Count;
+
+            if (length > 0)
+            {
+                if (content is List<TValue?> list)
+                {
+                    var rawData = ArrayHelper.GetRawData(list) ?? throw new NullReferenceException();
+
+                    writer.WriteArray(ref rawData[0], length);
+                }
+                else
+                {
+                    var temp = new TValue?[length];
+
+                    content.CopyTo(temp, 0);
+
+                    writer.WriteArray(ref temp[0], length);
+                }
+            }
+            else
+            {
+                writer.WriteEmptyArray<TValue>();
+            }
+        }
+
+        /// <summary>
+        /// 从数组值读取器中读取数组到数据源中。
+        /// </summary>
+        public void ReadFrom(IFastArrayValueReader valueReader)
+        {
+            var array = valueReader.ReadArray<TValue>(readFromAppendingInfo.MostClosestMeanCommonlyUsedLength, out var count);
+
+            if (IsAssignableFromList)
+            {
+                content = TypeHelper.As<List<TValue?>, T>(ArrayHelper.CreateList(array, count));
+            }
+            else
+            {
+                Initialize(count);
+
+                if (content is List<TValue?> list && array.Length == count)
+                {
+                    list.AddRange(array);
+                }
+                else
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        content.Add(array[i]);
+                    }
+                }
+            }
+
+            readFromAppendingInfo.AddUsedLength(count);
+        }
+
+        object? IDataRW.Content { get => Content; set => Content = (T?)value; }
+
+        object? IDataReader.Content { get => Content; set => Content = (T?)value; }
+
+        object? IDataWriter.Content { get => Content; set => Content = (T?)value; }
+
+        IValueWriter IDataWriter<int>.this[int key] => this[key];
+
+        IValueReader IDataReader<int>.this[int key] => this[key];
+
+        sealed class ValueRW : BaseGenericRW<TValue>
+        {
+            readonly ListRW<T, TValue> ListRW;
+            readonly int Index;
+
+            public ValueRW(ListRW<T, TValue> listRW, int index)
+            {
+                ListRW = listRW;
+                Index = index;
+            }
+
+            public override TValue? ReadValue()
+            {
+                if (ListRW.content is null)
+                {
+                    throw new NullReferenceException(nameof(Content));
+                }
+
+                return ListRW.content[Index];
+            }
+
+            public override void WriteValue(TValue? value)
+            {
+                if (ListRW.content is null)
+                {
+                    throw new NullReferenceException(nameof(Content));
+                }
+
+                if (Index == ListRW.Count)
+                {
+                    ListRW.content.Add(value);
+                }
+                else
+                {
+                    ListRW.content[Index] = value;
+                }
+            }
         }
     }
 }

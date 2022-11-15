@@ -3,44 +3,47 @@ using static Swifter.RW.DataTableRW;
 
 namespace Swifter.RW
 {
-    internal sealed class DataTableInterface<T> : IValueInterface<T> where T : DataTable
+    internal sealed class DataTableInterface<T> : IValueInterface<T?> where T : DataTable
     {
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<T> reader)
             {
                 return reader.ReadValue();
             }
 
-            var writer = new DataTableRW<T>(GetDataTableRWOptions(valueReader));
+            var writer = new DataTableRW<T>(
+                valueReader is ITargetableValueRW targetable && TargetableSetOptionsHelper<DataTableRWOptions>.TryGetOptions(targetable, out var options)
+                ? options
+                : DataTableRW.DefaultOptions
+                );
 
             valueReader.ReadArray(writer);
 
-            return writer.datatable;
+            return writer.content;
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
             if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<T> weiter)
+            else if (valueWriter is IValueWriter<T> weiter)
             {
                 weiter.WriteValue(value);
-
-                return;
             }
-
-            var reader = new DataTableRW<T>(GetDataTableRWOptions(valueWriter))
+            else
             {
-                datatable = value
-            };
-
-            valueWriter.WriteArray(reader);
+                valueWriter.WriteArray(new DataTableRW<T>(
+                    valueWriter is ITargetableValueRW targetable && TargetableSetOptionsHelper<DataTableRWOptions>.TryGetOptions(targetable, out var options)
+                    ? options
+                    : DataTableRW.DefaultOptions
+                    )
+                {
+                    content = value
+                });
+            }
         }
     }
 }

@@ -3,32 +3,63 @@ using System.Collections.Generic;
 
 namespace Swifter.RW
 {
-    internal sealed class EnumeratorReader<T, TValue> : IDataReader<int> where T : IEnumerator<TValue>
+    internal sealed class EnumeratorReader<T, TValue> : IArrayReader where T : IEnumerator<TValue?>
     {
-        internal T content;
+        T? content;
 
         public IValueReader this[int key] => throw new NotSupportedException();
-
-        public IEnumerable<int> Keys => throw new NotSupportedException();
 
         public int Count => -1;
 
         public Type ContentType => typeof(T);
 
-        public object Content
+        public Type ValueType => typeof(TValue);
+
+        public T? Content
         {
             get => content;
-            set => content = (T)value;
+            set => content = value;
         }
 
-        public void OnReadAll(IDataWriter<int> dataWriter)
+        public void OnReadAll(IDataWriter<int> dataWriter, RWStopToken stopToken = default)
         {
-            for (int i = 0; content.MoveNext(); i++)
+            if (content is null)
             {
-                ValueInterface<TValue>.WriteValue(dataWriter[i], content.Current);
+                throw new NullReferenceException(nameof(content));
+            }
+
+            int i = 0;
+
+            if (stopToken.CanBeStopped)
+            {
+                if (stopToken.PopState() is int index)
+                {
+                    i = index;
+                }
+
+                for (; content.MoveNext(); i++)
+                {
+                    if (stopToken.IsStopRequested)
+                    {
+                        stopToken.SetState(i);
+
+                        return;
+                    }
+
+                    ValueInterface<TValue>.WriteValue(dataWriter[i], content.Current);
+                }
+            }
+            else
+            {
+                for (; content.MoveNext(); i++)
+                {
+                    ValueInterface<TValue>.WriteValue(dataWriter[i], content.Current);
+                }
             }
         }
 
         public void OnReadValue(int key, IValueWriter valueWriter) => throw new NotSupportedException();
+
+        object? IDataReader.Content { get => Content; set => Content = (T?)value; }
     }
 }

@@ -1,9 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net20;net35;net40;net45;net47;netstandard2.0;netcoreapp2.0;netcoreapp2.1;netcoreapp3.0</TargetFrameworks>
+    <TargetFrameworks>net20;net35;net40;net45;netstandard2.0;netstandard2.1;netcoreapp2.1;netcoreapp3.1;net5;net6</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.5.0</Version>
+	<Nullable>enable</Nullable>
+    <Version>1.6.0</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Swifter.Json.xml</DocumentationFile>
     <Description>A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.</Description>
@@ -12,6 +13,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>Swifter.Json.snk</AssemblyOriginatorKeyFile>
+	<NoWarn>NETSDK1138</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,45 +25,35 @@
     <ProjectReference Include="..\Swifter.Core\Swifter.Core.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="JsonFormatter.Overload.tt">
-      <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>JsonFormatter.Overload.cs</LastGenOutput>
-    </None>
-    <Compile Update="JsonFormatter.Overload.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>JsonFormatter.Overload.tt</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
   <PropertyGroup Condition="'$(TargetFramework)' == 'net20'">
-    <DefineConstants></DefineConstants>
+    <DefineConstants>NO_OPTIONS_;</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net35'">
-    <DefineConstants></DefineConstants>
+    <DefineConstants>NO_OPTIONS_;</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net40'">
-    <DefineConstants>Dynamic;</DefineConstants>
+    <DefineConstants>NO_OPTIONS_;Dynamic;</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net45'">
-    <DefineConstants>Async;Dynamic;</DefineConstants>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net47'">
-    <DefineConstants>Async;Dynamic;</DefineConstants>
+    <DefineConstants>NO_OPTIONS_;Async;Dynamic;Span;</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <DefineConstants>Async;Dynamic;</DefineConstants>
+    <DefineConstants>NO_OPTIONS_;Async;Dynamic;Span;</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp2.0'">
-    <DefineConstants>Async;Dynamic;</DefineConstants>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <DefineConstants>NO_OPTIONS_;Async;Dynamic;NativeSpan;Span;</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp2.1'">
-    <DefineConstants>Async;Dynamic;ValueTask;Span;</DefineConstants>
+    <DefineConstants>NO_OPTIONS_;Async;Dynamic;NativeSpan;Span;</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp3.0'">
-    <DefineConstants>Async;Dynamic;ValueTask;Span;</DefineConstants>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp3.1'">
+    <DefineConstants>NO_OPTIONS_;Async;Dynamic;NativeSpan;Span;</DefineConstants>
   </PropertyGroup>
-
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net5'">
+    <DefineConstants>NO_OPTIONS_;Async;Dynamic;NativeSpan;Span;</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net6'">
+    <DefineConstants>NO_OPTIONS_;Async;Dynamic;NativeSpan;Span;</DefineConstants>
+  </PropertyGroup>
   
 </Project>

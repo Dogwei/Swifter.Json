@@ -1,47 +1,43 @@
 ﻿
 
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Swifter.RW
 {
     internal sealed class DataSetInterface<T> : IValueInterface<T> where T : DataSet
     {
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<T> tReader)
             {
                 return tReader.ReadValue();
             }
-            
+
             var dataReader = new DataSetRW<T>();
 
             valueReader.ReadArray(dataReader);
 
-            return dataReader.dataset;
+            return dataReader.content;
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
             if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<T> tWriter)
+            else if (valueWriter is IValueWriter<T> tWriter)
             {
                 tWriter.WriteValue(value);
-
-                return;
             }
-
-            var dataReader = new DataSetRW<T>
+            else
             {
-                dataset = value
-            };
-
-            valueWriter.WriteArray(dataReader);
+                valueWriter.WriteArray(new DataSetRW<T>
+                {
+                    content = value
+                });
+            }
         }
     }
 }

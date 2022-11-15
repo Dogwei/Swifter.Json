@@ -1,6 +1,5 @@
-﻿
-
-using System;
+﻿using System;
+using System.Globalization;
 
 namespace Swifter.RW
 {
@@ -9,46 +8,61 @@ namespace Swifter.RW
     /// </summary>
     public static class ValueInterfaceExtensions
     {
-        /// <summary>
-        /// 设置支持针对性接口的对象指定类型的值读写接口。
-        /// </summary>
-        /// <typeparam name="T">指定类型</typeparam>
-        /// <param name="targeted">支持针对性接口的对象</param>
-        /// <param name="valueInterface">值读写接口</param>
-        public static void SetValueInterface<T>(this ITargetedBind targeted, IValueInterface<T> valueInterface)
+        public static void SetValueInterface<T>(this ITargetableValueRWSource targetable, IValueInterface<T> valueInterface)
         {
-            ValueInterface<T>.SetTargetedInterface(targeted, valueInterface);
+            targetable.ValueInterfaceMapSource.SetValueInterface(valueInterface);
+        }
+
+        public static IValueInterface<T>? GetValueInterface<T>(this ITargetableValueRWSource targetable)
+        {
+            return targetable.ValueInterfaceMapSource.GetValueInterface<T>();
+        }
+
+        public static bool RemoveValueInterface<T>(this ITargetableValueRWSource targetable)
+        {
+            return targetable.ValueInterfaceMapSource.RemoveValueInterface<T>();
+        }
+
+        public static void ClearValueInterfaces(this ITargetableValueRWSource targetable)
+        {
+            targetable.ValueInterfaceMapSource.ClearValueInterfaces();
+        }
+
+        public static IValueInterface<T>? GetValueInterface<T>(this ITargetableValueRW targetable)
+        {
+            return targetable.ValueInterfaceMap.GetValueInterface<T>();
         }
 
         /// <summary>
         /// 设置支持针对性接口的对象指定类型的格式。
         /// </summary>
         /// <typeparam name="T">指定类型</typeparam>
-        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <param name="targetable">支持针对性接口的对象</param>
         /// <param name="format">格式</param>
-        public static void SetValueFormat<T>(this ITargetedBind targeted, string format) where T : IFormattable
+        /// <param name="formatProvider">格式提供者, 为 <see langword="null"/> 将使用 <see cref="CultureInfo.CurrentCulture"/>.</param>
+        public static void SetValueFormat<T>(this ITargetableValueRWSource targetable, string format, IFormatProvider? formatProvider = null) where T : IFormattable
         {
-            ValueInterface<T>.SetTargetedInterface(targeted, new SetValueFormatInterface<T>(ValueInterface<T>.Content, format));
+            targetable.SetValueInterface(new SetValueFormatInterface<T>(ValueInterface<T>.GetInterface(), format, formatProvider));
         }
 
         /// <summary>
         /// 设置支持针对性接口的对象的 DateTime 格式。
         /// </summary>
-        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <param name="targetable">支持针对性接口的对象</param>
         /// <param name="format">格式</param>
-        public static void SetDateTimeFormat(this ITargetedBind targeted, string format)
+        public static void SetDateTimeFormat(this ITargetableValueRWSource targetable, string format)
         {
-            ValueInterface<DateTime>.SetTargetedInterface(targeted, new DateTimeInterface(format));
+            targetable.SetValueInterface(new DateTimeInterface(format));
         }
 
         /// <summary>
         /// 设置支持针对性接口的对象的 DateTimeOffset 格式。
         /// </summary>
-        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <param name="targetable">支持针对性接口的对象</param>
         /// <param name="format">格式</param>
-        public static void SetDateTimeOffsetFormat(this ITargetedBind targeted, string format)
+        public static void SetDateTimeOffsetFormat(this ITargetableValueRWSource targetable, string format)
         {
-            ValueInterface<DateTimeOffset>.SetTargetedInterface(targeted, new DateTimeOffsetInterface(format));
+            targetable.SetValueInterface(new DateTimeOffsetInterface(format));
         }
 
 
@@ -83,11 +97,30 @@ namespace Swifter.RW
 
             public DateTimeOffset ReadValue(IValueReader valueReader)
             {
-                return DateTime.Parse(valueReader.ReadString());
+                if (valueReader is IValueReader<DateTimeOffset> reader)
+                {
+                    return reader.ReadValue();
+                }
+
+                var str = valueReader.ReadString();
+
+                if (str is null)
+                {
+                    return default;
+                }
+
+                return DateTime.Parse(str);
             }
 
             public void WriteValue(IValueWriter valueWriter, DateTimeOffset value)
             {
+                if (valueWriter is IValueWriter<DateTimeOffset> writer)
+                {
+                    writer.WriteValue(value);
+
+                    return;
+                }
+
                 valueWriter.WriteString(value.ToString(format));
             }
         }

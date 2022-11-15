@@ -6,7 +6,7 @@ namespace Swifter.RW
 {
     internal sealed class VersionInterface : IValueInterface<Version>
     {
-        public Version ReadValue(IValueReader valueReader)
+        public Version? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<Version> versionReader)
             {
@@ -23,16 +23,13 @@ namespace Swifter.RW
             return new Version(versionText);
         }
 
-        public void WriteValue(IValueWriter valueWriter, Version value)
+        public void WriteValue(IValueWriter valueWriter, Version? value)
         {
             if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<Version> versionReader)
+            else if (valueWriter is IValueWriter<Version> versionReader)
             {
                 versionReader.WriteValue(value);
             }

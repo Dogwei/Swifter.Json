@@ -13,9 +13,9 @@ namespace Swifter.RW
 
         sealed class AsHelperGroup
         {
-            public readonly AsHelper Reader;
-            public readonly AsHelper Writer;
-            public readonly AsHelper RW;
+            public readonly AsHelper? Reader;
+            public readonly AsHelper? Writer;
+            public readonly AsHelper? RW;
 
             public AsHelperGroup(Type type)
             {
@@ -26,44 +26,44 @@ namespace Swifter.RW
                         // Reader
                         if (typeof(IDataReader).IsAssignableFrom(@interface) && @interface.GetGenericTypeDefinition() == typeof(IDataReader<>))
                         {
-                            Store(ref Reader, @interface);
+                            Store(out Reader, @interface);
                         }
 
                         // Writer
                         if (typeof(IDataWriter).IsAssignableFrom(@interface) && @interface.GetGenericTypeDefinition() == typeof(IDataWriter<>))
                         {
-                            Store(ref Writer, @interface);
+                            Store(out Writer, @interface);
                         }
 
                         // RW
                         if (typeof(IDataRW).IsAssignableFrom(@interface) && @interface.GetGenericTypeDefinition() == typeof(IDataRW<>))
                         {
-                            Store(ref RW, @interface);
+                            Store(out RW, @interface);
                         }
                     }
                 }
             }
 
-            public static void Store(ref AsHelper value, Type @interface)
+            public static void Store(out AsHelper value, Type @interface)
             {
                 var genericTypes = @interface.GetGenericArguments();
 
                 var asHelperImplType = typeof(AsHelperImpl<>).MakeGenericType(genericTypes);
 
-                value = (AsHelper)Activator.CreateInstance(asHelperImplType);
+                value = (AsHelper)Activator.CreateInstance(asHelperImplType)!;
             }
         }
 
-        sealed class AsHelperImpl<TKey> : AsHelper
+        sealed class AsHelperImpl<TKey> : AsHelper where TKey : notnull
         {
             public override Type KeyType => typeof(TKey);
 
-            public override IDataReader<TOut> As<TOut>(IDataReader dataReader)
+            public override IDataReader<TOut> As<TOut>(IDataReader dataReader) 
             {
                 return new AsDataReader<TKey, TOut>((IDataReader<TKey>)dataReader);
             }
 
-            public override IDataWriter<TOut> As<TOut>(IDataWriter dataWriter)
+            public override IDataWriter<TOut> As<TOut>(IDataWriter dataWriter) 
             {
                 return new AsDataWriter<TKey, TOut>((IDataWriter<TKey>)dataWriter);
             }
@@ -87,7 +87,7 @@ namespace Swifter.RW
                 throw new ArgumentNullException(nameof(obj));
             }
 
-            if (Cache.TryGetValue(Underlying.GetMethodTablePointer(obj), out var group))
+            if (Cache.TryGetValue(TypeHelper.GetTypeHandle(obj), out var group))
             {
                 return group;
             }
@@ -100,7 +100,7 @@ namespace Swifter.RW
         {
             lock (Cache)
             {
-                var mtp = Underlying.GetMethodTablePointer(obj);
+                var mtp = TypeHelper.GetTypeHandle(obj);
 
                 if (Cache.TryGetValue(mtp, out var group))
                 {
@@ -116,19 +116,19 @@ namespace Swifter.RW
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static AsHelper GetInstance(IDataReader dataReader) => GetOrCreateGroup(dataReader).Reader;
+        public static AsHelper GetInstance(IDataReader dataReader) => GetOrCreateGroup(dataReader).Reader!;
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static AsHelper GetInstance(IDataWriter dataWriter) => GetOrCreateGroup(dataWriter).Writer;
+        public static AsHelper GetInstance(IDataWriter dataWriter) => GetOrCreateGroup(dataWriter).Writer!;
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static AsHelper GetInstance(IDataRW dataRW) => GetOrCreateGroup(dataRW).RW;
+        public static AsHelper GetInstance(IDataRW dataRW) => GetOrCreateGroup(dataRW).RW!;
 
-        public abstract IDataReader<TOut> As<TOut>(IDataReader dataReader);
+        public abstract IDataReader<TOut> As<TOut>(IDataReader dataReader) where TOut : notnull;
 
-        public abstract IDataWriter<TOut> As<TOut>(IDataWriter dataWriter);
+        public abstract IDataWriter<TOut> As<TOut>(IDataWriter dataWriter) where TOut : notnull;
 
-        public abstract IDataRW<TOut> As<TOut>(IDataRW dataRW);
+        public abstract IDataRW<TOut> As<TOut>(IDataRW dataRW) where TOut : notnull;
 
         public abstract Type KeyType { get; }
 

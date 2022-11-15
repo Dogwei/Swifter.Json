@@ -1,38 +1,30 @@
 ﻿
-using Swifter.Tools;
-
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
-    internal sealed class CollectionRW<T> : IDataRW<int> where T : ICollection
+    internal sealed class CollectionRW<T> : IArrayRW where T : ICollection
     {
         public const int DefaultCapacity = 3;
 
-        internal T content;
+        T? content;
 
-        public ValueCopyer<int> this[int key]=> throw new NotSupportedException();
+        public IValueRW this[int key] => throw new NotSupportedException();
 
-        IValueWriter IDataWriter<int>.this[int key] => this[key];
+        public int Count => content?.Count ?? -1;
 
-        IValueReader IDataReader<int>.this[int key] => this[key];
-
-        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
-
-        public int Count => content.Count;
-
-        public object Content
+        public T? Content
         {
             get => content;
-            set => content = (T)value;
+            set => content = value;
         }
 
         public Type ContentType => typeof(T);
 
-        IValueRW IDataRW<int>.this[int key] => this[key];
+        public Type ValueType => typeof(object);
 
         public void Initialize()
         {
@@ -43,29 +35,70 @@ namespace Swifter.RW
         {
             if (typeof(T).IsAssignableFrom(typeof(ArrayList)))
             {
-                Underlying.As<T, ArrayList>(ref content) = new ArrayList(capacity);
+                Unsafe.As<T?, ArrayList?>(ref content) = new ArrayList(capacity);
             }
             else
             {
-                // TODO: Capacity.
+                // TODO: Capacity
                 content = Activator.CreateInstance<T>();
             }
         }
 
-        public void OnReadAll(IDataWriter<int> dataWriter)
+        public void OnReadAll(IDataWriter<int> dataWriter, RWStopToken stopToken = default)
         {
-            var index = 0;
-
-            foreach (var item in content)
+            if (content is null)
             {
-                ValueInterface.WriteValue(dataWriter[index], item);
+                throw new NullReferenceException(nameof(Content));
+            }
 
-                ++index;
+            int index = 0;
+
+            if (stopToken.CanBeStopped)
+            {
+                IEnumerator enumerator;
+
+                if (stopToken.PopState() is ValueTuple<IEnumerator, int> state)
+                {
+                    enumerator = state.Item1;
+                    index = state.Item2;
+                }
+                else
+                {
+                    enumerator = content.GetEnumerator();
+                }
+
+                while (enumerator.MoveNext())
+                {
+                    ValueInterface.WriteValue(dataWriter[index], enumerator.Current);
+
+                    ++index;
+
+                    if (stopToken.IsStopRequested)
+                    {
+                        stopToken.SetState((enumerator, index));
+
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                foreach (var item in content)
+                {
+                    ValueInterface.WriteValue(dataWriter[index], item);
+
+                    ++index;
+                }
             }
         }
 
         public void OnReadValue(int key, IValueWriter valueWriter)
         {
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(Content));
+            }
+
             if (content is IList list)
             {
                 ValueInterface.WriteValue(valueWriter, list[key]);
@@ -78,6 +111,11 @@ namespace Swifter.RW
 
         public void OnWriteValue(int key, IValueReader valueReader)
         {
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(Content));
+            }
+
             if (content is IList list)
             {
                 var value = ValueInterface<object>.ReadValue(valueReader);
@@ -97,15 +135,43 @@ namespace Swifter.RW
             }
         }
 
-        public void OnWriteAll(IDataReader<int> dataReader)
+        public void OnWriteAll(IDataReader<int> dataReader, RWStopToken stopToken = default)
         {
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(Content));
+            }
+
             if (content is IList list)
             {
-                var length = Count;
+                int length = Count;
+                int i = 0;
 
-                for (int i = 0; i < length; i++)
+                if (stopToken.CanBeStopped)
                 {
-                    list[i] = ValueInterface<object>.ReadValue(dataReader[i]);
+                    if (stopToken.PopState() is int index)
+                    {
+                        i = index;
+                    }
+
+                    for (; i < length; i++)
+                    {
+                        if (stopToken.IsStopRequested)
+                        {
+                            stopToken.SetState(i);
+
+                            return;
+                        }
+
+                        list[i] = ValueInterface<object>.ReadValue(dataReader[i]);
+                    }
+                }
+                else
+                {
+                    for (; i < length; i++)
+                    {
+                        list[i] = ValueInterface<object>.ReadValue(dataReader[i]);
+                    }
                 }
             }
             else
@@ -113,5 +179,15 @@ namespace Swifter.RW
                 throw new NotSupportedException();
             }
         }
+
+        IValueWriter IDataWriter<int>.this[int key] => this[key];
+
+        IValueReader IDataReader<int>.this[int key] => this[key];
+
+        object? IDataRW.Content { get => Content; set => Content = (T?)value; }
+
+        object? IDataReader.Content { get => Content; set => Content = (T?)value; }
+
+        object? IDataWriter.Content { get => Content; set => Content = (T?)value; }
     }
 }

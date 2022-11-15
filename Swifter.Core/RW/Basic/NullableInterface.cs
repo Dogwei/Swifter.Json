@@ -18,7 +18,7 @@ namespace Swifter.RW
             }
             else
             {
-                ValueInterface<T>.WriteValue(valueWriter, value.Value);
+                ValueInterface.WriteValue(valueWriter, value.Value);
             }
         }
     }

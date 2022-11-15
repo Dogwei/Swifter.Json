@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 
 namespace Swifter.RW
 {
@@ -15,12 +16,7 @@ namespace Swifter.RW
         /// <summary>
         /// 字段的初始类型。
         /// </summary>
-        Type BeforeType { get; }
-
-        /// <summary>
-        /// 字段在经过处理之后的类型。
-        /// </summary>
-        Type AfterType { get; }
+        Type FieldType { get; }
 
         /// <summary>
         /// 能否读取。
@@ -38,7 +34,7 @@ namespace Swifter.RW
         bool IsPublic { get; }
 
         /// <summary>
-        /// 是否时静态字段。
+        /// 是否是静态字段。
         /// </summary>
         bool IsStatic { get; }
 
@@ -50,7 +46,7 @@ namespace Swifter.RW
         /// <summary>
         /// 字段原始信息。
         /// </summary>
-        object Original { get; }
+        MemberInfo MemberInfo { get; }
 
         /// <summary>
         /// 该字段在 OnReadAll 时是否忽略默认值。

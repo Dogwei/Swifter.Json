@@ -1,6 +1,4 @@
-﻿
-
-using System;
+﻿using System;
 
 namespace Swifter.RW
 {
@@ -10,7 +8,7 @@ namespace Swifter.RW
         {
             var value = valueReader.DirectRead();
 
-            if (value is null || value == DBNull.Value)
+            if (value is null or DBNull)
             {
                 return DBNull.Value;
             }
@@ -18,7 +16,7 @@ namespace Swifter.RW
             throw new NotSupportedException("Unable convert value to DbNull.");
         }
 
-        public void WriteValue(IValueWriter valueWriter, DBNull value)
+        public void WriteValue(IValueWriter valueWriter, DBNull? value)
         {
             valueWriter.DirectWrite(null);
         }

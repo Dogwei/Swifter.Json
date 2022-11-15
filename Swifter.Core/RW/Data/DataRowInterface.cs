@@ -6,42 +6,38 @@ namespace Swifter.RW
 {
     internal sealed class DataRowInterface<T> : IValueInterface<T> where T : DataRow
     {
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<T> tReader)
             {
                 return tReader.ReadValue();
             }
 
-            var dataWriter = new DataRowRW<T>();
+            var dataWriter = new DataRowRW<T>(new DataTable());
 
             valueReader.ReadObject(dataWriter);
 
-            return dataWriter.datarow;
+            return dataWriter.content;
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
             if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            if (valueWriter is IValueWriter<T> tWriter)
+            else if(valueWriter is IValueWriter<T> writer)
             {
-                tWriter.WriteValue(value);
-
-                return;
+                writer.WriteValue(value);
             }
-
-            var dataReader = new DataRowRW<T>
+            else
             {
-                datarow = value
-            };
+                var rw = new DataRowRW<T>(value.Table, value);
 
-            valueWriter.WriteObject(dataReader);
+                rw.Initialize();
+
+                valueWriter.WriteObject(rw);
+            }
         }
     }
 }

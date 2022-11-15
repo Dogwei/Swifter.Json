@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.Tools
 {
@@ -45,11 +46,23 @@ namespace Swifter.Tools
 
             if (hGCache.Available * Ratio <= average)
             {
-                hGCache.Offset = 0;
-                hGCache.Count = 0;
-
                 base.Return(hGCache);
             }
+        }
+
+        /// <summary>
+        /// 租借全局缓存。
+        /// </summary>
+        /// <returns>返回全局缓存实例</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public new HGlobalCache<T> Rent()
+        {
+            var result = base.Rent();
+
+            result.Count = 0;
+            result.Offset = 0;
+
+            return result;
         }
 
         /// <summary>
@@ -61,7 +74,12 @@ namespace Swifter.Tools
         {
             ref var thread_static = ref ThreadStatic;
 
-            return thread_static ??= CreateInstance();
+            var result = thread_static ??= CreateInstance();
+
+            result.Count = 0;
+            result.Offset = 0;
+
+            return result;
         }
     }
 }

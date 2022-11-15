@@ -1,6 +1,7 @@
 ﻿
 using Swifter.RW;
-
+using Swifter.Tools;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Swifter.Reflection
 {
@@ -10,8 +11,10 @@ namespace Swifter.Reflection
 
         void OnWriteValue(object obj, IValueReader valueReader);
 
-        T ReadValue<T>(object obj);
+        void OnReadAll(object obj, IDataWriter<string> dataWriter);
 
-        void WriteValue<T>(object obj, T value);
+        void OnWriteAll(object obj, IDataReader<string> dataReader);
+
+        IValueRW CreateValueRW(XObjectRW baseRW);
     }
 }

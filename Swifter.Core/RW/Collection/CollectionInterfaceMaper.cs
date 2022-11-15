@@ -5,7 +5,7 @@ namespace Swifter.RW
 {
     internal sealed class CollectionInterfaceMaper : IValueInterfaceMaper
     {
-        public IValueInterface<T> TryMap<T>()
+        public IValueInterface<T>? TryMap<T>()
         {
             if (typeof(Array).IsAssignableFrom(typeof(T)))
             {
@@ -41,7 +41,7 @@ namespace Swifter.RW
 
             static IValueInterface<T> CreateInstance(Type type)
             {
-                return (IValueInterface<T>)Activator.CreateInstance(type);
+                return (IValueInterface<T>)Activator.CreateInstance(type)!;
             }
         }
     }

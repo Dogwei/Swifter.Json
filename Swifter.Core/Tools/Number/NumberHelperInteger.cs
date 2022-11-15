@@ -872,11 +872,11 @@ namespace Swifter.Tools
 
             if (radix == DecimalRadix && count == DecimalDivisorLength)
             {
-                written = Mult(value, written, DecimalDivisor, out carry);
+                written = Mul(value, written, DecimalDivisor, out carry);
             }
             else
             {
-                written = Mult(value, written, numbers[count], out carry);
+                written = Mul(value, written, numbers[count], out carry);
             }
 
 

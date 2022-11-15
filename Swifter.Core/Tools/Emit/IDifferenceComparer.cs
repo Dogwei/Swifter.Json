@@ -6,7 +6,7 @@ namespace Swifter.Tools
     /// 差异位比较器。
     /// </summary>
     /// <typeparam name="T">指定类型</typeparam>
-    public interface IDifferenceComparer<T>:IHashComparer<T>
+    public interface IDifferenceComparer<T>
     {
         /// <summary>
         /// 获取类型实例的长度。
@@ -34,5 +34,19 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">IL 生成器</param>
         void EmitElementAt(ILGenerator ilGen);
+
+        /// <summary>
+        /// 比较两个值是否一致。
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <returns></returns>
+        bool Equals(T x, T y);
+
+        /// <summary>
+        /// 生成比较两个值是否一致的 IL 指令。
+        /// </summary>
+        /// <param name="ilGen"></param>
+        void EmitEquals(ILGenerator ilGen);
     }
 }

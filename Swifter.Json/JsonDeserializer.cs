@@ -2,171 +2,2175 @@
 using Swifter.RW;
 using Swifter.Tools;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Threading.Tasks;
 using static Swifter.Json.JsonCode;
 using static Swifter.Json.JsonFormatter;
+#if !NO_OPTIONS
 using static Swifter.Json.JsonFormatterOptions;
-using static Swifter.Json.JsonDeserializeModes;
-using static Swifter.Tools.StringHelper;
-using ArrayType = System.Collections.Generic.List<object>;
-using ObjectType = System.Collections.Generic.Dictionary<string, object>;
+#endif
 
 namespace Swifter.Json
 {
-    sealed unsafe class JsonDeserializer<TMode> :
-        IJsonReader,
-        IDataReader<string>,
-        IValueReader<Guid>,
-        IValueReader<DateTimeOffset>,
-        IValueReader<bool[]>, IValueReader<List<bool>>,
-        IValueReader<byte[]>, IValueReader<List<byte>>,
-        IValueReader<sbyte[]>, IValueReader<List<sbyte>>,
-        IValueReader<short[]>, IValueReader<List<short>>,
-        IValueReader<ushort[]>, IValueReader<List<ushort>>,
-        IValueReader<char[]>, IValueReader<List<char>>,
-        IValueReader<int[]>, IValueReader<List<int>>,
-        IValueReader<uint[]>, IValueReader<List<uint>>,
-        IValueReader<long[]>, IValueReader<List<long>>,
-        IValueReader<ulong[]>, IValueReader<List<ulong>>,
-        IValueReader<float[]>, IValueReader<List<float>>,
-        IValueReader<double[]>, IValueReader<List<double>>,
-        IValueReader<DateTime[]>, IValueReader<List<DateTime>>,
-        IValueReader<DateTimeOffset[]>, IValueReader<List<DateTimeOffset>>,
-        IValueReader<decimal[]>, IValueReader<List<decimal>>,
-        IValueReader<Guid[]>, IValueReader<List<Guid>>,
-        IValueReader<string[]>, IValueReader<List<string>>,
-        IValueReader<object[]>, IValueReader<List<object>>,
-        IFormatterReader
-        where TMode : struct
+    /// <summary>
+    /// Json 反序列化 (读取) 器。
+    /// </summary>
+    public sealed unsafe partial class JsonDeserializer :
+        IFormatterReader,
+        IFastArrayValueReader
     {
-        public readonly JsonFormatter jsonFormatter;
-        public readonly JsonFormatterOptions options;
+        /// <summary>
+        /// Json 格式化器。
+        /// </summary>
+        public readonly JsonFormatter? JsonFormatter;
 
-        public TMode mode;
+        /// <summary>
+        /// 分段读取器
+        /// </summary>
+        readonly JsonSegmentedContent? content;
 
-        public char* current;
-        public readonly char* begin;
-        public readonly char* end;
+        /// <summary>
+        /// 最大深度限制。
+        /// </summary>
+        public readonly int MaxDepth;
 
-        public readonly int maxDepth;
+#if !NO_OPTIONS
+        /// <summary>
+        /// 当前配置项。
+        /// </summary>
+        public readonly JsonFormatterOptions Options;
 
-        public int depth;
+        readonly object? mode;
+#endif
 
-        public int Offset => (int)(current - begin);
+        char* begin;
+        char* end;
 
-        public int Length => (int)(end - current);
+        char* current;
 
-        public long TargetedId => jsonFormatter?.targeted_id ?? 0;
+        int depth;
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonDeserializer(char* chars, int length, int maxDepth, JsonFormatterOptions options)
+        /// <summary>
+        /// 获取已读取的字符数。
+        /// </summary>
+        public int Offset
+            => (int)(current - begin);
+
+        /// <summary>
+        /// 获取剩余字符数。
+        /// </summary>
+        int Rest
+            => (int)(end - current);
+
+#if !NO_OPTIONS
+        ReferenceMode ReferenceModeInstance
+            => Unsafe.As<ReferenceMode>(mode!);
+#endif
+
+        #region -- 构造函数 --
+
+        /// <summary>
+        /// 初始化 Json 反序列化 (读取) 器。
+        /// </summary>
+        /// <param name="content">分段读取器</param>
+        public JsonDeserializer(JsonSegmentedContent content)
+            : this(content.hGCache.First, content.hGCache.Count)
+        {
+            this.content = content;
+        }
+
+        /// <summary>
+        /// 初始化 Json 反序列化 (读取) 器。
+        /// </summary>
+        /// <param name="chars">Json 字符串</param>
+        /// <param name="length">Json 字符串长度</param>
+        public JsonDeserializer(char* chars, int length)
         {
             begin = chars;
             end = chars + length;
-
             current = chars;
 
-            this.maxDepth = maxDepth;
-            this.options = options;
+            MaxDepth = DefaultMaxDepth;
+
+#if !NO_OPTIONS
+            Options = JsonFormatterOptions.Default;
+#endif
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonDeserializer(char* chars, int length, int maxDepth)
+#if !NO_OPTIONS
+        /// <summary>
+        /// 初始化 Json 反序列化 (读取) 器。
+        /// </summary>
+        /// <param name="content">分段内容</param>
+        /// <param name="options">指定配置</param>
+        public JsonDeserializer(JsonSegmentedContent content, JsonFormatterOptions options)
+            : this(content.hGCache.First, content.hGCache.Count, options)
         {
-            begin = chars;
-            end = chars + length;
-
-            current = chars;
-
-            this.maxDepth = maxDepth;
-            options = Default;
+            this.content = content;
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonDeserializer(JsonFormatter jsonFormatter, char* chars, int length, int maxDepth, JsonFormatterOptions options) : this(chars, length, maxDepth, options)
+        /// <summary>
+        /// 初始化 Json 反序列化 (读取) 器。
+        /// </summary>
+        /// <param name="chars">Json 字符串</param>
+        /// <param name="length">Json 字符串长度</param>
+        /// <param name="options">指定配置</param>
+        public JsonDeserializer(char* chars, int length, JsonFormatterOptions options)
+            : this(chars, length)
         {
-            this.jsonFormatter = jsonFormatter;
-        }
+            Options = options;
 
-        public ref Reference ReferenceMode => ref Underlying.As<TMode, Reference>(ref mode);
-
-        public IEnumerable<string> Keys => null;
-
-        public int Count => -1;
-
-        public Type ContentType => null;
-
-        public object Content
-        {
-            get => throw new NotSupportedException();
-            set => throw new NotSupportedException();
-        }
-
-        public IValueReader this[string key]
-        {
-            get
+            if (On(MultiReferencingReference))
             {
-                Loop:
+                mode = new ReferenceMode();
+            }
+        }
+#endif
+
+        /// <summary>
+        /// 初始化 Json 反序列化 (读取) 器。
+        /// </summary>
+        /// <param name="jsonFormatter">指定格式化器</param>
+        /// <param name="content">分段内容</param>
+        public JsonDeserializer(JsonFormatter jsonFormatter, JsonSegmentedContent content)
+            : this(jsonFormatter, content.hGCache.First, content.hGCache.Count)
+        {
+            this.content = content;
+        }
+
+        /// <summary>
+        /// 初始化 Json 反序列化 (读取) 器。
+        /// </summary>
+        /// <param name="jsonFormatter">指定格式化器</param>
+        /// <param name="chars">Json 字符串</param>
+        /// <param name="length">Json 字符串长度</param>
+        public JsonDeserializer(JsonFormatter jsonFormatter, char* chars, int length)
+            : this(chars, length
+#if !NO_OPTIONS
+                  , jsonFormatter.Options
+#endif
+                  )
+        {
+            JsonFormatter = jsonFormatter;
+            MaxDepth = jsonFormatter.MaxDepth;
+        }
+
+        #endregion
+
+        #region -- 数值 --
+
+        /// <summary>
+        /// 读取一个 <see cref="Boolean"/> 值。
+        /// </summary>
+        public bool ReadBoolean()
+        {
+            var curr = *current;
+
+            switch (curr)
+            {
+                case Fixtrue:
+                case FixTrue:
+                    if (Verify(trueString))
+                    {
+                        current += trueString.Length;
+
+                        return true;
+                    }
+                    break;
+#if !NO_OPTIONS
+                case FixString:
+                case FixChars:
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+
+                    break;
+#endif
+                case Fixfalse:
+                case FixFalse:
+                    if (Verify(falseString))
+                    {
+                        current += falseString.Length;
+
+                        return false;
+                    }
+                    break;
+            }
+
+            if (curr >= FixNumberMin && curr <= FixNumberMax && IsValueEnding(1))
+            {
+                ++current;
+
+                return curr != FixNumberMin;
+            }
+
+            return Convert.ToBoolean(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="Byte"/> 值。
+        /// </summary>
+        public byte ReadByte()
+            => checked((byte)ReadUInt64());
+
+        /// <summary>
+        /// 读取一个 <see cref="Char"/> 值。
+        /// </summary>
+        public char ReadChar()
+        {
+            if (Rest >= 3 && current[0] is FixString or FixChars && current[0] == current[2] && current[1] is not FixEscape)
+            {
+                var result = current[1];
+
+                current += 3;
+
+                return result;
+            }
+
+#if !NO_OPTIONS
+            if (On(EmptyStringAsDefault) && current[0] is FixString or FixChars && TryReadEmptyString())
+            {
+                return default;
+            }
+#endif
+
+            return char.Parse(ReadString() ?? throw new NullReferenceException());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="DateTime"/> 值。
+        /// </summary>
+        public DateTime ReadDateTime()
+        {
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<DateTime>();
+            }
+
+            return Convert.ToDateTime(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="Decimal"/> 值。
+        /// </summary>
+        public decimal ReadDecimal()
+        {
+            var (_, length, value) = NumberHelper.ParseDecimal(current, Rest);
+
+            if (length != 0 && IsValueEnding(length))
+            {
+                current += length;
+
+                return value;
+            }
+
+            return NoInliningReadDecimal();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        decimal NoInliningReadDecimal()
+        {
+        Loop:
+
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<decimal>();
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    break;
+            }
+
+            var numberInfo = NumberHelper.GetNumberInfo(current, Rest);
+
+            if (numberInfo.IsNumber)
+            {
+                if (IsValueEnding(numberInfo.End) && numberInfo.IsDecimal)
+                {
+                    current += numberInfo.End;
+
+                    return numberInfo.ToDecimal();
+                }
+
+                return decimal.Parse(InternalReadText().ToStringEx(), NumberStyle);
+            }
+
+            return Convert.ToDecimal(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="Double"/> 值。
+        /// </summary>
+        public double ReadDouble()
+        {
+#if !NO_OPTIONS
+            if (On(UseSystemFloatingPointsMethods))
+            {
+                var currentBackup = current;
+
+                switch (*currentBackup)
+                {
+                    case FixPositive:
+                    case FixNegative:
+                    case var digit when digit >= FixNumberMin && digit <= FixNumberMax:
+#if NativeSpan
+                        if (double.TryParse(InternalReadText(), out var value))
+                        {
+                            return value;
+                        }
+
+#else
+
+                        if (double.TryParse(InternalReadText().ToStringEx(), out var value))
+                        {
+                            return value;
+                        }
+
+#endif
+                        break;
+                }
+
+                current = currentBackup;
+
+            }
+            else
+#endif
+            {
+                var (_, length, value) = NumberHelper.DecimalParseDouble(current, Rest);
+
+                if (length != 0 && IsValueEnding(length))
+                {
+                    current += length;
+
+                    return value;
+                }
+            }
+
+            return NoInliningReadDouble();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        double NoInliningReadDouble()
+        {
+        Loop:
+
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<double>();
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    break;
+            }
+
+            var numberInfo = NumberHelper.GetNumberInfo(current, Rest);
+
+            if (numberInfo.IsNumber)
+            {
+                if (IsValueEnding(numberInfo.End) && numberInfo.IsCommonRadix(out var radix))
+                {
+                    current += numberInfo.End;
+
+                    return numberInfo.ToDouble(radix);
+                }
+
+                return double.Parse(InternalReadText().ToStringEx(), NumberStyle);
+            }
+
+            return Convert.ToDouble(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="Int16"/> 值。
+        /// </summary>
+        public short ReadInt16()
+            => checked((short)ReadInt64());
+
+        /// <summary>
+        /// 读取一个 <see cref="Int32"/> 值。
+        /// </summary>
+        public int ReadInt32()
+            => checked((int)ReadInt64());
+
+        /// <summary>
+        /// 读取一个 <see cref="Int64"/> 值。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public long ReadInt64()
+        {
+            var (_, length, value) = NumberHelper.DecimalParseInt64(current, Rest);
+
+            if (length != 0 && IsValueEnding(length))
+            {
+                current += length;
+
+                return value;
+            }
+
+            return NoInliningReadInt64();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        long NoInliningReadInt64()
+        {
+
+        Loop:
+
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<long>();
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    break;
+
+                case FixPositive:
+                case FixNegative:
+                case var curr when curr >= FixNumberMin && curr <= FixNumberMax:
+
+                    if (TryReadSegment(-1))
+                    {
+                        var (_, length, value) = NumberHelper.DecimalParseInt64(current, Rest);
+
+                        if (length != 0 && IsValueEnding(length))
+                        {
+                            current += length;
+
+                            return value;
+                        }
+                    }
+
+                    break;
+            }
+
+            return InternalNoInliningReadInt64();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        long InternalNoInliningReadInt64()
+        {
+            var numberInfo = NumberHelper.GetNumberInfo(current, Rest);
+
+            if (numberInfo.IsNumber)
+            {
+                if (IsValueEnding(numberInfo.End) && numberInfo.IsCommonRadix(out var radix))
+                {
+                    current += numberInfo.End;
+
+                    return numberInfo.ToInt64(radix);
+                }
+
+                // TODO: Span
+                return long.Parse(InternalReadText().ToStringEx(), NumberStyle);
+            }
+
+            return Convert.ToInt64(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="SByte"/> 值。
+        /// </summary>
+        public sbyte ReadSByte()
+            => checked((sbyte)ReadInt64());
+
+        /// <summary>
+        /// 读取一个 <see cref="Single"/> 值。
+        /// </summary>
+        public float ReadSingle()
+        {
+            var @double = ReadDouble();
+            var @float = (float)@double;
+
+            if (!float.IsInfinity(@float))
+            {
+                return @float;
+            }
+
+            if (double.IsInfinity(@double))
+            {
+                return @float;
+            }
+
+            throw new OverflowException();
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="UInt16"/> 值。
+        /// </summary>
+        public ushort ReadUInt16()
+            => checked((ushort)ReadUInt64());
+
+        /// <summary>
+        /// 读取一个 <see cref="UInt32"/> 值。
+        /// </summary>
+        public uint ReadUInt32()
+            => checked((uint)ReadUInt64());
+
+        /// <summary>
+        /// 读取一个 <see cref="UInt64"/> 值。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public ulong ReadUInt64()
+        {
+            var (_, length, value) = NumberHelper.DecimalParseUInt64(current, Rest);
+
+            if (length != 0 && IsValueEnding(length))
+            {
+                current += length;
+
+                return value;
+            }
+
+            return NoInliningReadUInt64();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        ulong NoInliningReadUInt64()
+        {
+        Loop:
+
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<ulong>();
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    break;
+            }
+
+            var numberInfo = NumberHelper.GetNumberInfo(current, Rest);
+
+            if (numberInfo.IsNumber)
+            {
+                if (IsValueEnding(numberInfo.End) && numberInfo.IsCommonRadix(out var radix))
+                {
+                    current += numberInfo.End;
+
+                    return numberInfo.ToUInt64(radix);
+                }
+
+                return ulong.Parse(InternalReadText().ToStringEx(), NumberStyle);
+            }
+
+            return Convert.ToUInt64(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="Guid"/> 值。
+        /// </summary>
+        public Guid ReadGuid()
+        {
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<Guid>();
+            }
+
+            return XConvert.Convert<Guid>(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="DateTimeOffset"/> 值。
+        /// </summary>
+        public DateTimeOffset ReadDateTimeOffset()
+        {
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<DateTimeOffset>();
+            }
+
+            return XConvert.Convert<DateTimeOffset>(DirectRead());
+        }
+
+        /// <summary>
+        /// 读取一个 <see cref="TimeSpan"/> 值。
+        /// </summary>
+        public TimeSpan ReadTimeSpan()
+        {
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
+                    {
+                        return default;
+                    }
+#endif
+
+                    return InternalReadParse<TimeSpan>();
+            }
+
+            return XConvert.Convert<TimeSpan>(DirectRead());
+        }
+
+        #endregion
+
+        #region -- 引用 --
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool IsReference()
+        {
+            var swap = current;
+
+            ++current;
+
+            var res = SkipReferenceKey();
+
+            current = swap;
+
+            return res;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool SkipReferenceKey()
+        {
+            SkipWhiteSpace();
+
+            var res = false;
+
+        Loop:
+
+            if (current < end)
+            {
+                switch (current[0])
+                {
+                    case DollarChar:
+                        res = Verify(RefKey);
+                        current += RefKey.Length;
+                        break;
+                    case FixString:
+                        res = Verify(RefKeyString);
+                        current += RefKeyString.Length;
+                        break;
+                    case FixChars:
+                        res = Verify(RefKeyChars);
+                        current += RefKeyChars.Length;
+                        break;
+                    case FixComment:
+                        if (SkipComment())
+                        {
+                            goto Loop;
+                        }
+                        break;
+                }
+            }
+
+            SkipWhiteSpace();
+
+            if (res)
+            {
+
+            Key:
+
+                if (current < end)
+                {
+                    if (*current is KeyEnding)
+                    {
+                        ++current;
+
+                        SkipWhiteSpace();
+                    }
+                    else if (*current is FixComment && SkipComment())
+                    {
+                        goto Key;
+                    }
+                }
+            }
+
+            return res;
+        }
+
+        /// <summary>
+        /// 读取一个引用。
+        /// </summary>
+        /// <exception cref="NotSupportedException">不是一个引用值或引用值格式错误</exception>
+        public RWPath ReadReference()
+        {
+            const string FormatErrorMessage = "Reference value does not end correctly.";
+            const string NotReferenceMessage = "Not a reference value.";
+
+            if (!(current < end && *current == FixObject))
+            {
+                throw new NotSupportedException(FormatErrorMessage);
+            }
+
+            ++current;
+
+            if (!SkipReferenceKey())
+            {
+                throw new NotSupportedException(NotReferenceMessage);
+            }
+
+            try
+            {
+
+            Loop:
+
+                switch (*current)
+                {
+                    case FixString:
+                    case FixChars:
+
+                        var result = InternalReadParse<RWPath>();
+
+                        if (result is not null)
+                        {
+                            return result;
+                        }
+
+                        throw new NullReferenceException();
+                    case FixComment:
+
+                        if (SkipComment())
+                        {
+                            if (current >= end)
+                            {
+                                ThrowException();
+                            }
+
+                            goto Loop;
+                        }
+
+                        goto default;
+                    default:
+                        var str = ReadString();
+
+                        if (str is not null)
+                        {
+                            result = SlowParse<RWPath>(str);
+
+                            if (result is not null)
+                            {
+                                return result;
+                            }
+                        }
+
+                        throw new NullReferenceException();
+                }
+            }
+            finally
+            {
+                SkipWhiteSpace();
+
+                if (!(current < end && *current == ObjectEnding))
+                {
+                    throw new NotSupportedException(FormatErrorMessage);
+                }
+
+                ++current;
+            }
+        }
+
+        #endregion
+
+        #region -- 结构 --
+
+        /// <summary>
+        /// 读取一个数组。
+        /// </summary>
+        public T?[]? ReadArray<T>()
+        {
+            SkipWhiteSpace();
+
+        Loop:
+
+            switch (*current)
+            {
+                case Fixnull:
+                case FixNull:
+                    if (Verify(nullString))
+                    {
+                        current += nullString.Length;
+
+                        return null;
+                    }
+                    goto default;
+#if !NO_OPTIONS
+                case FixString:
+                case FixChars:
+                    if (TryReadEmptyString())
+                    {
+                        return null;
+                    }
+
+                    goto default;
+#endif
+                case FixArray:
+                    break;
+                case ValueEnding:
+
+                    if (TryReadIsTuple())
+                    {
+                        goto Loop;
+                    }
+
+                    goto default;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    goto default;
+
+                default:
+
+                    return XConvert.Convert<T[]>(DirectRead());
+            }
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.EnterObject(new ArrayRW<T>());
+            }
+#endif
+
+            var result = ReadArray<T>(JsonArrayAppendingInfo<T[]>.AppendingInfo.MostClosestMeanCommonlyUsedLength, out var length);
+
+            JsonArrayAppendingInfo<T[]>.AppendingInfo.AddUsedLength(length);
+
+            if (result.Length != length)
+            {
+                Array.Resize(ref result, length);
+            }
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.CurrentObject.Content = result;
+
+                ReferenceModeInstance.LeavaObject();
+            }
+#endif
+
+            return result;
+        }
+
+        /// <summary>
+        /// 读取一个列表。
+        /// </summary>
+        public List<T?>? ReadList<T>()
+        {
+            SkipWhiteSpace();
+
+        Loop:
+
+            switch (*current)
+            {
+                case Fixnull:
+                case FixNull:
+                    if (Verify(nullString))
+                    {
+                        current += nullString.Length;
+
+                        return null;
+                    }
+                    goto default;
+#if !NO_OPTIONS
+                case FixString:
+                case FixChars:
+                    if (TryReadEmptyString())
+                    {
+                        return null;
+                    }
+
+                    goto default;
+#endif
+                case FixArray:
+                    break;
+                case ValueEnding:
+
+                    if (TryReadIsTuple())
+                    {
+                        goto Loop;
+                    }
+
+                    goto default;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    goto default;
+
+                default:
+
+                    return XConvert.Convert<List<T?>?>(DirectRead());
+            }
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.EnterObject(new ArrayRW<T>());
+            }
+#endif
+
+            var array = ReadArray<T>(JsonArrayAppendingInfo<List<T>>.AppendingInfo.MostClosestMeanCommonlyUsedLength, out var length);
+
+            JsonArrayAppendingInfo<List<T>>.AppendingInfo.AddUsedLength(length);
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.CurrentObject.Content = array;
+
+                ReferenceModeInstance.LeavaObject();
+            }
+#endif
+
+            return ArrayHelper.CreateList(array, length);
+        }
+
+        /// <summary>
+        /// 读取一个数组。
+        /// </summary>
+        /// <param name="defaultCapacity">默认容量</param>
+        /// <param name="length">返回数组长度</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public T?[] ReadArray<T>(int defaultCapacity, out int length)
+        {
+            var array = new T?[defaultCapacity];
+            var offset = 0;
+
+            FastObjectRW<T>? fastObjectRW = null;
+
+            if (ValueInterface<T>.IsFastObjectInterface)
+            {
+                fastObjectRW = FastObjectRW<T>.Create();
+            }
+
+            if (depth < MaxDepth)
+            {
+                ++current;
+                ++depth;
+
+#if !NO_OPTIONS
+                if (On(MultiReferencingReference))
+                {
+                    // TODO: 缺少首次赋值
+                    ReferenceModeInstance.CurrentObject.Content = array;
+                }
+#endif
+
+            Loop:
 
                 SkipWhiteSpace();
+
+                if (current < end)
+                {
+                    if (*current == ArrayEnding)
+                    {
+                        goto Return;
+                    }
+
+                    if (offset >= array.Length)
+                    {
+                        Array.Resize(ref array, offset * 2 + 1);
+
+#if !NO_OPTIONS
+                        if (On(MultiReferencingReference))
+                        {
+                            // TODO: 缺少首次赋值
+                            ReferenceModeInstance.CurrentObject.Content = array;
+                        }
+#endif
+                    }
+
+#if !NO_OPTIONS
+                    if (On(MultiReferencingReference))
+                    {
+                        ReferenceModeInstance.SetCurrentKey(offset);
+                    }
+#endif
+                    if (fastObjectRW is not null)
+                    {
+                        ReadObject(fastObjectRW);
+
+                        array[offset] = fastObjectRW.content;
+
+#if !NO_OPTIONS
+                        if (On(MultiReferencingReference))
+                        {
+                            fastObjectRW = FastObjectRW<T>.Create();
+                        }
+                        else
+#endif
+                        {
+                            fastObjectRW.content = default;
+                        }
+                    }
+                    else if (ValueInterface<T>.IsNotModified)
+                    {
+                        array[offset] = ReadValue<T>();
+                    }
+                    else
+                    {
+                        array[offset] = ValueInterface<T>.ReadValue(this);
+                    }
+
+                    ++offset;
+
+                Next:
+
+                    SkipWhiteSpace();
+
+                    if (current < end)
+                    {
+                        switch (*current)
+                        {
+                            case ArrayEnding:
+                                goto Return;
+                            case ValueEnding:
+                                ++current;
+
+                                goto Loop;
+                            case FixComment:
+                                if (SkipComment())
+                                {
+                                    goto Next;
+                                }
+
+                                break;
+                        }
+                    }
+                    else if (TryReadSegment(0))
+                    {
+                        goto Next;
+                    }
+                }
+                else if (TryReadSegment(0))
+                {
+                    goto Loop;
+                }
+
+                throw MakeException();
+
+            Return:
+
+                --depth;
+                ++current;
+            }
+            else
+            {
+                ThrowOutOfDepthException();
+
+                SkipValue();
+            }
+
+            length = offset;
+
+            return array;
+        }
+
+        /// <summary>
+        /// 读取一个数组。
+        /// </summary>
+        public void ReadArray(IDataWriter<int> dataWriter)
+        {
+            SkipWhiteSpace();
+
+        Loop:
+
+            switch (*current)
+            {
+                case Fixnull:
+                case FixNull:
+                    if (Verify(nullString))
+                    {
+                        current += nullString.Length;
+
+                        return;
+                    }
+                    goto default;
+                case FixObject:
+#if !NO_OPTIONS
+                    if (On(MultiReferencingReference))
+                    {
+                        if (IsReference())
+                        {
+                            goto default;
+                        }
+                    }
+#endif
+                    ReadObject(dataWriter.As<string>());
+                    return;
+                case FixArray:
+                    break;
+                case ValueEnding:
+
+                    if (TryReadIsTuple())
+                    {
+                        goto Loop;
+                    }
+
+                    goto default;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    goto default;
+
+                default:
+
+                    if (dataWriter.ContentType is Type contentType)
+                    {
+                        dataWriter.Content = XConvert.Convert(DirectRead(), contentType);
+                    }
+                    else
+                    {
+                        dataWriter.Content = DirectRead();
+                    }
+
+                    return;
+            }
+
+            if (dataWriter is IFastArrayRW fastArrayRW && dataWriter.ValueType is not null/* 如果是未知的值的类型则不支持快速读取 */)
+            {
+#if !NO_OPTIONS
+                if (On(MultiReferencingReference))
+                {
+                    ReferenceModeInstance.EnterObject(dataWriter);
+                }
+#endif
+
+                fastArrayRW.ReadFrom(this);
+
+#if !NO_OPTIONS
+                if (On(MultiReferencingReference))
+                {
+                    ReferenceModeInstance.LeavaObject();
+                }
+#endif
+                return;
+            }
+
+            dataWriter.Initialize();
+
+            InternalReadArray(dataWriter);
+
+        }
+
+        void InternalReadArray(IDataWriter<int> dataWriter)
+        {
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.EnterObject(dataWriter);
+            }
+#endif
+
+            if (depth >= MaxDepth)
+            {
+                ThrowOutOfDepthException();
+
+                SkipValue();
+
+                return;
+            }
+
+            ++current;
+            ++depth;
+
+            var offset = 0;
+
+        Loop:
+
+            SkipWhiteSpace();
+
+            if (current < end)
+            {
+                if (*current == ArrayEnding)
+                {
+                    goto Return;
+                }
+
+#if !NO_OPTIONS
+                if (On(MultiReferencingReference))
+                {
+                    ReferenceModeInstance.SetCurrentKey(offset);
+                }
+#endif
+
+                dataWriter.OnWriteValue(offset, this);
+
+                ++offset;
+
+            Next:
+
+                SkipWhiteSpace();
+
+                if (current < end)
+                {
+                    switch (*current)
+                    {
+                        case ArrayEnding:
+                            goto Return;
+                        case ValueEnding:
+                            ++current;
+
+                            goto Loop;
+                        case FixComment:
+                            if (SkipComment())
+                            {
+                                goto Next;
+                            }
+
+                            break;
+                    }
+                }
+                else if (TryReadSegment(0))
+                {
+                    goto Next;
+                }
+            }
+            else if (TryReadSegment(0))
+            {
+                goto Loop;
+            }
+
+            throw MakeException();
+
+        Return:
+
+            --depth;
+            ++current;
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.LeavaObject();
+            }
+#endif
+        }
+
+        /// <summary>
+        /// 读取一个对象。
+        /// </summary>
+        public void ReadObject(IDataWriter<string> dataWriter)
+        {
+            SkipWhiteSpace();
+
+        Loop:
+
+            switch (*current)
+            {
+                case Fixnull:
+                case FixNull:
+                    if (Verify(nullString))
+                    {
+                        current += nullString.Length;
+
+                        return;
+                    }
+                    goto default;
+#if !NO_OPTIONS
+                case FixString:
+                case FixChars:
+                    if (TryReadEmptyString())
+                    {
+
+                        return;
+                    }
+
+                    goto default;
+#endif
+                case FixArray:
+                    ReadArray(dataWriter.As<int>());
+                    return;
+                case FixObject:
+#if !NO_OPTIONS
+                    if (On(MultiReferencingReference))
+                    {
+                        if (IsReference())
+                        {
+                            goto default;
+                        }
+                    }
+#endif
+                    break;
+                case ValueEnding:
+
+                    if (TryReadIsTuple())
+                    {
+                        goto Loop;
+                    }
+
+                    goto default;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    goto default;
+
+                default:
+
+                    if (dataWriter.ContentType is Type contentType)
+                    {
+                        dataWriter.Content = XConvert.Convert(DirectRead(), dataWriter.ContentType);
+                    }
+                    else
+                    {
+                        dataWriter.Content = DirectRead();
+                    }
+
+                    return;
+            }
+
+            dataWriter.Initialize();
+
+            InternalReadObject(dataWriter);
+        }
+
+        void InternalReadObject(IDataWriter<string> dataWriter)
+        {
+            var isFastDataWriter = dataWriter is IDataWriter<Ps<char>>;
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.EnterObject(dataWriter);
+            }
+#endif
+
+            if (depth >= MaxDepth)
+            {
+                ThrowOutOfDepthException();
+
+                SkipValue();
+
+                return;
+            }
+
+            ++current;
+            ++depth;
+
+#if !NO_OPTIONS
+            var count_non_zero = dataWriter.Count > 0;
+#endif
+
+        Loop:
+
+            SkipWhiteSpace();
+
+            if (current < end)
+            {
+                Ps<char> name;
 
                 switch (*current)
                 {
                     case ObjectEnding:
-                        goto Empty;
-                    case ValueEnding:
-                        ++current;
-                        goto Loop;
+                        goto Return;
                     case FixString:
                     case FixChars:
+                        name = InternalReadString();
+                        break;
+                    case FixComment:
 
-                        if (TryReadNamedString(key))
+                        if (SkipComment())
                         {
-                            break;
+                            goto Loop;
                         }
 
-                        goto Empty;
+                        goto default;
                     default:
-
-                        if (TryReadNamedText(key))
-                        {
-                            break;
-                        }
-
-                        goto Empty;
+                        name = InternalReadText();
+                        break;
                 }
 
-                if (*current == ObjectEnding)
-                {
-                    goto Empty;
-                }
+            Key:
 
                 SkipWhiteSpace();
 
-                if (IsContent() && *current == KeyEnding)
+                if (current < end)
+                {
+                    if (*current is KeyEnding)
+                    {
+                        ++current;
+
+                    Value:
+
+                        SkipWhiteSpace();
+
+                        if (current < end)
+                        {
+#if !NO_OPTIONS
+                            switch (*current)
+                            {
+                                case FixNull:
+                                case Fixnull:
+                                    if (count_non_zero && On(IgnoreNull) && Verify(nullString))
+                                    {
+                                        current += nullString.Length;
+
+                                        goto Next;
+                                    }
+
+                                    break;
+                                case FixNumberMin:
+                                    if (count_non_zero && On(IgnoreZero) && IsValueEnding(1))
+                                    {
+                                        current += 1/*length of 0*/;
+
+                                        goto Next;
+                                    }
+
+                                    break;
+                            }
+#endif
+
+                            if (isFastDataWriter)
+                            {
+#if !NO_OPTIONS
+                                if (On(MultiReferencingReference))
+                                {
+                                    ReferenceModeInstance.SetCurrentKey(name);
+                                }
+#endif
+
+                                Unsafe.As<IDataWriter<Ps<char>>>(dataWriter).OnWriteValue(name, this);
+                            }
+                            else
+                            {
+                                var str_name = name.ToStringEx();
+
+#if !NO_OPTIONS
+                                if (On(MultiReferencingReference))
+                                {
+                                    ReferenceModeInstance.SetCurrentKey(str_name);
+                                }
+#endif
+
+                                dataWriter.OnWriteValue(str_name, this);
+                            }
+
+                        Next:
+
+                            SkipWhiteSpace();
+
+                            if (current < end)
+                            {
+                                switch (*current)
+                                {
+                                    case ObjectEnding:
+                                        goto Return;
+                                    case ValueEnding:
+                                        ++current;
+
+                                        goto Loop;
+                                    case FixComment:
+                                        if (SkipComment())
+                                        {
+                                            goto Next;
+                                        }
+
+                                        break;
+                                }
+                            }
+                            else if (TryReadSegment(0))
+                            {
+                                goto Next;
+                            }
+                        }
+                        else if (TryReadSegmentWithKeepName())
+                        {
+                            goto Value;
+                        }
+                    }
+                    else if (*current is FixComment && SkipComment())
+                    {
+                        goto Key;
+                    }
+                }
+                else if (TryReadSegmentWithKeepName())
+                {
+                    goto Key;
+                }
+
+                [MethodImpl(VersionDifferences.AggressiveInlining)]
+                bool TryReadSegmentWithKeepName()
+                {
+                    if (content is null)
+                    {
+                        return false;
+                    }
+
+                    return InternalTryReadSegmentWithKeepName();
+
+                    [MethodImpl(MethodImplOptions.NoInlining)]
+                    bool InternalTryReadSegmentWithKeepName()
+                    {
+                        if (name.Pointer >= begin && name.Pointer < end)
+                        {
+                            var offset = (int)(end - name.Pointer);
+
+                            if (TryReadSegment(offset))
+                            {
+                                name = new Ps<char>(begin, name.Length);
+
+                                current += offset;
+
+                                return true;
+                            }
+
+                            return false;
+                        }
+
+                        return TryReadSegment(0);
+                    }
+                }
+            }
+            else if (TryReadSegment(0))
+            {
+                goto Loop;
+            }
+
+            throw MakeException();
+
+        Return:
+
+            --depth;
+            ++current;
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingReference))
+            {
+                ReferenceModeInstance.LeavaObject();
+            }
+#endif
+        }
+
+        /// <summary>
+        /// 确切读取一个属性名。此方法的返回值不要跨线程使用！
+        /// </summary>
+        public Ps<char> InternalReadPropertyName()
+        {
+            Ps<char> name;
+
+        Loop:
+
+            switch (*current)
+            {
+                case ObjectEnding:
+                    goto Exception;
+                case FixString:
+                case FixChars:
+                    name = InternalReadString();
+                    break;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            goto Exception;
+                        }
+
+                        goto Loop;
+                    }
+
+                    goto default;
+                default:
+                    name = InternalReadText();
+                    break;
+            }
+
+            SkipWhiteSpace();
+
+            if (current < end && *current == KeyEnding)
+            {
+                ++current;
+
+                SkipWhiteSpace();
+
+                return name;
+            }
+
+        Exception:
+
+            throw MakeException();
+        }
+
+        /// <summary>
+        /// 确切读取一个属性名。
+        /// </summary>
+        public string ReadPropertyName()
+        {
+            return InternalReadPropertyName().ToStringEx();
+        }
+
+        /// <summary>
+        /// 尝试读取对象开头。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool TryReadBeginObject()
+        {
+            if (current < end && *current == FixObject)
+            {
+                ++current;
+
+                SkipWhiteSpace();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 尝试读取对象结尾。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool TryReadEndObject()
+        {
+            SkipWhiteSpace();
+
+            if (current < end)
+            {
+                switch (*current)
+                {
+                    case ObjectEnding:
+
+                        ++current;
+
+                        return true;
+
+                    case ValueEnding:
+
+                        ++current;
+
+                        SkipWhiteSpace();
+
+                        if (current < end && *current == ObjectEnding)
+                        {
+                            return true;
+                        }
+
+                        return false;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 尝试读取数组开头。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool TryReadBeginArray()
+        {
+            if (current < end && *current == FixArray)
+            {
+                ++current;
+
+                SkipWhiteSpace();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 尝试读取数组结尾。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public bool TryReadEndArray()
+        {
+            SkipWhiteSpace();
+
+            if (current < end)
+            {
+                switch (*current)
+                {
+                    case ArrayEnding:
+
+                        ++current;
+
+                        return true;
+
+                    case ValueEnding:
+
+                        ++current;
+
+                        SkipWhiteSpace();
+
+                        if (current < end && *current == ArrayEnding)
+                        {
+                            return true;
+                        }
+
+                        return false;
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region -- 字符串 --
+
+        /// <summary>
+        /// 确切读取一个元文本。此方法的返回值不要跨线程使用！
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public Ps<char> InternalReadText()
+        {
+            var chars = current;
+
+            int length;
+
+        Loop:
+
+            for (; chars < end; ++chars)
+            {
+                switch (*chars)
+                {
+                    case KeyEnding:
+                    case ValueEnding:
+                    case ObjectEnding:
+                    case ArrayEnding:
+
+                        length = (int)(chars - current);
+
+                        goto Return;
+
+                    case FixComment:
+
+                        length = (int)(chars - current);
+
+                        if (IsValueEnding(length))
+                        {
+                            goto Return;
+                        }
+
+                        break;
+                }
+            }
+
+            length = (int)(chars - current);
+
+            if (TryReadSegment(length))
+            {
+                chars = current + length;
+
+                goto Loop;
+            }
+
+        Return:
+
+            chars = current;
+
+            current += length;
+
+            return
+#if !NO_OPTIONS
+                On(DeflateDeserialize)
+                ? new Ps<char>(chars, length)
+                :
+#endif
+                StringHelper.Trim(chars, length);
+        }
+
+        /// <summary>
+        /// 确切读取一个字符串。此方法的返回值不要跨线程使用！
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public Ps<char> InternalReadString()
+        {
+            var fixStr = *current;
+
+            ++current;
+
+            var offset = StringHelper.IndexOfAny(current, Rest, fixStr, FixEscape);
+
+            if (offset >= 0 && current[offset] != FixEscape)
+            {
+                var result = new Ps<char>(current, offset);
+
+                current = current + offset + 1;
+
+                return result;
+            }
+
+            return NoInliningInternalReadString(fixStr, offset);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        Ps<char> NoInliningInternalReadString(char fixStr, int offset)
+        {
+            var hGChars = CharsPool.Current();
+
+            goto Enter;
+
+        Loop:
+
+            offset = StringHelper.IndexOfAny(current, Rest, fixStr, FixEscape);
+
+        Enter:
+
+            if (offset is -1)
+            {
+                if (content is not null)
+                {
+                    hGChars.ReadFrom(ref *current, (int)(end - current));
+
+                    if (TryReadSegment(0))
+                    {
+                        goto Loop;
+                    }
+                }
+            }
+            else
+            {
+                hGChars.ReadFrom(ref *current, offset);
+
+                current += offset;
+
+                if (*current is not FixEscape)
                 {
                     ++current;
 
-                    SkipWhiteSpace();
-
-                    if (IsContent())
-                    {
-                        return this;
-                    }
+                    return hGChars;
                 }
 
-                throw GetException();
+                ++current;
 
-                Empty:
+                if (end - current <= 5)
+                {
+                    TryReadSegment(-1);
+                }
 
-                return RWHelper.DefaultValueReader;
+                hGChars.Append(*current switch
+                {
+                    EscapedWhiteChar2 => WhiteChar2,
+                    EscapedWhiteChar3 => WhiteChar3,
+                    EscapedWhiteChar4 => WhiteChar4,
+                    EscapedWhiteChar5 => WhiteChar5,
+                    EscapedWhiteChar6 => WhiteChar6,
+                    FixUnicodeEscape or FixunicodeEscape => (char)(
+                        (GetDigital(*++current) << 12) |
+                        (GetDigital(*++current) << 8) |
+                        (GetDigital(*++current) << 4) |
+                        (GetDigital(*++current))
+                    ),
+                    var val => val
+                });
+
+                ++current;
+
+                if (current < end)
+                {
+                    goto Loop;
+                }
+            }
+
+            throw MakeException();
+        }
+
+        /// <summary>
+        /// 读取一个字符串。
+        /// </summary>
+        public string? ReadString()
+        {
+            switch (*current)
+            {
+                case FixString:
+                case FixChars:
+                    return InternalReadString().ToStringEx();
+                case Fixnull:
+                case FixNull:
+                    if (Verify(nullString))
+                    {
+                        current += nullString.Length;
+
+                        return null;
+                    }
+                    break;
+            }
+
+            return NoInliningReadString();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        string? NoInliningReadString()
+        {
+        Loop:
+
+            switch (*current)
+            {
+                case Fixtrue:
+                case FixTrue:
+                    if (Verify(trueString))
+                    {
+                        current += trueString.Length;
+
+                        return TrueString;
+                    }
+                    break;
+                case Fixfalse:
+                case FixFalse:
+                    if (Verify(falseString))
+                    {
+                        current += falseString.Length;
+
+                        return FalseString;
+                    }
+                    break;
+                case Fixundefined:
+                case FixUndefined:
+                    if (Verify(undefinedString))
+                    {
+                        current += undefinedString.Length;
+
+                        return null;
+                    }
+                    break;
+                case FixObject:
+                case FixArray:
+                    return Convert.ToString(DirectRead());
+                case FixPositive:
+                case FixNegative:
+                    goto Number;
+                case ValueEnding:
+
+                    if (TryReadIsTuple())
+                    {
+                        return ReadString();
+                    }
+
+                    goto default;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
+                    }
+
+                    goto default;
+
+                default:
+                    if (*current >= FixNumberMin && *current <= FixNumberMax)
+                    {
+                        goto Number;
+                    }
+                    break;
+            }
+
+        Text:
+
+            return InternalReadText().ToStringEx();
+
+        Number:
+
+            var numberInfo = NumberHelper.GetNumberInfo(current, Rest);
+
+            if (IsValueEnding(numberInfo.End) && numberInfo.IsNumber)
+            {
+                current += numberInfo.End;
+
+                return numberInfo.ToString();
+            }
+
+            goto Text;
+        }
+
+#if !NO_OPTIONS
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        bool TryReadEmptyString()
+        {
+            if (On(EmptyStringAsNull | EmptyStringAsDefault))
+            {
+                if (current + 1 < end && current[0] == current[1])
+                {
+                    current += 2;
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+#endif
+
+        void SkipString()
+        {
+            var fixStr = *current;
+
+            ++current;
+
+        Loop:
+
+            var offset = StringHelper.IndexOf(current, Rest, fixStr);
+
+            if (offset is -1)
+            {
+                if (TryReadSegment(0))
+                {
+                    goto Loop;
+                }
+
+                ThrowException();
+            }
+
+            current += offset + 1;
+
+            if (current[-2] is FixEscape)
+            {
+                goto Loop;
             }
         }
 
+        #endregion
+
+        #region -- 公共值 --
+
+        /// <summary>
+        /// 获取当前值的 Token。
+        /// </summary>
         public JsonToken GetToken()
         {
-            if (IsContent())
+            if (current < end)
             {
                 switch (*current)
                 {
@@ -176,6 +2180,17 @@ namespace Swifter.Json
                     case FixArray:
                         return JsonToken.Array;
                     case FixObject:
+
+#if !NO_OPTIONS
+                        if (On(MultiReferencingReference))
+                        {
+                            if (IsReference())
+                            {
+                                return JsonToken.Reference;
+                            }
+                        }
+#endif
+
                         return JsonToken.Object;
                     case Fixtrue:
                     case FixTrue:
@@ -187,6 +2202,14 @@ namespace Swifter.Json
                     case Fixundefined:
                     case FixUndefined:
                         return JsonToken.Null;
+                    case FixComment:
+
+                        if (GetCommentType() != JsonCommentType.Non)
+                        {
+                            return JsonToken.Comment;
+                        }
+
+                        return JsonToken.Other;
                     case FixPositive:
                     case FixNegative:
                     case var dight when dight >= FixNumberMin && dight <= FixNumberMax:
@@ -199,36 +2222,35 @@ namespace Swifter.Json
             return JsonToken.End;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void ThrowOutOfDepthException()
-        {
-            if (On(OutOfDepthException))
-            {
-                throw new JsonOutOfDepthException();
-            }
-        }
 
+        /// <summary>
+        /// 直接读取一个值。
+        /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public object DirectRead()
+        public object? DirectRead()
         {
+        Loop:
+
             switch (*current)
             {
                 case FixString:
                 case FixChars:
                     return InternalReadString().ToStringEx();
                 case FixArray:
-                    return ValueInterface<ArrayType>.ReadValue(this);
+                    return ((JsonFormatter?.ArrayValueInterface) ?? DefaultArrayValueInterface).Read(this);
                 case FixObject:
 
-                    if (IsReferenceMode)
+#if !NO_OPTIONS
+                    if (On(MultiReferencingReference))
                     {
                         if (IsReference())
                         {
-                            return ReadReference();
+                            return ReferenceModeInstance.GetValue(ReadReference());
                         }
                     }
+#endif
 
-                    return ValueInterface<ObjectType>.ReadValue(this);
+                    return ((JsonFormatter?.ObjectValueInterface) ?? DefaultObjectValueInterface).Read(this);
                 case Fixtrue:
                 case FixTrue:
                     if (Verify(trueString))
@@ -270,9 +2292,22 @@ namespace Swifter.Json
                     goto Number;
                 case ValueEnding:
 
-                    if (IsTuple())
+                    if (TryReadIsTuple())
                     {
-                        return DirectRead();
+                        goto Loop;
+                    }
+
+                    goto Text;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
                     }
 
                     goto Text;
@@ -281,15 +2316,15 @@ namespace Swifter.Json
                     goto Number;
             }
 
-            Text:
+        Text:
 
             return InternalReadText().ToStringEx();
 
-            Number:
+        Number:
 
-            var numberInfo = NumberHelper.GetNumberInfo(current, Length);
+            var numberInfo = NumberHelper.GetNumberInfo(current, Rest);
 
-            if (IsEnding(numberInfo.End) && numberInfo.IsNumber && numberInfo.IsCommonRadix(out var radix))
+            if (IsValueEnding(numberInfo.End) && numberInfo.IsNumber && numberInfo.IsCommonRadix(out var radix))
             {
                 current += numberInfo.End;
 
@@ -334,25 +2369,13 @@ namespace Swifter.Json
             goto Text;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public bool IsTuple()
+        /// <summary>
+        /// 读取一个可空值。
+        /// </summary>
+        public T? ReadNullable<T>() where T : struct
         {
-            var temp = current++;
+        Loop:
 
-            SkipWhiteSpace();
-
-            if (IsContent() && *current != ValueEnding)
-            {
-                return true;
-            }
-
-            current = temp;
-
-            return false;
-        }
-
-        public T[] ReadArray<T>()
-        {
             switch (*current)
             {
                 case Fixnull:
@@ -363,316 +2386,103 @@ namespace Swifter.Json
 
                         return null;
                     }
-                    goto default;
+                    break;
+                case Fixundefined:
+                case FixUndefined:
+                    if (Verify(undefinedString))
+                    {
+                        current += undefinedString.Length;
+
+                        return null;
+                    }
+                    break;
+#if !NO_OPTIONS
                 case FixString:
                 case FixChars:
                     if (TryReadEmptyString())
                     {
-                        return null;
+                        return default;
                     }
 
-                    goto default;
-                case FixArray:
                     break;
-                case ValueEnding:
+#endif
+                case FixComment:
 
-                    if (IsTuple())
+                    if (SkipComment())
                     {
-                        return ReadArray<T>();
+                        if (current >= end)
+                        {
+                            ThrowException();
+                        }
+
+                        goto Loop;
                     }
 
-                    goto default;
-
-                default:
-
-                    return XConvert.FromObject<T[]>(DirectRead());
+                    break;
             }
 
-            if (IsReferenceMode)
-            {
-                ReferenceMode.EnterObject(new ArrayRW<T>());
-            }
-
-            var result = InternalReadArray<T>(JsonArrayAppendingInfo<T[]>.AppendingInfo.MostClosestMeanCommonlyUsedLength, out var length);
-
-            JsonArrayAppendingInfo<T[]>.AppendingInfo.AddUsedLength(length);
-
-            if (result.Length != length)
-            {
-                Array.Resize(ref result, length);
-            }
-
-            if (IsReferenceMode)
-            {
-                ReferenceMode.CurrentObject.Content = result;
-
-                ReferenceMode.LeavaObject();
-            }
-
-            return result;
+            return ReadValue<T>();
         }
 
-        public List<T> ReadList<T>()
+        /// <summary>
+        /// 读取一个枚举值。
+        /// </summary>
+        public T ReadEnum<T>() where T : struct, Enum
         {
             switch (*current)
             {
-                case Fixnull:
-                case FixNull:
-                    if (Verify(nullString))
-                    {
-                        current += nullString.Length;
-
-                        return null;
-                    }
-                    goto default;
                 case FixString:
                 case FixChars:
-                    if (TryReadEmptyString())
+#if !NO_OPTIONS
+                    if (On(EmptyStringAsDefault) && TryReadEmptyString())
                     {
-                        return null;
+                        return default;
+                    }
+#endif
+
+
+                    var str = InternalReadString();
+
+                    if (EnumHelper.TryParseEnum(str, out T value))
+                    {
+                        return value;
                     }
 
-                    goto default;
-                case FixArray:
+                    return (T)Enum.Parse(typeof(T), str.ToStringEx());
+                case FixNegative:
+
+                    var psd = NumberHelper.Decimal.ParseInt64(current, Rest);
+
+                    if (psd.length != 0 && IsValueEnding(psd.length))
+                    {
+                        current += psd.length;
+
+                        return EnumHelper.AsEnum<T>((ulong)psd.value);
+                    }
+
                     break;
-                case ValueEnding:
+                case var curr when curr >= FixNumberMin && curr <= FixNumberMax:
 
-                    if (IsTuple())
+                    var upsd = NumberHelper.Decimal.ParseUInt64(current, Rest);
+
+                    if (upsd.length != 0 && IsValueEnding(upsd.length))
                     {
-                        return ReadList<T>();
+                        current += upsd.length;
+
+                        return EnumHelper.AsEnum<T>(upsd.value);
                     }
 
-                    goto default;
-
-                default:
-
-                    return XConvert.FromObject<List<T>>(DirectRead());
-            }
-
-            if (IsReferenceMode)
-            {
-                ReferenceMode.EnterObject(new ArrayRW<T>());
-            }
-
-            var array = InternalReadArray<T>(JsonArrayAppendingInfo<List<T>>.AppendingInfo.MostClosestMeanCommonlyUsedLength, out var length);
-
-            JsonArrayAppendingInfo<List<T>>.AppendingInfo.AddUsedLength(length);
-
-            if (IsReferenceMode)
-            {
-                ReferenceMode.CurrentObject.Content = array;
-
-                ReferenceMode.LeavaObject();
-            }
-
-            return ArrayHelper.CreateList(array, length);
-        }
-        
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool IsContent() => /*IsDeflateMode || IsStandardMode ||*/ current < end;
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public T[] InternalReadArray<T>(int defaultCapacity, out int length)
-        {
-            var array = new T[defaultCapacity];
-            var offset = 0;
-
-            if (depth < maxDepth)
-            {
-                ++current;
-                ++depth;
-
-                Loop:
-
-                SkipWhiteSpace();
-
-                if (IsContent())
-                {
-                    if (*current == ArrayEnding)
-                    {
-                        goto Return;
-                    }
-
-                    if (offset >= array.Length)
-                    {
-                        Array.Resize(ref array, offset * 2 + 1);
-
-                        if (IsReferenceMode)
-                        {
-                            ReferenceMode.CurrentObject.Content = array;
-                        }
-                    }
-
-                    if (IsReferenceMode)
-                    {
-                        ReferenceMode.SetCurrentKey(offset);
-                    }
-
-                    if (ValueInterface<T>.IsNotModified)
-                    {
-                        array[offset] = ReadValue<T>();
-                    }
-                    else
-                    {
-                        array[offset] = ValueInterface<T>.ReadValue(this);
-                    }
-
-                    ++offset;
-
-                    SkipWhiteSpace();
-
-                    if (IsContent())
-                    {
-                        switch (*current)
-                        {
-                            case ArrayEnding:
-                                goto Return;
-                            case ValueEnding:
-                                ++current;
-
-                                goto Loop;
-                        }
-                    }
-                }
-
-                throw GetException();
-
-                Return:
-
-                --depth;
-                ++current;
-            }
-            else
-            {
-                ThrowOutOfDepthException();
-
-                SkipValue();
-            }
-
-            length = offset;
-
-            return array;
-        }
-
-        public void ReadArray(IDataWriter<int> dataWriter)
-        {
-            switch (*current)
-            {
-                case Fixnull:
-                case FixNull:
-                    if (Verify(nullString))
-                    {
-                        current += nullString.Length;
-
-                        return;
-                    }
-                    goto default;
-                case FixObject:
-                    if (IsReferenceMode)
-                    {
-                        if (IsReference())
-                        {
-                            goto default;
-                        }
-                    }
-                    ReadObject(dataWriter.As<string>());
-                    return;
-                case FixArray:
                     break;
-                case ValueEnding:
-
-                    if (IsTuple())
-                    {
-                        ReadArray(dataWriter);
-
-                        return;
-                    }
-
-                    goto default;
-
-                default:
-
-                    dataWriter.Content = XConvert.Cast(DirectRead(), dataWriter.ContentType);
-                    return;
             }
 
-            dataWriter.Initialize();
-
-            SlowReadArray(dataWriter);
+            return XConvert.Convert<T>(DirectRead());
         }
 
-        public void SlowReadArray(IDataWriter<int> dataWriter)
-        {
-            if (IsReferenceMode)
-            {
-                ReferenceMode.EnterObject(dataWriter);
-            }
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-
-                SkipValue();
-
-                return;
-            }
-
-            ++current;
-            ++depth;
-
-            var offset = 0;
-
-            Loop:
-
-            SkipWhiteSpace();
-
-            if (IsContent())
-            {
-                if (*current == ArrayEnding)
-                {
-                    goto Return;
-                }
-
-                if (IsReferenceMode)
-                {
-                    ReferenceMode.SetCurrentKey(offset);
-                }
-
-                dataWriter.OnWriteValue(offset, this);
-
-                ++offset;
-
-                SkipWhiteSpace();
-
-                if (IsContent())
-                {
-                    switch (*current)
-                    {
-                        case ArrayEnding:
-                            goto Return;
-                        case ValueEnding:
-                            ++current;
-
-                            goto Loop;
-                    }
-                }
-            }
-
-            throw GetException();
-
-            Return:
-
-            --depth;
-            ++current;
-
-            if (IsReferenceMode)
-            {
-                ReferenceMode.LeavaObject();
-            }
-        }
-
+        /// <summary>
+        /// 读取一个已知类型的值。
+        /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public T ReadValue<T>()
+        public T? ReadValue<T>()
         {
             if (typeof(T) == typeof(int)) return As(ReadInt32());
             if (typeof(T) == typeof(string)) return As(ReadString());
@@ -691,1395 +2501,30 @@ namespace Swifter.Json
             if (typeof(T) == typeof(DateTime)) return As(ReadDateTime());
             if (typeof(T) == typeof(Guid)) return As(ReadGuid());
             if (typeof(T) == typeof(DateTimeOffset)) return As(ReadDateTimeOffset());
+            if (typeof(T) == typeof(TimeSpan)) return As(ReadTimeSpan());
             if (typeof(T) == typeof(object)) return As(DirectRead());
 
             return ValueInterface<T>.ReadValue(this);
 
             [MethodImpl(VersionDifferences.AggressiveInlining)]
             static T As<TInput>(TInput input)
-                => Underlying.As<TInput, T>(ref input);
-        }
-
-        public static bool IsDeflateMode
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => typeof(TMode) == typeof(Deflate);
-        }
-        
-        public static bool IsStandardMode
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => typeof(TMode) == typeof(Standard);
-        }
-
-        public static bool IsVerifiedMode
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => typeof(TMode) == typeof(Verified);
-        }
-
-        public static bool IsReferenceMode
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => typeof(TMode) == typeof(Reference);
+                => Unsafe.As<TInput, T>(ref input);
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void SkipWhiteSpace()
+        T? InternalReadParse<T>()
         {
-            if (!IsDeflateMode)
-            {
-                if (IsContent() && *current <= 0x20)
-                {
-                    NoInliningSkipWhiteSpace();
-                }
-            }
+            return FastParse<T>(InternalReadString());
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void NoInliningSkipWhiteSpace()
-        {
-            Loop:
-
-            switch (*current)
-            {
-                case WhiteChar1:
-                case WhiteChar2:
-                case WhiteChar3:
-                case WhiteChar4:
-                case WhiteChar5:
-                case WhiteChar6:
-                    ++current;
-                    if (IsContent())
-                    {
-                        goto Loop;
-                    }
-                    break;
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool IsEnding(int offset)
-        {
-            if (current + offset >= end)
-            {
-                return current + offset == end;
-            }
-
-            Loop:
-
-            var curr = current[offset];
-
-            switch (curr)
-            {
-                case ObjectEnding:
-                case ArrayEnding:
-                case KeyEnding:
-                case ValueEnding:
-                    return true;
-            }
-
-            if (IsDeflateMode)
-            {
-                return false;
-            }
-            else if (IsStandardMode)
-            {
-                switch (curr)
-                {
-                    case WhiteChar1:
-                    case WhiteChar2:
-                    case WhiteChar3:
-                    case WhiteChar4:
-                    case WhiteChar5:
-                    case WhiteChar6:
-                        return true;
-                }
-
-                return false;
-            }
-            else
-            {
-                switch (curr)
-                {
-                    case WhiteChar1:
-                    case WhiteChar2:
-                    case WhiteChar3:
-                    case WhiteChar4:
-                    case WhiteChar5:
-                    case WhiteChar6:
-                        ++offset;
-
-                        goto Loop;
-                }
-
-                return false;
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool Verify(string lowerstr)
-        {
-            if (IsDeflateMode)
-            {
-                return true;
-            }
-
-            if (!IsEnding(lowerstr.Length))
-            {
-                return false;
-            }
-
-            for (int i = 0; i < lowerstr.Length; i++)
-            {
-                if (current[i] != lowerstr[i] && ToLower(current[i]) != lowerstr[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        public bool ReadBoolean()
-        {
-            var curr = *current;
-
-            switch (curr)
-            {
-                case Fixtrue:
-                case FixTrue:
-                    if (Verify(trueString))
-                    {
-                        current += trueString.Length;
-
-                        return true;
-                    }
-                    break;
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    break;
-                case Fixfalse:
-                case FixFalse:
-                    if (Verify(falseString))
-                    {
-                        current += falseString.Length;
-
-                        return false;
-                    }
-                    break;
-            }
-
-            if (curr >= FixNumberMin && curr <= FixNumberMax && IsEnding(1))
-            {
-                ++current;
-
-                return curr != FixNumberMin;
-            }
-
-            return Convert.ToBoolean(DirectRead());
-        }
-
-        public byte ReadByte() => checked((byte)ReadUInt64());
-
-        public char ReadChar()
-        {
-            if (Length >= 3 && current[0] == current[2] && (current[0] == FixString || current[0] == FixChars) && current[1] != FixEscape)
-            {
-                current += 3;
-
-                return current[-2];
-            }
-
-            if ((options & EmptyStringAsDefault) != 0 && (*current == FixString || *current == FixChars) && TryReadEmptyString())
-            {
-                return default;
-            }
-
-
-
-            return char.Parse(ReadString());
-        }
-
-        public DateTime ReadDateTime()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    return ReadParse<DateTime>();
-            }
-
-            return Convert.ToDateTime(DirectRead());
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public T ReadParse<T>()
-        {
-            return FastReadParse<T>(InternalReadString(), options);
-        }
-
-        public decimal ReadDecimal()
-        {
-            var (_, length, value) = NumberHelper.ParseDecimal(current, Length);
-
-            if (length != 0 && IsEnding(length))
-            {
-                current += length;
-
-                return value;
-            }
-
-            return NoInliningReadDecimal();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public decimal NoInliningReadDecimal()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    return ReadParse<decimal>();
-            }
-
-            var numberInfo = NumberHelper.GetNumberInfo(current, Length);
-
-            if (numberInfo.IsNumber)
-            {
-                if (IsEnding(numberInfo.End) && numberInfo.IsDecimal)
-                {
-                    current += numberInfo.End;
-
-                    return numberInfo.ToDecimal();
-                }
-
-                return decimal.Parse(InternalReadText().ToStringEx(), NumberStyle);
-            }
-
-            return Convert.ToDecimal(DirectRead());
-        }
-
-        public double ReadDouble()
-        {
-            if (On(UseSystemFloatingPointsMethods))
-            {
-                var currentBackup = current;
-
-                switch (*currentBackup)
-                {
-                    case FixPositive:
-                    case FixNegative:
-                    case var digit when digit >= FixNumberMin && digit <= FixNumberMax:
-#if Span
-                        if (double.TryParse(InternalReadText(), out var value))
-                        {
-                            return value;
-                        }
-
-#else
-
-                        if (double.TryParse(InternalReadText().ToStringEx(), out var value))
-                        {
-                            return value;
-                        }
-
-#endif
-                        break;
-                }
-
-                current = currentBackup;
-
-            }
-            else
-            {
-                var (_, length, value) = NumberHelper.DecimalParseDouble(current, Length);
-
-                if (length != 0 && IsEnding(length))
-                {
-                    current += length;
-
-                    return value;
-                }
-            }
-
-            return NoInliningReadDouble();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public double NoInliningReadDouble()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    return ReadParse<double>();
-            }
-
-            var numberInfo = NumberHelper.GetNumberInfo(current, Length);
-
-            if (numberInfo.IsNumber)
-            {
-                if (IsEnding(numberInfo.End) && numberInfo.IsCommonRadix(out var radix))
-                {
-                    current += numberInfo.End;
-
-                    return numberInfo.ToDouble(radix);
-                }
-
-                return double.Parse(InternalReadText().ToStringEx(), NumberStyle);
-            }
-
-            return Convert.ToDouble(DirectRead());
-        }
-
-        public short ReadInt16() => checked((short)ReadInt64());
-
-        public int ReadInt32() => checked((int)ReadInt64());
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public long ReadInt64()
-        {
-            var (_, length, value) = NumberHelper.DecimalParseInt64(current, Length);
-
-            if (length != 0 && IsEnding(length))
-            {
-                current += length;
-
-                return value;
-            }
-
-            return NoInliningReadInt64();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private long NoInliningReadInt64()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    return ReadParse<long>();
-            }
-
-            var numberInfo = NumberHelper.GetNumberInfo(current, Length);
-
-            if (numberInfo.IsNumber)
-            {
-                if (IsEnding(numberInfo.End) && numberInfo.IsCommonRadix(out var radix))
-                {
-                    current += numberInfo.End;
-
-                    return numberInfo.ToInt64(radix);
-                }
-
-                return long.Parse(InternalReadText().ToStringEx(), NumberStyle);
-            }
-
-            return Convert.ToInt64(DirectRead());
-        }
-
-        public T? ReadNullable<T>() where T : struct
-        {
-            var curr = *current;
-
-            switch (curr)
-            {
-                case Fixnull:
-                case FixNull:
-                    if (Verify(nullString))
-                    {
-                        current += nullString.Length;
-
-                        return null;
-                    }
-                    break;
-                case Fixundefined:
-                case FixUndefined:
-                    if (Verify(undefinedString))
-                    {
-                        current += undefinedString.Length;
-
-                        return null;
-                    }
-                    break;
-                case FixString:
-                case FixChars:
-                    if (TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    break;
-            }
-
-            return ReadValue<T>();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool IsReference()
-        {
-            if (Length < 8)
-            {
-                return false;
-            }
-
-            if (current[1] == FixString) if (current[2] == DollarChar) goto Could; else return false;
-            if (current[2] == FixString) if (current[3] == DollarChar) goto Could; else return false;
-            if (current[3] == FixString) if (current[4] == DollarChar) goto Could; else return false;
-            if (current[4] == FixString) if (current[5] == DollarChar) goto Could; else return false;
-            if (current[5] == FixString) if (current[6] == DollarChar) goto Could; else return false;
-            if (current[6] == FixString) if (current[7] == DollarChar) goto Could; else return false;
-            if (current[7] == FixString) if (current[8] == DollarChar) goto Could; else return false;
-
-            Could:
-
-            return NoInliningIsReference();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public bool NoInliningIsReference()
-        {
-            var swap = current;
-
-            var res = SkipReferenceKey();
-
-            current = swap;
-
-            return res;
-        }
-
-        public bool SkipReferenceKey()
-        {
-            ++current;
-
-            SkipWhiteSpace();
-
-            var res = false;
-
-            if (IsContent())
-            {
-                switch (current[0])
-                {
-                    case DollarChar:
-                        res = Verify(RefKey);
-                        current += RefKey.Length;
-                        break;
-                    case FixString:
-                        res = Verify(RefKeyString);
-                        current += RefKeyString.Length;
-                        break;
-                    case FixChars:
-                        res = Verify(RefKeyChars);
-                        current += RefKeyChars.Length;
-                        break;
-                }
-            }
-
-            SkipWhiteSpace();
-
-            if (res && IsContent() && *current == KeyEnding)
-            {
-                ++current;
-
-                SkipWhiteSpace();
-            }
-
-            return res;
-        }
-
-        public void ReadObject(IDataWriter<string> dataWriter)
-        {
-            switch (*current)
-            {
-                case Fixnull:
-                case FixNull:
-                    if (Verify(nullString))
-                    {
-                        current += nullString.Length;
-
-                        return;
-                    }
-                    goto default;
-                case FixString:
-                case FixChars:
-                    if (TryReadEmptyString())
-                    {
-
-                        return;
-                    }
-
-                    goto default;
-                case FixArray:
-                    ReadArray(dataWriter.As<int>());
-                    return;
-                case FixObject:
-                    if (IsReferenceMode)
-                    {
-                        if (IsReference())
-                        {
-                            goto default;
-                        }
-                    }
-                    break;
-                case ValueEnding:
-
-                    if (IsTuple())
-                    {
-                        ReadObject(dataWriter);
-
-                        return;
-                    }
-
-                    goto default;
-
-                default:
-                    dataWriter.Content = XConvert.Cast(DirectRead(), dataWriter.ContentType);
-                    return;
-            }
-
-            dataWriter.Initialize();
-
-            if (dataWriter is IDataWriter<Ps<char>> fastWriter)
-            {
-                FastReadObject(fastWriter);
-            }
-            else
-            {
-                SlowReadObject(dataWriter);
-            }
-        }
-
-        public sbyte ReadSByte() => checked((sbyte)ReadInt64());
-
-        public float ReadSingle()
-        {
-            var @double = ReadDouble();
-            var @float = (float)@double;
-
-            if (!float.IsInfinity(@float))
-            {
-                return @float;
-            }
-
-            if (double.IsInfinity(@double))
-            {
-                return @float;
-            }
-
-            throw new OverflowException();
-        }
-
-        public string ReadString()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    return InternalReadString().ToStringEx();
-                case Fixnull:
-                case FixNull:
-                    if (Verify(nullString))
-                    {
-                        current += nullString.Length;
-
-                        return null;
-                    }
-                    break;
-            }
-
-            return NoInliningReadString();
-        }
-
-        public object ReadReference()
-        {
-            if (!SkipReferenceKey())
-            {
-                goto Exception;
-            }
-
-            RWPathInfo reference = null;
-
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    reference = ReadParse<RWPathInfo>();
-                    break;
-                default:
-                    var str = ReadString();
-
-                    if (str != null)
-                    {
-                        reference = SlowReadParse<RWPathInfo>(str);
-                    }
-
-                    break;
-            }
-
-            SkipWhiteSpace();
-
-            if (!(IsContent() && *current == ObjectEnding))
-            {
-                goto Exception;
-            }
-
-            ++current;
-
-            return ReferenceMode.GetValue(reference);
-
-            Exception:
-
-            throw new NotSupportedException("Not a reference format.");
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public string NoInliningReadString()
-        {
-            switch (*current)
-            {
-                case Fixtrue:
-                case FixTrue:
-                    if (Verify(trueString))
-                    {
-                        current += trueString.Length;
-
-                        return TrueString;
-                    }
-                    break;
-                case Fixfalse:
-                case FixFalse:
-                    if (Verify(falseString))
-                    {
-                        current += falseString.Length;
-
-                        return FalseString;
-                    }
-                    break;
-                case Fixundefined:
-                case FixUndefined:
-                    if (Verify(undefinedString))
-                    {
-                        current += undefinedString.Length;
-
-                        return null;
-                    }
-                    break;
-                case FixObject:
-                case FixArray:
-                    return Convert.ToString(DirectRead());
-                case FixPositive:
-                case FixNegative:
-                    goto Number;
-                case ValueEnding:
-
-                    if (IsTuple())
-                    {
-                        return ReadString();
-                    }
-
-                    goto default;
-
-                default:
-                    if (*current >= FixNumberMin && *current <= FixNumberMax)
-                    {
-                        goto Number;
-                    }
-                    break;
-            }
-
-            Text:
-
-            return InternalReadText().ToStringEx();
-
-            Number:
-
-            var numberInfo = NumberHelper.GetNumberInfo(current, Length);
-
-            if (IsEnding(numberInfo.End) && numberInfo.IsNumber)
-            {
-                current += numberInfo.End;
-
-                return numberInfo.ToString();
-            }
-
-            goto Text;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public Exception GetException()
-        {
-            return new JsonDeserializeException(Offset);
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void ThrowException()
-        {
-            throw GetException();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public Ps<char> InternalReadText()
-        {
-            var temp = current;
-
-            while (IsContent())
-            {
-                switch (*current)
-                {
-                    case KeyEnding:
-                    case ValueEnding:
-                    case ObjectEnding:
-                    case ArrayEnding:
-
-                        goto Return;
-
-                    default:
-
-                        ++current;
-
-                        continue;
-                }
-            }
-
-            Return:
-
-            if (IsDeflateMode)
-            {
-                return new Ps<char>(temp, (int)(current - temp));
-            }
-            else
-            {
-                return Trim(temp, (int)(current - temp));
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public Ps<char> InternalReadString()
-        {
-            var fixStr = *current;
-
-            ++current;
-
-            var offset = IndexOfAny(current, Length, fixStr, FixEscape);
-
-            if (offset == -1)
-            {
-                ThrowException();
-            }
-
-            if (current[offset] != FixEscape)
-            {
-                var ret = new Ps<char>(current, offset);
-
-                current += offset + 1;
-
-                return ret;
-            }
-
-            var hGCache = CharsPool.Current();
-
-            var strStart = hGCache.First;
-            var strLength = 0;
-
-            Loop:
-
-            if (strLength + offset > 20480)
-            {
-                hGCache.Grow(strLength + offset);
-
-                strStart = hGCache.First;
-            }
-
-            Underlying.CopyBlock(strStart + strLength, current, checked((uint)offset * sizeof(char)));
-
-            current += offset;
-            strLength += offset;
-
-            if (*current != FixEscape)
-            {
-                ++current;
-
-                return new Ps<char>(strStart, strLength);
-            }
-
-            strStart[strLength] = Descape(ref current);
-
-            ++strLength;
-
-            offset = IndexOfAny(current, Length, fixStr, FixEscape);
-
-            if (offset == -1)
-            {
-                ThrowException();
-            }
-
-            goto Loop;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public bool TryReadNamedText(string name)
-        {
-            var backup = current;
-
-            if (EqualsWithIgnoreCase(InternalReadText(), name))
-            {
-                return true;
-            }
-
-            current = backup;
-
-            return false;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryReadNamedString(string name)
-        {
-            var backup = current;
-            var fixStr = *current;
-
-            ++current;
-
-            if (Length <= name.Length)
-            {
-                goto False;
-            }
-
-            for (int i = 0; i < name.Length; i++)
-            {
-                var chr = *current;
-
-                if (chr == FixEscape)
-                {
-                    chr = Descape(ref current);
-                }
-                else
-                {
-                    ++current;
-                }
-
-                if (name[i] != chr && ToLower(name[i]) != ToLower(chr))
-                {
-                    goto False;
-                }
-            }
-
-            if (*current == fixStr)
-            {
-                ++current;
-
-                return true;
-            }
-
-            False:
-
-            current = backup;
-
-            return false;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryReadEmptyString()
-        {
-            if(On(EmptyStringAsNull | EmptyStringAsDefault))
-            {
-                if (current + 1 < end && *(current + 1) == *current)
-                {
-                    current += 2;
-
-                    return true;
-                }
-
-#if WhiteSpaceStringAsNull
-
-                if (On(WhiteSpaceStringAsNull & WhiteSpaceStringAsDefault))
-                {
-                    return TryReadWhiteSpaceString();
-                }
-
-#endif
-
-            }
-
-            return false;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool On(JsonFormatterOptions options)
-            => (this.options & options) != 0;
-
-
-#if WhiteSpaceStringAsNull
-
-        public bool TryReadWhiteSpaceString()
-        {
-            var temp = current;
-
-            var fixStr = *temp;
-
-            ++temp;
-
-            while (temp < end)
-            {
-                var chr = *temp;
-
-                if (chr == fixStr)
-                {
-                    current = temp + 1;
-
-                    return true;
-                }
-
-                if (chr == FixEscape)
-                {
-                    chr = Descape(ref temp);
-                }
-                else
-                {
-                    ++temp;
-                }
-
-                if (!IsWhiteSpace(chr))
-                {
-                    break;
-                }
-            }
-
-            return false;
-        }
-
-#endif
-
-
-        public ushort ReadUInt16() => checked((ushort)ReadUInt64());
-
-        public uint ReadUInt32() => checked((uint)ReadUInt64());
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public ulong ReadUInt64()
-        {
-            var (_, length, value) = NumberHelper.DecimalParseUInt64(current, Length);
-
-            if (length != 0 && IsEnding(length))
-            {
-                current += length;
-
-                return value;
-            }
-
-            return NoInliningReadUInt64();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private ulong NoInliningReadUInt64()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    return ReadParse<ulong>();
-            }
-
-            var numberInfo = NumberHelper.GetNumberInfo(current, Length);
-
-            if (numberInfo.IsNumber)
-            {
-                if (IsEnding(numberInfo.End) && numberInfo.IsCommonRadix(out var radix))
-                {
-                    current += numberInfo.End;
-
-                    return numberInfo.ToUInt64(radix);
-                }
-
-                return ulong.Parse(InternalReadText().ToStringEx(), NumberStyle);
-            }
-
-            return Convert.ToUInt64(DirectRead());
-        }
-
-        public Guid ReadGuid()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    return ReadParse<Guid>();
-            }
-
-            return XConvert.FromObject<Guid>(DirectRead());
-        }
-
-        public DateTimeOffset ReadDateTimeOffset()
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-                    return ReadParse<DateTimeOffset>();
-            }
-
-            return XConvert.FromObject<DateTimeOffset>(DirectRead());
-        }
-
-        public T ReadEnum<T>() where T : struct, Enum
-        {
-            switch (*current)
-            {
-                case FixString:
-                case FixChars:
-                    if ((options & EmptyStringAsDefault) != 0 && TryReadEmptyString())
-                    {
-                        return default;
-                    }
-
-
-                    var str = InternalReadString();
-
-                    if (EnumHelper.TryParseEnum(str, out T value))
-                    {
-                        return value;
-                    }
-
-                    return (T)Enum.Parse(typeof(T), str.ToStringEx());
-                case FixNegative:
-
-                    var psd = NumberHelper.Decimal.ParseInt64(current, Length);
-
-                    if (psd.length != 0 && IsEnding(psd.length))
-                    {
-                        current += psd.length;
-
-                        EnumHelper.AsEnum<T>((ulong)psd.value);
-                    }
-
-                    break;
-                case var curr when curr >= FixNumberMin && curr <= FixNumberMax:
-
-                    var upsd = NumberHelper.Decimal.ParseUInt64(current, Length);
-
-                    if (upsd.length != 0 && IsEnding(upsd.length))
-                    {
-                        current += upsd.length;
-
-                        EnumHelper.AsEnum<T>(upsd.value);
-                    }
-
-                    break;
-            }
-            return XConvert.FromObject<T>(DirectRead());
-        }
-
-        Guid IValueReader<Guid>.ReadValue() => ReadGuid();
-
-        DateTimeOffset IValueReader<DateTimeOffset>.ReadValue() => ReadDateTimeOffset();
-
-        public void FastReadObject(IDataWriter<Ps<char>> dataWriter)
-        {
-            if (IsReferenceMode)
-            {
-                ReferenceMode.EnterObject(dataWriter);
-            }
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-
-                SkipValue();
-
-                return;
-            }
-
-            ++current;
-            ++depth;
-
-            var count_non_zero = dataWriter.Count > 0;
-
-            if ((options & AsOrderedObjectDeserialize) != 0 && count_non_zero)
-            {
-                Underlying.As<IDataWriter<string>>(dataWriter).OnWriteAll(this); // dataWriter 一定是 IDataWriter<string>
-
-                switch (*current)
-                {
-                    case ObjectEnding:
-                        goto Return;
-                    case ValueEnding:
-                        ++current;
-                        break;
-                }
-            }
-
-            Loop:
-
-            SkipWhiteSpace();
-
-            if (IsContent())
-            {
-                Ps<char> name;
-
-                switch (*current)
-                {
-                    case ObjectEnding:
-                        goto Return;
-                    case FixString:
-                    case FixChars:
-                        name = InternalReadString();
-                        break;
-                    default:
-                        name = InternalReadText();
-                        break;
-                }
-
-                SkipWhiteSpace();
-
-                if (IsContent() && *current == KeyEnding)
-                {
-                    ++current;
-
-                    SkipWhiteSpace();
-
-                    if (IsContent())
-                    {
-                        switch (*current)
-                        {
-                            case FixNull:
-                            case Fixnull:
-                                if (count_non_zero && On(IgnoreNull) && Verify(nullString))
-                                {
-                                    current += nullString.Length;
-
-                                    break;
-                                }
-
-                                goto default;
-                            case FixNumberMin:
-                                if (count_non_zero && On(IgnoreZero) && IsEnding(1))
-                                {
-                                    current += 1/*length of 0*/;
-
-                                    break;
-                                }
-
-                                goto default;
-                            default:
-
-                                if (IsReferenceMode)
-                                {
-                                    ReferenceMode.SetCurrentKey(name);
-                                }
-
-                                dataWriter.OnWriteValue(name, this);
-                                break;
-                        }
-
-                        SkipWhiteSpace();
-
-                        if (IsContent())
-                        {
-                            switch (*current)
-                            {
-                                case ObjectEnding:
-                                    goto Return;
-                                case ValueEnding:
-                                    ++current;
-
-                                    goto Loop;
-                            }
-                        }
-                    }
-                }
-            }
-
-            throw GetException();
-
-            Return:
-
-            --depth;
-            ++current;
-
-            if (IsReferenceMode)
-            {
-                ReferenceMode.LeavaObject();
-            }
-        }
-
-        public void SlowReadObject(IDataWriter<string> dataWriter)
-        {
-            if (IsReferenceMode)
-            {
-                ReferenceMode.EnterObject(dataWriter);
-            }
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-
-                SkipValue();
-
-                return;
-            }
-
-            ++current;
-            ++depth;
-
-            var count_non_zero = dataWriter.Count > 0;
-
-            if ((options & AsOrderedObjectDeserialize) != 0 && count_non_zero)
-            {
-                dataWriter.OnWriteAll(this);
-
-                switch (*current)
-                {
-                    case ObjectEnding:
-                        goto Return;
-                    case ValueEnding:
-                        ++current;
-                        break;
-                }
-            }
-
-            Loop:
-
-            SkipWhiteSpace();
-
-            if (IsContent())
-            {
-                Ps<char> name;
-
-                switch (*current)
-                {
-                    case ObjectEnding:
-                        goto Return;
-                    case FixString:
-                    case FixChars:
-                        name = InternalReadString();
-                        break;
-                    default:
-                        name = InternalReadText();
-                        break;
-                }
-
-                SkipWhiteSpace();
-
-                if (IsContent() && *current == KeyEnding)
-                {
-                    ++current;
-
-                    SkipWhiteSpace();
-
-                    if (IsContent())
-                    {
-                        switch (*current)
-                        {
-                            case FixNull:
-                            case Fixnull:
-                                if (count_non_zero && On(IgnoreNull) && Verify(nullString))
-                                {
-                                    current += nullString.Length;
-
-                                    break;
-                                }
-
-                                goto default;
-                            case FixNumberMin:
-                                if (count_non_zero && On(IgnoreZero) && IsEnding(1))
-                                {
-                                    current += 1/*length of 0*/;
-
-                                    break;
-                                }
-
-                                goto default;
-                            default:
-
-                                var str_name = name.ToStringEx();
-
-                                if (IsReferenceMode)
-                                {
-                                    ReferenceMode.SetCurrentKey(str_name);
-                                }
-
-                                dataWriter.OnWriteValue(str_name, this);
-                                break;
-                        }
-
-                        SkipWhiteSpace();
-
-                        if (IsContent())
-                        {
-                            switch (*current)
-                            {
-                                case ObjectEnding:
-                                    goto Return;
-                                case ValueEnding:
-                                    ++current;
-
-                                    goto Loop;
-                            }
-                        }
-                    }
-                }
-            }
-
-            throw GetException();
-
-            Return:
-
-            --depth;
-            ++current;
-
-            if (IsReferenceMode)
-            {
-                ReferenceMode.LeavaObject();
-            }
-        }
-
-
-
+        /// <summary>
+        /// 跳过一个值。
+        /// </summary>
         public void SkipValue()
         {
             var depth = 0;
 
-            Loop:
+        Loop:
 
             switch (*current)
             {
@@ -2126,6 +2571,19 @@ namespace Swifter.Json
 
                     SkipWhiteSpace();
                     break;
+                case FixComment:
+
+                    if (SkipComment())
+                    {
+                        if (current >= end)
+                        {
+                            break;
+                        }
+
+                        goto Loop;
+                    }
+
+                    goto default;
                 case FixPositive:
                 case FixNegative:
                 case var digit when digit >= FixNumberMin && digit <= FixNumberMax:
@@ -2138,7 +2596,12 @@ namespace Swifter.Json
 
             SkipWhiteSpace();
 
-            if (IsContent())
+            if (depth is 0)
+            {
+                return;
+            }
+
+            if (current < end)
             {
                 switch (*current)
                 {
@@ -2153,81 +2616,641 @@ namespace Swifter.Json
                 }
             }
 
-            if (depth <= 0) return;
+            if (current < end)
+            {
+                goto Loop;
+            }
 
-            if (current >= end) ThrowException();
+            ThrowException();
+        }
 
-            goto Loop;
+
+        #endregion
+
+        #region -- 辅助函数 --
+
+#if !NO_OPTIONS
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        bool On(JsonFormatterOptions options)
+            => (Options & options) != 0;
+#endif
+
+        /// <summary>
+        /// 跳过空白字符。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void SkipWhiteSpace()
+        {
+#if !NO_OPTIONS
+            if (On(DeflateDeserialize))
+            {
+                return;
+            }
+#endif
+
+            if (current < end && *current <= 0x20)
+            {
+                NoInliningSkipWhiteSpace();
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void NoInliningSkipWhiteSpace()
+        {
+        Loop:
+
+            switch (*current)
+            {
+                case WhiteChar1:
+                case WhiteChar2:
+                case WhiteChar3:
+                case WhiteChar4:
+                case WhiteChar5:
+                case WhiteChar6:
+                    ++current;
+                    if (current < end)
+                    {
+                        goto Loop;
+                    }
+                    break;
+            }
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void SkipString()
+        bool IsValueEnding(int offset)
         {
-            var fixEnding = *current;
+            return current[offset] is ObjectEnding or ArrayEnding or KeyEnding or ValueEnding 
+                || NoInliningIsValueEnding(offset);
+        }
 
-            for (++current; IsContent(); ++current)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool NoInliningIsValueEnding(int offset)
+        {
+        Loop:
+
+            if (current + offset == end)
             {
-                if (*current == fixEnding)
-                {
-                    ++current;
+                return content is null || content.IsFinalBlock;
+            }
 
-                    return;
+            switch (current[offset])
+            {
+                case ObjectEnding or ArrayEnding or KeyEnding or ValueEnding:
+                    return true;
+
+                case WhiteChar1 or WhiteChar2 or WhiteChar3 or WhiteChar4 or WhiteChar5 or WhiteChar6:
+
+#if !NO_OPTIONS
+                    if (On(DeflateDeserialize))
+                    {
+                        return false;
+                    }
+
+                    if (On(StandardDeserialize))
+                    {
+                        return true;
+                    }
+#endif
+
+                    ++offset;
+
+                    goto Loop;
+                case FixComment:
+
+                    ++offset;
+
+                    if (current + offset == end)
+                    {
+                        return false;
+                    }
+
+                    return current[offset] is FixComment or AsteriskChar;
+            }
+
+            return false;
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        bool Verify(string lowerstr)
+        {
+#if !NO_OPTIONS
+            if (On(DeflateDeserialize))
+            {
+                return true;
+            }
+#endif
+
+            if (!IsValueEnding(lowerstr.Length))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < lowerstr.Length; i++)
+            {
+                if (current[i] != lowerstr[i] && StringHelper.ToLower(current[i]) != lowerstr[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool IsFinalBlock => content is null || content.IsFinalBlock;
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        bool TryReadSegment(int retain)
+        {
+            if (content is null)
+            {
+                return false;
+            }
+
+            return InternalTryReadSegment();
+
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            bool InternalTryReadSegment()
+            {
+                if (retain is -1)
+                {
+                    retain = (int)(end - current);
                 }
 
-                if (*current == FixEscape)
-                {
-                    ++current;
+                var readCount = content.ReadSegment(retain);
 
-                    if (IsContent() && (*current == FixUnicodeEscape || *current == FixunicodeEscape))
+                begin = content.hGCache.First;
+                end = begin + content.hGCache.Count;
+                current = begin;
+
+                return readCount > 0;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool TryReadIsTuple()
+        {
+            var temp = current++;
+
+            SkipWhiteSpace();
+
+            if (current < end && *current != ValueEnding)
+            {
+                return true;
+            }
+
+            current = temp;
+
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        Exception MakeException()
+        {
+            return new JsonDeserializeException(Offset);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void ThrowException()
+        {
+            throw MakeException();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void ThrowOutOfDepthException()
+        {
+#if !NO_OPTIONS
+            if (On(OutOfDepthException))
+#endif
+            {
+                throw new JsonOutOfDepthException();
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal void DeserializeTo(IDataWriter dataWriter)
+        {
+            switch (GetToken())
+            {
+                case JsonToken.Object:
+
+                    InternalReadObject(dataWriter.As<string>());
+
+                    break;
+                case JsonToken.Array:
+
+                    InternalReadArray(dataWriter.As<int>());
+
+                    break;
+                default:
+
+                    if (dataWriter.ContentType is Type contentType)
                     {
-                        current += 4;
+                        dataWriter.Content = XConvert.Convert(DirectRead(), contentType);
+                    }
+                    else
+                    {
+                        dataWriter.Content = DirectRead();
+                    }
+
+                    break;
+            }
+        }
+
+
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        T? FastParse<T>(Ps<char> str)
+        {
+            if (typeof(T) == typeof(DateTime))
+            {
+                if (DateTimeHelper.TryParseISODateTime(str.Pointer, str.Length, out DateTime date_time)) return As(date_time);
+            }
+            else if (typeof(T) == typeof(DateTimeOffset))
+            {
+                if (DateTimeHelper.TryParseISODateTime(str.Pointer, str.Length, out DateTimeOffset date_time_offset)) As(date_time_offset);
+            }
+            else if (typeof(T) == typeof(TimeSpan))
+            {
+                if (DateTimeHelper.TryParseISODateTime(str.Pointer, str.Length, out DateTime date_time)) return As(new TimeSpan(date_time.Ticks));
+            }
+            else if (typeof(T) == typeof(Guid))
+            {
+                var (_, length, value) = GuidHelper.ParseGuid(str.Pointer, str.Length);
+
+                if (length == str.Length) As(value);
+            }
+            else if (typeof(T) == typeof(long))
+            {
+                var (_, length, value) = NumberHelper.DecimalParseInt64(str.Pointer, str.Length);
+
+                if (length == str.Length) As(value);
+            }
+            else if (typeof(T) == typeof(ulong))
+            {
+                var (_, length, value) = NumberHelper.DecimalParseUInt64(str.Pointer, str.Length);
+
+                if (length == str.Length) As(value);
+            }
+            else if (typeof(T) == typeof(double))
+            {
+#if !NO_OPTIONS
+                if (On(JsonFormatterOptions.UseSystemFloatingPointsMethods))
+                {
+#if NativeSpan
+                    if (double.TryParse(str, out var value))
+                    {
+                        return As(value);
+                    }
+#endif
+                }
+                else
+#endif
+                {
+                    var (_, length, value) = NumberHelper.DecimalParseDouble(str.Pointer, str.Length);
+
+                    if (length == str.Length) As(value);
+                }
+            }
+            else if (typeof(T) == typeof(decimal))
+            {
+                var (_, length, value) = NumberHelper.ParseDecimal(str.Pointer, str.Length);
+
+                if (length == str.Length) As(value);
+            }
+            else if (typeof(T) == typeof(RWPath))
+            {
+                return As(ParseReference(str.Pointer, str.Length));
+            }
+
+            if (typeof(T) == typeof(long) ||
+                typeof(T) == typeof(ulong) ||
+                typeof(T) == typeof(double) ||
+                typeof(T) == typeof(decimal))
+            {
+                var numberInfo = NumberHelper.GetNumberInfo(str.Pointer, str.Length);
+
+                if (numberInfo.End == str.Length && numberInfo.IsNumber && numberInfo.IsCommonRadix(out var radix))
+                {
+                    if (typeof(T) == typeof(long)) return As(numberInfo.ToInt64(radix));
+                    if (typeof(T) == typeof(ulong)) return As(numberInfo.ToUInt64(radix));
+                    if (typeof(T) == typeof(double)) return As(numberInfo.ToDouble(radix));
+
+                    if (typeof(T) == typeof(decimal) && numberInfo.IsDecimal) return As(numberInfo.ToDecimal());
+                }
+            }
+
+            return SlowParse<T>(str.ToStringEx());
+
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            static T As<TInput>(TInput input)
+                => Unsafe.As<TInput, T>(ref input);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static unsafe T? SlowParse<T>(string str)
+        {
+            if (typeof(T) == typeof(DateTime))
+            {
+                return As(DateTime.Parse(str));
+            }
+            else if (typeof(T) == typeof(DateTimeOffset))
+            {
+                return As(DateTimeOffset.Parse(str));
+            }
+            else if (typeof(T) == typeof(TimeSpan))
+            {
+                return As(TimeSpan.Parse(str));
+            }
+            else if (typeof(T) == typeof(Guid))
+            {
+                return As(new Guid(str));
+            }
+            else if (typeof(T) == typeof(long))
+            {
+                return As(long.Parse(str, NumberStyle));
+            }
+            else if (typeof(T) == typeof(ulong))
+            {
+                return As(ulong.Parse(str, NumberStyle));
+            }
+            else if (typeof(T) == typeof(double))
+            {
+                return As(double.Parse(str, NumberStyle));
+            }
+            else if (typeof(T) == typeof(decimal))
+            {
+                return As(decimal.Parse(str, NumberStyle));
+            }
+            else if (typeof(T) == typeof(RWPath))
+            {
+                fixed (char* chars = str)
+                {
+                    return (T)(object)ParseReference(chars, str.Length);
+                }
+            }
+
+            return default;
+
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            static T As<TInput>(TInput input)
+                => Unsafe.As<TInput, T>(ref input);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static unsafe RWPath ParseReference(char* chars, int length)
+        {
+            var reference = new RWPath();
+
+            // i: Index;
+            // j: Item start;
+            // k: Item length;
+            for (int i = 0, j = 0, k = 0; ; i++)
+            {
+                if (i < length)
+                {
+                    switch (chars[i])
+                    {
+                        case RefSeparater:
+                            break;
+                        case RefEscape:
+
+                            if (i + 2 < length)
+                            {
+                                GetDigital(chars[++i]);
+                                GetDigital(chars[++i]);
+
+                                continue;
+                            }
+
+                            throw new FormatException();
+                        default:
+                            ++k;
+                            continue;
+                    }
+                }
+
+                if (j < length)
+                {
+                    var item = i - j == k ? StringHelper.ToString(chars + j, k) : GetItem(j, i, k);
+
+                    j = i + 1;
+                    k = 0;
+
+                    switch (item)
+                    {
+                        case ReferenceRootPathName:
+                        case ReferenceRootPathName2:
+                            if (reference.Nodes.IsEmpty)
+                            {
+                                continue;
+                            }
+                            break;
+                    }
+
+                    if (item.Length != 0 && item[0] >= FixNumberMin && item[0] <= FixNumberMax && int.TryParse(item, out var result))
+                    {
+                        reference.AddPathNode(result);
+                    }
+                    else
+                    {
+                        reference.AddPathNode(item);
+                    }
+
+                    continue;
+                }
+
+                break;
+            }
+
+            return reference;
+
+
+            string GetItem(int start, int end, int count)
+            {
+                var bytesCount = (end - start - count) / 3;
+
+                var bytes = stackalloc byte[bytesCount];
+
+                for (int i = start, j = 0; i < end; i++)
+                {
+                    if (chars[i] == RefEscape)
+                    {
+                        bytes[j++] = (byte)((GetDigital(chars[++i]) << 4) | GetDigital(chars[++i]));
+                    }
+                }
+
+                var charsCount = Encoding.UTF8.GetCharCount(bytes, bytesCount);
+
+                var str = StringHelper.MakeString(charsCount + count);
+
+                fixed (char* pStr = str)
+                {
+                    for (int i = start, j = 0, k = 0; i < end; i++)
+                    {
+                        if (chars[i] == RefEscape)
+                        {
+                            var l = 1;
+
+                            for (i += 3; i < end && chars[i] == RefEscape; i += 3, ++l) ;
+
+                            --i;
+
+                            j += Encoding.UTF8.GetChars(bytes + k, l, pStr + j, charsCount);
+
+                            k += l;
+                        }
+                        else
+                        {
+                            pStr[j] = chars[i];
+
+                            ++j;
+                        }
+                    }
+                }
+
+                return str;
+            }
+        }
+
+        #endregion
+
+        #region -- 注释 --
+
+        /// <summary>
+        /// 读取一个注释。
+        /// </summary>
+        /// <param name="includeSymbols">是否包含注释符</param>
+        /// <returns>返回注释</returns>
+        public string ReadComment(bool includeSymbols = false)
+        {
+            return InternalReadComment(includeSymbols).ToStringEx();
+        }
+
+        /// <summary>
+        /// 获取当前注释类型。
+        /// </summary>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public JsonCommentType GetCommentType()
+        {
+            if (current < end && *current is FixComment)
+            {
+                if (current + 1 < end || TryReadSegment(1))
+                {
+                    switch (current[1])
+                    {
+                        case FixComment:
+                            return JsonCommentType.SingleLine;
+                        case AsteriskChar:
+                            return JsonCommentType.MultiLine;
                     }
                 }
             }
 
-            throw GetException();
+            return JsonCommentType.Non;
         }
 
-        public string ReadPropertyName()
+        /// <summary>
+        /// 读取一个注释。此方法的返回值不要跨线程使用！
+        /// </summary>
+        /// <param name="includeSymbols">是否包含注释符</param>
+        /// <returns>返回注释</returns>
+        public Ps<char> InternalReadComment(bool includeSymbols = false)
         {
-            Ps<char> name;
+            var commentType = GetCommentType();
 
-            switch (*current)
+            if (commentType is JsonCommentType.Non)
             {
-                case ObjectEnding:
-                    goto Exception;
-                case FixString:
-                case FixChars:
-                    name = InternalReadString();
-                    break;
-                default:
-                    name = InternalReadText();
-                    break;
+                return default;
             }
 
-            SkipWhiteSpace();
+            var endSymbol = commentType is JsonCommentType.SingleLine ? LineFeedChar : FixComment;
 
-            if (IsContent() && *current == KeyEnding)
+            var offset = commentType is JsonCommentType.SingleLine ? SingleLineCommentPrefix.Length : MultiLineCommentPrefix.Length;
+
+        Loop:
+
+            var index = StringHelper.IndexOf(current + offset, Rest, endSymbol);
+
+            if (index is -1)
             {
-                ++current;
+                index += Rest;
 
-                SkipWhiteSpace();
+                if (TryReadSegment(-1))
+                {
+                    goto Loop;
+                }
 
-                return name.ToStringEx();
+                var chars = current;
+                var length = Rest;
+
+                current += length;
+
+                if (includeSymbols)
+                {
+                    return new Ps<char>(chars, length);
+                }
+
+                if (commentType is JsonCommentType.SingleLine)
+                {
+                    chars += SingleLineCommentPrefix.Length;
+                    length -= SingleLineCommentPrefix.Length;
+
+                    return StringHelper.Trim(chars, length);
+                }
+                else
+                {
+                    chars += MultiLineCommentPrefix.Length;
+                    length -= MultiLineCommentPrefix.Length;
+
+                    return StringHelper.TrimStart(chars, length);
+                }
             }
+            else if (commentType is JsonCommentType.MultiLine && !(index > 0 && current[offset + index - 1] is AsteriskChar))
+            {
+                offset += index + 1;
 
-            Exception:
+                goto Loop;
+            }
+            else
+            {
+                var chars = current;
+                var length = offset + index + 1;
 
-            throw GetException();
+                current += length;
+
+                if (includeSymbols)
+                {
+                    return new Ps<char>(chars, length);
+                }
+
+                if (commentType is JsonCommentType.SingleLine)
+                {
+                    chars += SingleLineCommentPrefix.Length;
+                    length -= SingleLineCommentPrefix.Length;
+
+                    return StringHelper.Trim(chars, length);
+                }
+                else
+                {
+                    chars += MultiLineCommentPrefix.Length;
+                    length -= MultiLineCommentPrefix.Length;
+                    length -= MultiLineCommentSuffix.Length;
+
+                    return StringHelper.Trim(chars, length);
+                }
+            }
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryReadBeginObject()
+        /// <summary>
+        /// 跳过一个注释。
+        /// </summary>
+        /// <returns>返回是否已跳过一个注释</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public bool SkipComment()
         {
-            if (IsContent() && *current == FixObject)
+            if (InternalReadComment(true).Length != 0)
             {
-                ++current;
-
                 SkipWhiteSpace();
 
                 return true;
@@ -2236,170 +3259,201 @@ namespace Swifter.Json
             return false;
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryReadEndObject()
+        #endregion
+
+        #region -- 接口实现 --
+
+        Type? IValueReader.ValueType
         {
-            SkipWhiteSpace();
-
-            if (IsContent())
+            get
             {
-                switch (*current)
+                switch (GetToken())
                 {
-                    case ObjectEnding:
+                    case JsonToken.Object:
+                        return ((JsonFormatter?.ObjectValueInterface) ?? DefaultObjectValueInterface).Type;
+                    case JsonToken.Array:
+                        return ((JsonFormatter?.ArrayValueInterface) ?? DefaultArrayValueInterface).Type;
+                    case JsonToken.Boolean:
+                        return typeof(bool);
+                    case JsonToken.Number:
+                        return typeof(double);
+                    case JsonToken.String:
+                        return typeof(string);
+                    default:
+                        return null;
+                }
+            }
+        }
 
-                        ++current;
+        void IValueReader.Pop() => SkipValue();
 
-                        return true;
+        TargetableValueInterfaceMap ITargetableValueRW.ValueInterfaceMap => TargetableValueInterfaceMap.FromSource(JsonFormatter);
 
-                    case ValueEnding:
+        #endregion
 
-                        ++current;
+        #region -- 辅助类 --
 
-                        SkipWhiteSpace();
+#if !NO_OPTIONS
 
-                        if (IsContent() && *current == ObjectEnding)
-                        {
-                            return true;
-                        }
+        class ReferenceMode
+        {
+            SinglyLinkedList<BindItem> Binds;
+            SinglyLinkedList<ObjectItem> Objects;
 
-                        return false;
+            public IDataWriter CurrentObject
+            {
+                get
+                {
+                    var first = Objects.First;
+
+                    if (first is null)
+                    {
+                        throw new InvalidOperationException();
+                    }
+
+                    return first.DataWriter;
                 }
             }
 
-            return false;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryReadBeginArray()
-        {
-            if (IsContent() && *current == FixArray)
+            public void EnterObject(IDataWriter dataWriter)
             {
-                ++current;
-
-                SkipWhiteSpace();
-
-                return true;
+                Objects.AddFirst(new ObjectItem(dataWriter));
             }
 
-            return false;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool TryReadEndArray()
-        {
-            SkipWhiteSpace();
-
-            if (IsContent())
+            public void LeavaObject()
             {
-                switch (*current)
+                Objects.RemoveFirst(out _);
+
+                if (Objects.IsEmpty)
                 {
-                    case ArrayEnding:
-
-                        ++current;
-
-                        return true;
-
-                    case ValueEnding:
-
-                        ++current;
-
-                        SkipWhiteSpace();
-
-                        if (IsContent() && *current == ArrayEnding)
-                        {
-                            return true;
-                        }
-
-                        return false;
+                    Process();
                 }
             }
 
-            return false;
+            private void Process()
+            {
+                const string NotWritableMsg = "The destination is not writable.";
+                const string NotReadableMsg = "The source is not readable.";
+                const string UnableCreateMsg = "Unable to create data reader!.";
+
+                while (Binds.RemoveFirst(out var item))
+                {
+                    if (item.SourcePath.Nodes.IsEmpty)
+                    {
+                        var valueWriter = item.DestinationPath.GetFirstValueWriter(item.Destination);
+
+                        if (valueWriter is null)
+                        {
+                            throw new NotSupportedException(NotWritableMsg);
+                        }
+
+                        valueWriter.DirectWrite(item.Source.Content);
+                    }
+                    else
+                    {
+                        var dataReader = item.Source as IDataReader;
+
+                        if (dataReader is null)
+                        {
+                            var content = item.Source.Content;
+
+                            if (content is null)
+                            {
+                                throw new NullReferenceException(nameof(item.Source.Content));
+                            }
+
+                            dataReader = RWHelper.CreateReader(content);
+                        }
+
+                        if (dataReader is null)
+                        {
+                            throw new NotSupportedException(UnableCreateMsg);
+                        }
+
+                        var valueWriter = item.DestinationPath.GetFirstValueWriter(item.Destination);
+                        var valueReader = item.SourcePath.GetFirstValueReader(dataReader);
+
+                        if (valueWriter is null)
+                        {
+                            throw new NotSupportedException(NotWritableMsg);
+                        }
+
+                        if (valueReader is null)
+                        {
+                            throw new NotSupportedException(NotReadableMsg);
+                        }
+
+                        valueWriter.DirectWrite(valueReader.DirectRead());
+                    }
+                }
+            }
+
+            public void SetCurrentKey<TKey>(TKey key) where TKey : notnull
+            {
+                var first = Objects.First;
+
+                if (first is null)
+                {
+                    throw new InvalidOperationException();
+                }
+
+                first.CurrentKey = new RWPathConstantNode<TKey>(key);
+            }
+
+            public object? GetValue(RWPath reference)
+            {
+                var first = Objects.First;
+                var last = Objects.Last;
+
+                if (first is null || last is null || first.CurrentKey is null)
+                {
+                    throw new InvalidOperationException();
+                }
+
+                var destinationPath = new RWPath();
+
+                destinationPath.Nodes.AddLast(first.CurrentKey);
+
+                Binds.AddLast(new BindItem(
+                    last.DataWriter,
+                    reference,
+                    first.DataWriter,
+                    destinationPath
+                    ));
+
+                return null;
+            }
+
+            sealed class BindItem
+            {
+                public readonly IDataWriter Source;
+                public readonly RWPath SourcePath;
+                public readonly IDataWriter Destination;
+                public readonly RWPath DestinationPath;
+
+                public BindItem(IDataWriter source, RWPath sourcePath, IDataWriter destination, RWPath destinationPath)
+                {
+                    Source = source;
+                    SourcePath = sourcePath;
+                    Destination = destination;
+                    DestinationPath = destinationPath;
+                }
+            }
+
+            sealed class ObjectItem
+            {
+                public readonly IDataWriter DataWriter;
+                public RWPathNode? CurrentKey;
+
+                public ObjectItem(IDataWriter dataWriter)
+                {
+                    DataWriter = dataWriter;
+                }
+            }
         }
 
-        public void MakeTargetedId() { }
+#endif
 
-        bool[] IValueReader<bool[]>.ReadValue() => ReadArray<bool>();
-
-        byte[] IValueReader<byte[]>.ReadValue() => ReadArray<byte>();
-
-        sbyte[] IValueReader<sbyte[]>.ReadValue() => ReadArray<sbyte>();
-
-        short[] IValueReader<short[]>.ReadValue() => ReadArray<short>();
-
-        ushort[] IValueReader<ushort[]>.ReadValue() => ReadArray<ushort>();
-
-        char[] IValueReader<char[]>.ReadValue() => ReadArray<char>();
-
-        int[] IValueReader<int[]>.ReadValue() => ReadArray<int>();
-
-        uint[] IValueReader<uint[]>.ReadValue() => ReadArray<uint>();
-
-        long[] IValueReader<long[]>.ReadValue() => ReadArray<long>();
-
-        ulong[] IValueReader<ulong[]>.ReadValue() => ReadArray<ulong>();
-
-        float[] IValueReader<float[]>.ReadValue() => ReadArray<float>();
-
-        double[] IValueReader<double[]>.ReadValue() => ReadArray<double>();
-
-        DateTime[] IValueReader<DateTime[]>.ReadValue() => ReadArray<DateTime>();
-
-        DateTimeOffset[] IValueReader<DateTimeOffset[]>.ReadValue() => ReadArray<DateTimeOffset>();
-
-        decimal[] IValueReader<decimal[]>.ReadValue() => ReadArray<decimal>();
-
-        Guid[] IValueReader<Guid[]>.ReadValue() => ReadArray<Guid>();
-
-        string[] IValueReader<string[]>.ReadValue() => ReadArray<string>();
-
-        object[] IValueReader<object[]>.ReadValue() => ReadArray<object>();
-
-        List<bool> IValueReader<List<bool>>.ReadValue() => ReadList<bool>();
-
-        List<byte> IValueReader<List<byte>>.ReadValue() => ReadList<byte>();
-
-        List<sbyte> IValueReader<List<sbyte>>.ReadValue() => ReadList<sbyte>();
-
-        List<short> IValueReader<List<short>>.ReadValue() => ReadList<short>();
-
-        List<ushort> IValueReader<List<ushort>>.ReadValue() => ReadList<ushort>();
-
-        List<char> IValueReader<List<char>>.ReadValue() => ReadList<char>();
-
-        List<int> IValueReader<List<int>>.ReadValue() => ReadList<int>();
-
-        List<uint> IValueReader<List<uint>>.ReadValue() => ReadList<uint>();
-
-        List<long> IValueReader<List<long>>.ReadValue() => ReadList<long>();
-
-        List<ulong> IValueReader<List<ulong>>.ReadValue() => ReadList<ulong>();
-
-        List<float> IValueReader<List<float>>.ReadValue() => ReadList<float>();
-
-        List<double> IValueReader<List<double>>.ReadValue() => ReadList<double>();
-
-        List<DateTime> IValueReader<List<DateTime>>.ReadValue() => ReadList<DateTime>();
-
-        List<DateTimeOffset> IValueReader<List<DateTimeOffset>>.ReadValue() => ReadList<DateTimeOffset>();
-
-        List<decimal> IValueReader<List<decimal>>.ReadValue() => ReadList<decimal>();
-
-        List<Guid> IValueReader<List<Guid>>.ReadValue() => ReadList<Guid>();
-
-        List<string> IValueReader<List<string>>.ReadValue() => ReadList<string>();
-
-        List<object> IValueReader<List<object>>.ReadValue() => ReadList<object>();
-
-        void IDataReader<string>.OnReadValue(string key, IValueWriter valueWriter)
-        {
-            valueWriter.DirectWrite(this[key].DirectRead());
-        }
-
-        void IDataReader<string>.OnReadAll(IDataWriter<string> dataWriter)
-        {
-            // TODO: 
-            throw new NotSupportedException();
-        }
+        #endregion
     }
 }

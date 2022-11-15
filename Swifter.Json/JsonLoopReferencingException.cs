@@ -3,6 +3,7 @@ using System;
 
 namespace Swifter.Json
 {
+#if !NO_OPTIONS
     /// <summary>
     /// Json 序列化时出现循环引用引发的异常信息。
     /// </summary>
@@ -16,10 +17,11 @@ namespace Swifter.Json
         /// <summary>
         /// 构建实例
         /// </summary>
-        internal JsonLoopReferencingException(RWPathInfo ref1, RWPathInfo ref2, object loopingObject) 
+        internal JsonLoopReferencingException(RWPath ref1, RWPath ref2, object loopingObject) 
             : base($"Json serializating members '{ref1}' and '{ref2}' loop referencing.")
         {
             LoopingObject = loopingObject;
         }
     }
+#endif
 }

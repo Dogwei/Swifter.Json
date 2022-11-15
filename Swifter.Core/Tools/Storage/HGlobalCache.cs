@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Swifter.Tools
 {
@@ -123,8 +125,8 @@ namespace Swifter.Tools
             {
                 if (offset >= 0 && offset < array.Length)
                 {
-                    First = (T*)Underlying.AsPointer(ref array[value]);
-                    Last = (T*)Underlying.AsPointer(ref array[Available - 1]);
+                    First = (T*)Unsafe.AsPointer(ref array[value]);
+                    Last = (T*)Unsafe.AsPointer(ref array[Available - 1]);
 
 
                     Count = Math.Max(Count + offset - value, 0);
@@ -141,15 +143,15 @@ namespace Swifter.Tools
         /// <summary>
         /// 扩展全局缓存内存。
         /// </summary>
-        /// <param name="expandMinSize">最小扩展长度</param>
+        /// <param name="growMinSize">最小扩展长度</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void Expand(int expandMinSize)
+        public void Grow(int growMinSize)
         {
             var limit = MaxSize;
 
-            if (expandMinSize >= limit)
+            if (growMinSize >= limit)
             {
-                throw new OutOfMemoryException("HGlobal cache expand size exceeds limit.");
+                throw new OutOfMemoryException("HGlobal cache grow size exceeds limit.");
             }
 
             if (array.Length >= limit)
@@ -157,19 +159,34 @@ namespace Swifter.Tools
                 throw new OutOfMemoryException("HGlobal cache size exceeds limit.");
             }
 
-            ReAlloc(Math.Min(array.Length * 2 + expandMinSize, limit));
+            ReAlloc(Math.Min(array.Length * 2 + growMinSize, limit));
         }
 
+        static T[] AllocatePinnedArray(int size)
+        {
+#if NET5_0_OR_GREATER
+            return GC.AllocateUninitializedArray<T>(size, true);
+#else
+            return new T[size];
+#endif
+        }
 
+        [MemberNotNull(nameof(array))]
         void ReAlloc(int size)
         {
+
+
             if (array is null)
             {
-                array = new T[size];
+                array = AllocatePinnedArray(size);
             }
             else
             {
-                Array.Resize(ref array, size + 12);
+                var newArray = AllocatePinnedArray(size);
+
+                Array.Copy(array, newArray, array.Length/* TODO: Count */);
+
+                array = newArray;
             }
 
             Offset = Offset;

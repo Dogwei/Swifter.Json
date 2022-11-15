@@ -1,32 +1,30 @@
-﻿using Swifter.RW;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Swifter.RW
 {
-    internal sealed class EnumeratorInterface<T, TValue> : IValueInterface<T> where T : IEnumerator<TValue>
+    internal sealed class EnumeratorInterface<T, TValue> : IValueInterface<T> where T : IEnumerator<TValue?>
     {
         public T ReadValue(IValueReader valueReader)
         {
             throw new NotSupportedException();
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, [AllowNull] T value)
         {
             if (value is null)
             {
                 valueWriter.DirectWrite(null);
-
-                return;
             }
-
-            var enumeratorReader = new EnumeratorReader<T, TValue>
+            else if (valueWriter is IValueWriter<T> writer)
             {
-                content = value
-            };
-
-            valueWriter.WriteArray(enumeratorReader);
+                writer.WriteValue(value);
+            }
+            else
+            {
+                valueWriter.WriteArray(new EnumeratorReader<T, TValue> { Content = value });
+            }
         }
     }
 }

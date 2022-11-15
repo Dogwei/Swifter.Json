@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using InlineIL;
+using System;
 using System.ComponentModel;
-using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static Swifter.Tools.MethodHelper;
 
 namespace Swifter.Tools
 {
@@ -20,9 +18,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TValue LoadClassField<TValue>(object obj, int offset)
+        public static TValue? LoadClassField<TValue>(object obj, int offset)
         {
-            return Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
+            return TypeHelper.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
         }
 
         /// <summary>
@@ -30,9 +28,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref TValue LoadClassFieldAddress<TValue>(object obj, int offset)
+        public static ref TValue? LoadClassFieldAddress<TValue>(object obj, int offset)
         {
-            return ref Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
+            return ref TypeHelper.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset);
         }
 
         /// <summary>
@@ -40,9 +38,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void StoreClassField<TValue>(object obj, TValue value, int offset)
+        public static void StoreClassField<TValue>(object obj, TValue? value, int offset)
         {
-            Underlying.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset) = value;
+            TypeHelper.AddByteOffset(ref TypeHelper.Unbox<TValue>(obj), offset) = value;
         }
 
         /// <summary>
@@ -50,9 +48,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TValue LoadStructField<TValue>(ref TValue obj, int offset)
+        public static TValue? LoadStructField<TValue>(ref TValue? obj, int offset)
         {
-            return Underlying.AddByteOffset(ref obj, offset);
+            return TypeHelper.AddByteOffset(ref obj, offset);
         }
 
         /// <summary>
@@ -60,9 +58,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref TValue LoadStructFieldAddress<TValue>(ref TValue obj, int offset)
+        public static ref TValue? LoadStructFieldAddress<TValue>(ref TValue? obj, int offset)
         {
-            return ref Underlying.AddByteOffset(ref obj, offset);
+            return ref TypeHelper.AddByteOffset(ref obj, offset);
         }
 
         /// <summary>
@@ -70,9 +68,9 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void StoreStructField<TValue>(ref TValue obj, TValue value, int offset)
+        public static void StoreStructField<TValue>(ref TValue? obj, TValue? value, int offset)
         {
-            Underlying.AddByteOffset(ref obj, offset) = value;
+            TypeHelper.AddByteOffset(ref obj, offset) = value;
         }
 
         /// <summary>
@@ -80,7 +78,7 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TValue LoadStaticField<TValue>(ref TValue address)
+        public static TValue? LoadStaticField<TValue>(ref TValue? address)
         {
             return address;
         }
@@ -90,7 +88,7 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref TValue LoadStaticFieldAddress<TValue>(ref TValue address)
+        public static ref TValue? LoadStaticFieldAddress<TValue>(ref TValue? address)
         {
             return ref address;
         }
@@ -100,7 +98,7 @@ namespace Swifter.Tools
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void StoreStaticField<TValue>(TValue value, ref TValue address)
+        public static void StoreStaticField<TValue>(TValue? value, ref TValue? address)
         {
             address = value;
         }
@@ -133,19 +131,19 @@ namespace Swifter.Tools
         {
             if (fieldInfo.IsStatic)
             {
-                throw new NotSupportedException("Static fields are not supported at this time.");
+                throw new NotSupportedException("Static fields are not supported.");
             }
-            else if(fieldInfo.DeclaringType.IsValueType)
+            else if(fieldInfo.DeclaringType!.IsValueType)
             {
                 ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadStructField)).MakeGenericMethod(fieldInfo.FieldType));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(EmitHelper), nameof(LoadStructField)))).MakeGenericMethod(fieldInfo.FieldType));
             }
             else
             {
                 ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadClassField)).MakeGenericMethod(fieldInfo.FieldType));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(EmitHelper), nameof(EmitHelper.LoadClassField)))).MakeGenericMethod(fieldInfo.FieldType));
             }
 
             return ilGen;
@@ -179,19 +177,19 @@ namespace Swifter.Tools
         {
             if (fieldInfo.IsStatic)
             {
-                throw new NotSupportedException("Static fields are not supported at this time.");
+                throw new NotSupportedException("Static fields are not supported.");
             }
-            else if (fieldInfo.DeclaringType.IsValueType)
+            else if (fieldInfo.DeclaringType!.IsValueType)
             {
                 ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreStructField)).MakeGenericMethod(fieldInfo.FieldType));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(EmitHelper), nameof(EmitHelper.StoreStructField)))).MakeGenericMethod(fieldInfo.FieldType));
             }
             else
             {
                 ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(StoreClassField)).MakeGenericMethod(fieldInfo.FieldType));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(EmitHelper), nameof(EmitHelper.StoreClassField)))).MakeGenericMethod(fieldInfo.FieldType));
             }
 
             return ilGen;
@@ -225,19 +223,19 @@ namespace Swifter.Tools
         {
             if (fieldInfo.IsStatic)
             {
-                throw new NotSupportedException("Static fields are not supported at this time.");
+                throw new NotSupportedException("Static fields are not supported.");
             }
-            else if (fieldInfo.DeclaringType.IsValueType)
+            else if (fieldInfo.DeclaringType!.IsValueType)
             {
                 ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadClassFieldAddress)).MakeGenericMethod(typeof(byte)));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(EmitHelper), nameof(EmitHelper.LoadStructFieldAddress)))).MakeGenericMethod(typeof(byte)));
             }
             else
             {
                 ilGen.LoadConstant(TypeHelper.OffsetOf(fieldInfo));
 
-                ilGen.Call(typeof(EmitHelper).GetMethod(nameof(LoadStructFieldAddress)).MakeGenericMethod(typeof(byte)));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(EmitHelper), nameof(EmitHelper.LoadClassFieldAddress)))).MakeGenericMethod(typeof(byte)));
             }
 
             return ilGen;
@@ -263,8 +261,7 @@ namespace Swifter.Tools
         public static ILGenerator LoadType(this ILGenerator ilGen, Type type)
         {
             ilGen.LoadToken(type);
-
-            ilGen.Call(MethodOf<RuntimeTypeHandle, Type>(Type.GetTypeFromHandle));
+            ilGen.Call(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(Type), nameof(Type.GetTypeFromHandle)))));
 
             return ilGen;
         }
@@ -750,7 +747,7 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 当提供的值为 False 时跳到指定块。
+        /// 当提供的值为 False, Null 或 0 时跳到指定块。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
@@ -762,7 +759,7 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 当提供的值为 True 时跳到指定块。
+        /// 当提供的值为 True, 非 Null 或非 0 时跳到指定块。
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="label">代码块</param>
@@ -1028,44 +1025,76 @@ namespace Swifter.Tools
                         break;
                     default:
                         var size = TypeHelper.SizeOf(type);
+                        var offset = 0;
 
                         var labNotEmpty = ilGen.DefineLabel();
 
-                        while (size >= 4)
+                        while (size >= 8)
                         {
-                            size -= 4;
                             ilGen.LoadLocalAddress(local);
 
-                            if (size != 0)
+                            if (offset != 0)
                             {
-                                ilGen.LoadConstant(size);
+                                ilGen.LoadConstant(offset);
+                                ilGen.Emit(OpCodes.Add);
+                            }
+
+                            ilGen.Emit(OpCodes.Ldind_I8);
+                            ilGen.BranchTrue(labNotEmpty);
+
+                            offset += 8;
+                            size -= 8;
+                        }
+
+                        if (size >= 4)
+                        {
+                            ilGen.LoadLocalAddress(local);
+
+                            if (offset != 0)
+                            {
+                                ilGen.LoadConstant(offset);
                                 ilGen.Emit(OpCodes.Add);
                             }
 
                             ilGen.Emit(OpCodes.Ldind_I4);
                             ilGen.BranchTrue(labNotEmpty);
+
+                            offset += 4;
+                            size -= 4;
                         }
 
                         if (size >= 2)
                         {
-                            size -= 2;
                             ilGen.LoadLocalAddress(local);
 
-                            if (size != 0)
+                            if (offset != 0)
                             {
-                                ilGen.LoadConstant(size);
+                                ilGen.LoadConstant(offset);
                                 ilGen.Emit(OpCodes.Add);
                             }
 
                             ilGen.Emit(OpCodes.Ldind_I2);
                             ilGen.BranchTrue(labNotEmpty);
+
+                            offset += 2;
+                            size -= 2;
                         }
 
                         if (size >= 1)
                         {
                             ilGen.LoadLocalAddress(local);
+
+                            if (offset != 0)
+                            {
+                                ilGen.LoadConstant(offset);
+                                ilGen.Emit(OpCodes.Add);
+                            }
+
                             ilGen.Emit(OpCodes.Ldind_I1);
                             ilGen.BranchTrue(labNotEmpty);
+
+                            ++offset;
+                            --size;
                         }
 
                         ilGen.Branch(label);
@@ -1079,12 +1108,23 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 调用方法。
+        /// 自动调用方法。<br/>
+        /// 当方法为虚方法时，使用 <see cref="OpCodes.Callvirt"/>；<br/>
+        /// 当方法为动态方法时，使用 <see cref="OpCodes.Calli"/>；<br/>
+        /// 否则使用 <see cref="OpCodes.Call"/>。<br/>
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="methodBase">方法信息</param>
-        public static ILGenerator Call(this ILGenerator ilGen, MethodBase methodBase)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static ILGenerator AutoCall(this ILGenerator ilGen, MethodBase methodBase)
         {
+            VersionDifferences.Assert(methodBase is MethodInfo or ConstructorInfo);
+
+            if (methodBase is DynamicMethod dynamicMethod)
+            {
+                return ilGen.Call(dynamicMethod);
+            }
+
             if (methodBase is ConstructorInfo constructor)
             {
                 ilGen.Emit(OpCodes.Call, constructor);
@@ -1104,32 +1144,78 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 跳过方法访问检查调用方法。
+        /// 调用方法。
         /// </summary>
-        /// <param name="ilGen"></param>
-        /// <param name="methodBase"></param>
-        /// <returns></returns>
-        public static ILGenerator UnsafeCall(this ILGenerator ilGen, MethodBase methodBase)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static ILGenerator Call(this ILGenerator ilGen, MethodBase methodBase)
         {
-            var functionPointer = methodBase.GetFunctionPointer();
+            VersionDifferences.Assert(methodBase is MethodInfo or ConstructorInfo);
 
-            GetParametersTypes(methodBase, out var parameterTypes, out var returnType);
+            if (methodBase is ConstructorInfo constructor)
+            {
+                ilGen.Emit(OpCodes.Call, constructor);
+            }
+            else
+            {
+                ilGen.Emit(OpCodes.Call, (MethodInfo)methodBase);
+            }
 
-            return ilGen.Calli(functionPointer, returnType, parameterTypes);
+            return ilGen;
         }
 
         /// <summary>
-        /// 以托管代码默认约定调用方法指针。
+        /// 调用虚方法。
         /// </summary>
-        /// <param name="ilGen">ilGen</param>
-        /// <param name="functionPointer">指针底值</param>
-        /// <param name="parameterTypes">调用参数签名</param>
-        /// <param name="returnType">调用返回值前面</param>
-        public static ILGenerator Calli(this ILGenerator ilGen, IntPtr functionPointer, Type returnType, Type[] parameterTypes)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static ILGenerator CallVirtual(this ILGenerator ilGen, MethodBase methodBase)
         {
-            ilGen.LoadConstant(functionPointer);
+            VersionDifferences.Assert(methodBase is MethodInfo or ConstructorInfo);
 
-            ilGen.EmitCalli(OpCodes.Calli, CallingConventions.Standard, returnType, parameterTypes, null);
+            if (methodBase is ConstructorInfo constructor)
+            {
+                ilGen.Emit(OpCodes.Callvirt, constructor);
+            }
+            else
+            {
+                ilGen.Emit(OpCodes.Callvirt, (MethodInfo)methodBase);
+            }
+
+            return ilGen;
+        }
+
+        /// <summary>
+        /// 跳过方法访问检查调用方法。
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static ILGenerator UnsafeCall(this ILGenerator ilGen, MethodBase methodBase)
+        {
+            VersionDifferences.Assert(methodBase is MethodInfo or ConstructorInfo);
+
+            ilGen.LoadConstant(methodBase.GetFunctionPointer());
+
+            if (methodBase is ConstructorInfo constructor)
+            {
+                return ilGen.ManagedCalli(CallingConventions.HasThis, typeof(void), constructor.GetParameterTypes());
+            }
+
+            var methodInfo = Unsafe.As<MethodInfo>(methodBase);
+
+            if (methodInfo.IsStatic)
+            {
+                return ilGen.ManagedCalli(CallingConventions.Standard, methodInfo.ReturnType, methodInfo.GetParameterTypes());
+            }
+            else
+            {
+                return ilGen.ManagedCalli(CallingConventions.HasThis, methodInfo.ReturnType, methodInfo.GetParameterTypes());
+            }
+        }
+
+        /// <summary>
+        /// 以托管代码约定调用方法指针。
+        /// </summary>
+        public static ILGenerator ManagedCalli(this ILGenerator ilGen, CallingConventions callingConvention, Type returnType, Type[] parameterTypes)
+        {
+            ilGen.EmitCalli(OpCodes.Calli, callingConvention, returnType, parameterTypes, null);
 
             return ilGen;
         }
@@ -1139,15 +1225,14 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="ilGen">ilGen</param>
         /// <param name="dynamicMethod">动态方法</param>
-        public static ILGenerator Calli(this ILGenerator ilGen, DynamicMethod dynamicMethod)
+        public static ILGenerator Call(this ILGenerator ilGen, DynamicMethod dynamicMethod)
         {
             // 保存引用。
             GCHandle.Alloc(dynamicMethod);
 
-            return ilGen.Calli(
-                dynamicMethod.GetFunctionPointer(), 
-                dynamicMethod.ReturnType, 
-                dynamicMethod.GetParameters().Map(item => item.ParameterType));
+            ilGen.LoadConstant(dynamicMethod.GetFunctionPointer());
+
+            return ilGen.ManagedCalli(CallingConventions.Standard, dynamicMethod.ReturnType, dynamicMethod.GetParameterTypes());
         }
 
         /// <summary>
@@ -1168,6 +1253,18 @@ namespace Swifter.Tools
         public static ILGenerator ConvertInt32(this ILGenerator ilGen)
         {
             ilGen.Emit(OpCodes.Conv_I4);
+
+            return ilGen;
+        }
+
+
+        /// <summary>
+        /// 将值转换为 UInt32 类型。
+        /// </summary>
+        /// <param name="ilGen">ilGen</param>
+        public static ILGenerator ConvertUInt32(this ILGenerator ilGen)
+        {
+            ilGen.Emit(OpCodes.Conv_U4);
 
             return ilGen;
         }

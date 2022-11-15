@@ -11,16 +11,6 @@ namespace Swifter.Tools
         /// </summary>
         public const int DecimalStringMaxLength = 30;
 
-        /// <summary>
-        /// Guid 字符串包含分隔符的长度。
-        /// </summary>
-        public const int GuidStringWithSeparatorsLength = 36;
-
-        /// <summary>
-        /// Guid 字符串的长度。
-        /// </summary>
-        public const int GuidStringLength = 32;
-
 
         /* ['0', '1', '2', '3',... 'a', 'b', 'c',... 'A', 'B', 'C',... 'Z', '~', '!'] */
         private static readonly char* Digitals;
@@ -232,65 +222,6 @@ namespace Swifter.Tools
 
 
         /// <summary>
-        /// 将一个 Guid 值写入到一个空间足够的字符串中。
-        /// </summary>
-        /// <param name="value">Guid 值</param>
-        /// <param name="chars">空间足够的字符串</param>
-        /// <param name="separator">是否包含分隔符</param>
-        /// <returns>返回写入长度。</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int ToString(Guid value, char* chars, bool separator)
-        {
-            var hex = Hex;
-            var offset = chars;
-            var ptr = (GuidStruct*)(&value);
-
-            hex.AppendD2(offset, ptr->_a1); offset += 2;
-            hex.AppendD2(offset, ptr->_a2); offset += 2;
-            hex.AppendD2(offset, ptr->_a3); offset += 2;
-            hex.AppendD2(offset, ptr->_a4); offset += 2;
-
-            if (separator)
-            {
-                *offset = '-'; ++offset;
-            }
-
-            hex.AppendD2(offset, ptr->_b1); offset += 2;
-            hex.AppendD2(offset, ptr->_b2); offset += 2;
-
-            if (separator)
-            {
-                *offset = '-'; ++offset;
-            }
-
-            hex.AppendD2(offset, ptr->_c1); offset += 2;
-            hex.AppendD2(offset, ptr->_c2); offset += 2;
-
-            if (separator)
-            {
-                *offset = '-'; ++offset;
-            }
-
-            hex.AppendD2(offset, ptr->_d); offset += 2;
-            hex.AppendD2(offset, ptr->_e); offset += 2;
-
-            if (separator)
-            {
-                *offset = '-'; ++offset;
-            }
-
-            hex.AppendD2(offset, ptr->_f); offset += 2;
-            hex.AppendD2(offset, ptr->_g); offset += 2;
-            hex.AppendD2(offset, ptr->_h); offset += 2;
-            hex.AppendD2(offset, ptr->_i); offset += 2;
-            hex.AppendD2(offset, ptr->_j); offset += 2;
-            hex.AppendD2(offset, ptr->_k); offset += 2;
-
-            return (int)(offset - chars);
-        }
-
-
-        /// <summary>
         /// 获取一个十进制数字的小数刻度。
         /// </summary>
         /// <param name="value">十进制数字</param>
@@ -298,7 +229,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int GetScale(decimal value)
         {
-            return Underlying.As<decimal, DecimalStruct>(ref value).Scale;
+            return Unsafe.As<decimal, DecimalStruct>(ref value).Scale;
         }
 
         /// <summary>
@@ -574,13 +505,13 @@ namespace Swifter.Tools
         {
             if (value >= 0)
             {
-                return ToDecimalString((ulong)(value), chars);
+                return ToDecimalString((ulong)value, chars);
             }
             else
             {
                 *chars = NegativeSign;
 
-                return ToDecimalString((ulong)(-value), chars + 1) + 1;
+                return ToDecimalString((ulong)-value, chars + 1) + 1;
             }
         }
 
@@ -772,114 +703,6 @@ namespace Swifter.Tools
         }
 
         /// <summary>
-        /// 尝试从字符串开始位置解析一个 Guid 值。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="length">字符串长度</param>
-        /// <returns>解析成功则返回解析的长度，失败则返回 0</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static (ParseCode code, int length, Guid value) ParseGuid(char* chars, int length)
-        {
-            GuidStruct value = default;
-
-            var offset = chars;
-
-            if (length < 32)
-            {
-                goto Error;
-            }
-
-            if (*offset == '{')
-            {
-                ++offset;
-                --length;
-            }
-
-            if (!TryParseHexByte(ref offset, ref value._a1)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._a2)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._a3)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._a4)) goto False;
-
-
-            if (*offset == '-')
-            {
-                ++offset;
-                --length;
-            }
-
-            if (!TryParseHexByte(ref offset, ref value._b1)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._b2)) goto False;
-
-            if (*offset == '-')
-            {
-                ++offset;
-                --length;
-            }
-
-            if (!TryParseHexByte(ref offset, ref value._c1)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._c2)) goto False;
-
-            if (*offset == '-')
-            {
-                ++offset;
-                --length;
-            }
-
-            if (!TryParseHexByte(ref offset, ref value._d)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._e)) goto False;
-
-            if (*offset == '-')
-            {
-                ++offset;
-                --length;
-            }
-
-            if (length < 32)
-            {
-                goto Error;
-            }
-
-            if (!TryParseHexByte(ref offset, ref value._f)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._g)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._h)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._i)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._j)) goto False;
-            if (!TryParseHexByte(ref offset, ref value._k)) goto False;
-
-            if (*offset == '}')
-            {
-                ++offset;
-                --length;
-            }
-
-            return (ParseCode.Success, (int)(offset - chars), Underlying.As<GuidStruct, Guid>(ref value));
-
-            Error:
-            return (ParseCode.WrongFormat, 0, default);
-
-            False:
-            return (ParseCode.OutOfRadix, 0, default);
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static bool TryParseHexByte(ref char* chars, ref byte value)
-        {
-            var a = Hex.ToRadix(chars[0]);
-            var b = Hex.ToRadix(chars[1]);
-
-            if ((a | b) >= 16)
-            {
-                return false;
-            }
-
-            value = (byte)((a << 4) | b);
-
-            chars += 2;
-
-            return true;
-        }
-
-        /// <summary>
         /// 
         /// </summary>
         /// <param name="chars"></param>
@@ -961,7 +784,7 @@ namespace Swifter.Tools
 
             if (number != 0)
             {
-                Mult((uint*)&value, lengthOfValueBits, (uint)DecimalUInt64Numbers[number], out var carry);
+                Mul((uint*)&value, lengthOfValueBits, (uint)DecimalUInt64Numbers[number], out var carry);
 
                 if (carry != 0)
                 {
@@ -1011,7 +834,7 @@ namespace Swifter.Tools
 
                         exponent -= number;
 
-                        Mult((uint*)&value, lengthOfValueBits, (uint)DecimalUInt64Numbers[number], out var carry);
+                        Mul((uint*)&value, lengthOfValueBits, (uint)DecimalUInt64Numbers[number], out var carry);
 
                         if (carry != 0)
                         {
@@ -1031,7 +854,7 @@ namespace Swifter.Tools
                 }
             }
 
-            ((DecimalStruct*)(&value))->SetBits((int*)(&value));
+            ((DecimalStruct*)&value)->SetBits((int*)&value);
 
             if (exponent < 0)
             {
@@ -1041,13 +864,13 @@ namespace Swifter.Tools
                 }
                 else
                 {
-                    ((DecimalStruct*)(&value))->Scale = (int)(-exponent);
+                    ((DecimalStruct*)&value)->Scale = (int)-exponent;
                 }
             }
 
             if (isNegative)
             {
-                ((DecimalStruct*)(&value))->Sign = 1;
+                ((DecimalStruct*)&value)->Sign = 1;
             }
 
             return (code, offset, value);
@@ -1070,8 +893,27 @@ namespace Swifter.Tools
             goto Return;
         }
 
+        /// <summary>
+        /// 将字节码转换为 16 进制字符串。
+        /// </summary>
+        /// <param name="firstByte">字节码</param>
+        /// <param name="length">字节码长度</param>
+        /// <param name="chars">字符串</param>
+        public static void ToHexString(ref byte firstByte, int length, char* chars)
+        {
+            var digitals = Hex.threeDigitals;
 
+            while (length > 0)
+            {
+                *(int*)chars = *(int*)&digitals[firstByte].char2;
 
+                --length;
+
+                chars += 2;
+
+                firstByte = ref Unsafe.Add(ref firstByte, 1);
+            }
+        }
 
         /// <summary>
         /// 字节正整数乘以 UInt32 值。
@@ -1082,7 +924,7 @@ namespace Swifter.Tools
         /// <param name="carry">进位值</param>
         /// <returns>返回字节正整数的长度</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static int Mult(uint* number, int length, uint value, out uint carry)
+        public static int Mul(uint* number, int length, uint value, out uint carry)
         {
             ulong c = 0;
 
@@ -1179,7 +1021,7 @@ namespace Swifter.Tools
 
                 number[i] = (uint)carry;
 
-                carry = (t - carry * value);
+                carry = t - carry * value;
 
             Next:
                 --i;
@@ -1277,7 +1119,7 @@ namespace Swifter.Tools
 
             if (length != 1)
             {
-                *number = (uint)((0x100000000 + *number) - value);
+                *number = (uint)(0x100000000 + *number - value);
 
                 for (int i = 1; i < length; ++i)
                 {
@@ -1309,6 +1151,44 @@ namespace Swifter.Tools
             *number = 0;
 
             return 0;
+        }
+
+        /// <summary>
+        /// 获取按指定位数的前面的值。
+        /// </summary>
+        /// <param name="value">值</param>
+        /// <param name="bitCount">指定位数</param>
+        /// <returns>返回值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static uint Front(uint value, int bitCount)
+        {
+            if (BitConverter.IsLittleEndian)
+            {
+                return value & (~(uint.MaxValue << bitCount));
+            }
+            else
+            {
+                return value & (~(uint.MaxValue >> bitCount));
+            }
+        }
+
+        /// <summary>
+        /// 获取按指定位数的前面的值。
+        /// </summary>
+        /// <param name="value">值</param>
+        /// <param name="bitCount">指定位数</param>
+        /// <returns>返回值</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static ulong Front(ulong value, int bitCount)
+        {
+            if (BitConverter.IsLittleEndian)
+            {
+                return value & (~(ulong.MaxValue << bitCount));
+            }
+            else
+            {
+                return value & (~(ulong.MaxValue >> bitCount));
+            }
         }
     }
 }

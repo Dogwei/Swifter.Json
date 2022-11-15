@@ -1,34 +1,38 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 
 namespace Swifter.RW
 {
-    internal abstract class BaseField : IObjectField
+    internal abstract class BaseField : IObjectField, IComparable<BaseField>
     {
-        public readonly RWFieldAttribute Attribute;
+        public readonly MemberInfo Member;
 
-        public readonly MethodInfo ReadValueMethod;
-        public readonly MethodInfo WriteValueMethod;
+        public readonly RWFieldAttribute? Attribute;
 
-        public readonly object InterfaceInstance;
+        public readonly MethodInfo? ReadValueMethod;
+        public readonly MethodInfo? WriteValueMethod;
 
-        public readonly object Member;
+        public readonly object? InterfaceInstance;
 
-        public BaseField(object member, RWFieldAttribute attribute)
+
+        public BaseField(MemberInfo member, RWFieldAttribute? attribute)
         {
             Attribute = attribute;
 
             Member = member;
 
-            attribute?.GetBestMatchInterfaceMethod(BeforeType, out InterfaceInstance, out ReadValueMethod, out WriteValueMethod);
+            attribute?.GetBestMatchInterfaceMethod(FieldType, out InterfaceInstance, out ReadValueMethod, out WriteValueMethod);
         }
 
         public abstract string Name { get; }
 
-        public abstract Type BeforeType { get; }
+        public abstract Type FieldType { get; }
 
-        public abstract Type AfterType { get; }
+        public abstract Type ReadType { get; }
+
+        public abstract Type WriteType { get; }
 
         public abstract bool CanRead { get; }
 
@@ -50,7 +54,7 @@ namespace Swifter.RW
 
         public int Order => Attribute?.Order ?? RWFieldAttribute.DefaultOrder;
 
-        public object Original => Member;
+        public MemberInfo MemberInfo => Member;
 
         public abstract void GetValueBefore(ILGenerator ilGen);
 
@@ -67,5 +71,22 @@ namespace Swifter.RW
         public abstract void WriteValueBefore(ILGenerator ilGen);
 
         public abstract void WriteValueAfter(ILGenerator ilGen);
+
+        public int CompareTo([AllowNull] BaseField other)
+        {
+            if (other is null)
+            {
+                return -1;
+            }
+
+            var comparison = Order.CompareTo(other.Order);
+
+            if (comparison is not 0)
+            {
+                return comparison;
+            }
+
+            return Name.CompareTo(other.Name);
+        }
     }
 }

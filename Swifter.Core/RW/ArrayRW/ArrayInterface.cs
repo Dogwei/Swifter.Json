@@ -1,10 +1,10 @@
 ﻿namespace Swifter.RW
 {
-    internal sealed class ArrayInterface<TElement> : IValueInterface<TElement[]>
+    internal sealed class ArrayInterface<TElement> : IValueInterface<TElement?[]?>
     {
-        public TElement[] ReadValue(IValueReader valueReader)
+        public TElement?[]? ReadValue(IValueReader valueReader)
         {
-            if (valueReader is IValueReader<TElement[]> reader)
+            if (valueReader is IValueReader<TElement?[]> reader)
             {
                 return reader.ReadValue();
             }
@@ -14,23 +14,23 @@
 
                 valueReader.ReadArray(rw);
 
-                return rw.GetContent();
+                return rw.Content;
             }
         }
 
-        public void WriteValue(IValueWriter valueWriter, TElement[] value)
+        public void WriteValue(IValueWriter valueWriter, TElement?[]? value)
         {
             if (value is null)
             {
                 valueWriter.DirectWrite(null);
             }
-            else if (valueWriter is IValueWriter<TElement[]> writer)
+            else if (valueWriter is IValueWriter<TElement?[]> writer)
             {
                 writer.WriteValue(value);
             }
             else
             {
-                valueWriter.WriteArray(new ArrayRW<TElement>(value));
+                valueWriter.WriteArray(new ArrayRW<TElement> { Content = value });
             }
         }
     }

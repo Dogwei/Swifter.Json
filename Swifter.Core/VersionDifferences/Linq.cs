@@ -1,6 +1,7 @@
 ﻿#if NET20
 
 #pragma warning disable 1591
+#nullable disable
 
 using System.Collections;
 using System.Collections.Generic;

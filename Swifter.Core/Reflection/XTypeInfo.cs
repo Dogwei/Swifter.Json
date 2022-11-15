@@ -2,8 +2,10 @@
 using Swifter.Tools;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.Reflection
 {
@@ -13,34 +15,28 @@ namespace Swifter.Reflection
     /// </summary>
     public sealed class XTypeInfo
     {
-        internal const XBindingFlags RW = (XBindingFlags)0x10000000;
-
-
-        private static Type[] ParametersToTypes(ParameterInfo[] parameters)
-        {
-            return parameters.Select(item => item.ParameterType).ToArray();
-        }
+        internal const XBindingFlags Flags_RW = (XBindingFlags)0x10000000;
 
         private static BindingFlags AsBindingFlags(XBindingFlags flags)
         {
             var result = BindingFlags.DeclaredOnly;
 
-            if ((flags & XBindingFlags.Static) != 0)
+            if (flags.On(XBindingFlags.Static))
             {
                 result |= BindingFlags.Static;
             }
 
-            if ((flags & XBindingFlags.Instance) != 0)
+            if (flags.On(XBindingFlags.Instance))
             {
                 result |= BindingFlags.Instance;
             }
 
-            if ((flags & XBindingFlags.Public) != 0)
+            if (flags.On(XBindingFlags.Public))
             {
                 result |= BindingFlags.Public;
             }
 
-            if ((flags & XBindingFlags.NonPublic) != 0)
+            if (flags.On(XBindingFlags.NonPublic))
             {
                 result |= BindingFlags.NonPublic;
             }
@@ -54,7 +50,7 @@ namespace Swifter.Reflection
         /// <param name="type">需要创建 XTypeInfo 类型信息的类型</param>
         /// <param name="flags">绑定参数</param>
         /// <returns>返回一个 XTypeInfo 类型信息</returns>
-        public static XTypeInfo Create(Type type, XBindingFlags flags = XBindingFlags.Default) => XCache.Get(type)[flags];
+        public static XTypeInfo Create(Type type, XBindingFlags flags = XBindingFlags.Default) => XTypeInfoCollection.GetInstance(type).GetOrCreateXTypeInfo(flags);
 
         /// <summary>
         /// 创建 XTypeInfo 类型信息。
@@ -62,17 +58,19 @@ namespace Swifter.Reflection
         /// <typeparam name="T">需要创建 XTypeInfo 类型信息的类型</typeparam>
         /// <param name="flags">绑定参数</param>
         /// <returns>返回一个 XTypeInfo 类型信息</returns>
-        public static XTypeInfo Create<T>(XBindingFlags flags = XBindingFlags.Default) => XCache.Get<T>()[flags];
+        public static XTypeInfo Create<T>(XBindingFlags flags = XBindingFlags.Default) => XTypeInfoCollection.GetInstance<T>().GetOrCreateXTypeInfo(flags);
 
 
-        private static void GetItems(Type type, XBindingFlags flags, List<XFieldInfo> fields, List<XPropertyInfo> properties, List<XEventInfo> events, List<XIndexerInfo> indexers, List<XMethodInfo> methods)
+        private static void GetItems(
+            Type type,
+            XBindingFlags flags,
+            List<XFieldInfo> fields,
+            List<XPropertyInfo> properties,
+            List<XEventInfo> events,
+            List<XIndexerInfo> indexers,
+            List<XMethodInfo> methods)
         {
-            if (type.BaseType != null && (flags & XBindingFlags.InheritedMembers) != 0)
-            {
-                GetItems(type.BaseType, flags, fields, properties, events, indexers, methods);
-            }
-
-            if ((flags & XBindingFlags.Field) != 0)
+            if (flags.On(XBindingFlags.Field))
             {
                 foreach (var item in type.GetFields(AsBindingFlags(flags)))
                 {
@@ -80,7 +78,7 @@ namespace Swifter.Reflection
                 }
             }
 
-            if ((flags & (XBindingFlags.Property | XBindingFlags.Indexer)) != 0)
+            if (flags.On(XBindingFlags.Property | XBindingFlags.Indexer))
             {
                 foreach (var item in type.GetProperties(AsBindingFlags(flags)))
                 {
@@ -88,14 +86,14 @@ namespace Swifter.Reflection
 
                     if (parameters != null && parameters.Length != 0)
                     {
-                        if ((flags & XBindingFlags.Indexer) != 0)
+                        if (flags.On(XBindingFlags.Indexer))
                         {
                             indexers.Add(XIndexerInfo.Create(item, flags));
                         }
                     }
                     else
                     {
-                        if ((flags & XBindingFlags.Property) != 0)
+                        if (flags.On(XBindingFlags.Property))
                         {
                             properties.Add(XPropertyInfo.Create(item, flags));
                         }
@@ -103,7 +101,7 @@ namespace Swifter.Reflection
                 }
             }
 
-            if ((flags & XBindingFlags.Event) != 0)
+            if (flags.On(XBindingFlags.Event))
             {
                 foreach (var item in type.GetEvents(AsBindingFlags(flags)))
                 {
@@ -111,12 +109,17 @@ namespace Swifter.Reflection
                 }
             }
 
-            if ((flags & XBindingFlags.Method) != 0)
+            if (flags.On(XBindingFlags.Method))
             {
                 foreach (var item in type.GetMethods(AsBindingFlags(flags)))
                 {
                     methods.Add(XMethodInfo.Create(item, flags));
                 }
+            }
+
+            if (type.BaseType != null && flags.On(XBindingFlags.InheritedMembers))
+            {
+                GetItems(type.BaseType, flags, fields, properties, events, indexers, methods);
             }
         }
 
@@ -135,55 +138,55 @@ namespace Swifter.Reflection
             }
         }
 
-        /*
-         * 
-         * 为什么没有构造函数信息？
-         * 
-         * 因为系统的 System.Activator 已经非常优秀且方便了，所以没必要或者说我做不到更好的了。
-         * 
-         * Why no construct method informations?
-         * 
-         * Because System.Activator have very good, I can't do better.
-         * 
-         */
-        internal readonly Cache<string, XFieldInfo> fields;
-        internal readonly Cache<string, XPropertyInfo> properties;
-        internal readonly Cache<string, XEventInfo> events;
-        internal readonly Cache<RuntimeParamsSign, XIndexerInfo> indexers;
-        internal readonly Cache<RuntimeMethodSign, XMethodInfo> methods;
-        internal readonly Cache<string, IXFieldRW> rwFields;
+        internal readonly OpenDictionary<string, XFieldInfo> fields;
+        internal readonly OpenDictionary<string, XPropertyInfo> properties;
+        internal readonly OpenDictionary<string, XEventInfo> events;
+        internal readonly List<XIndexerInfo> indexers;
+        internal readonly OpenDictionary<string, XMethodInfo> methods;
+        internal readonly List<XConstructorInfo> constructors;
+        internal readonly OpenDictionary<string, IXFieldRW> rwFields;
+#if IMMUTABLE_COLLECTIONS
+        internal readonly ImmutableArray<string> rwKeys;
+#else
+        internal readonly ReadOnlyCollection<string> rwKeys;
+#endif
 
         internal readonly Type type;
         internal readonly XBindingFlags flags;
 
         internal XTypeInfo(Type type, XBindingFlags flags)
         {
-            RWObjectAttribute[] rwAttributes = null;
+            RWObjectAttribute[]? rwAttributes = null;
 
-            if ((flags & RW) != 0)
+            if (flags.On(Flags_RW))
             {
-                rwAttributes = type.GetDefinedAttributes<RWObjectAttribute>(true);
-            }
-
-            if (rwAttributes != null && rwAttributes.Length != 0)
-            {
-                foreach (var item in rwAttributes)
+                if ((flags & ~Flags_RW) == XBindingFlags.UseDefault)
                 {
-                    Switch(ref flags, XBindingFlags.RWIgnoreCase, item.IgnoreCace);
+                    flags = XObjectRW.GetDefaultBindingFlags(type) | Flags_RW;
+                }
 
-                    Switch(ref flags, XBindingFlags.RWNotFoundException, item.NotFoundException);
+                rwAttributes = Unsafe.As<RWObjectAttribute[]>(type.GetCustomAttributes(typeof(RWObjectAttribute), true)); // TODO: 是否满足顺序需求
 
-                    Switch(ref flags, XBindingFlags.RWCannotGetException, item.CannotGetException);
+                if (rwAttributes.Length != 0)
+                {
+                    foreach (var item in rwAttributes)
+                    {
+                        Switch(ref flags, XBindingFlags.RWIgnoreCase, item.IgnoreCace);
 
-                    Switch(ref flags, XBindingFlags.RWCannotSetException, item.CannotSetException);
+                        Switch(ref flags, XBindingFlags.RWNotFoundException, item.NotFoundException);
 
-                    Switch(ref flags, XBindingFlags.Property, item.IncludeProperties);
+                        Switch(ref flags, XBindingFlags.RWCannotGetException, item.CannotGetException);
 
-                    Switch(ref flags, XBindingFlags.Field, item.IncludeFields);
+                        Switch(ref flags, XBindingFlags.RWCannotSetException, item.CannotSetException);
 
-                    Switch(ref flags, XBindingFlags.RWSkipDefaultValue, item.SkipDefaultValue);
+                        Switch(ref flags, XBindingFlags.Property, item.IncludeProperties);
 
-                    Switch(ref flags, XBindingFlags.RWMembersOptIn, item.MembersOptIn);
+                        Switch(ref flags, XBindingFlags.Field, item.IncludeFields);
+
+                        Switch(ref flags, XBindingFlags.RWSkipDefaultValue, item.SkipDefaultValue);
+
+                        Switch(ref flags, XBindingFlags.RWMembersOptIn, item.MembersOptIn);
+                    }
                 }
             }
 
@@ -195,24 +198,35 @@ namespace Swifter.Reflection
             var events = new List<XEventInfo>();
             var indexers = new List<XIndexerInfo>();
             var methods = new List<XMethodInfo>();
+            var constructors = new List<XConstructorInfo>();
             var rwFields = new List<IXFieldRW>();
+            var rwStringComparer = flags.On(XBindingFlags.RWIgnoreCase) ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
             GetItems(type, flags, fields, properties, events, indexers, methods);
 
+            if (flags.On(XBindingFlags.Constructor))
+            {
+                foreach (var item in type.GetConstructors(AsBindingFlags(flags)))
+                {
+                    constructors.Add(XConstructorInfo.Create(item, flags));
+                }
+            }
+
             foreach (var item in fields)
             {
-                if (item is IXFieldRW rwField && rwField.AfterType.CanBeGenericParameter())
+                if (item is IXFieldRW rwField && rwField.FieldType.CanBeGenericParameter())
                 {
-                    var attributes = item.FieldInfo
-                        .GetCustomAttributes(typeof(RWFieldAttribute), true)
-                        ?.OfType<RWFieldAttribute>()
-                        ?.ToList();
+                    var attributes = new List<RWFieldAttribute>(
+                        Unsafe.As<RWFieldAttribute[]>(
+                            item.FieldInfo.GetCustomAttributes(typeof(RWFieldAttribute), true)
+                            )
+                        );
 
                     if (rwAttributes != null && rwAttributes.Length != 0)
                     {
                         foreach (var objectAttribute in rwAttributes)
                         {
-                            objectAttribute.OnLoadMember(type, item.FieldInfo, ref attributes);
+                            objectAttribute.OnLoadMember(type, item.FieldInfo, attributes);
                         }
                     }
 
@@ -220,9 +234,9 @@ namespace Swifter.Reflection
                     {
                         foreach (var attribute in attributes)
                         {
-                            XAttributedFieldRW attributedFieldRW = XAttributedFieldRW.Create(rwField, attribute, flags);
+                            var attributedFieldRW = item.WithAttribute(attribute);
 
-                            if (attributedFieldRW.CanRead || attributedFieldRW.CanWrite)
+                            if (attribute.Access is not RWFieldAccess.Ignore)
                             {
                                 rwFields.Add(attributedFieldRW);
                             }
@@ -237,29 +251,27 @@ namespace Swifter.Reflection
 
             foreach (var item in properties)
             {
-                if (item is IXFieldRW rwField && rwField.AfterType.CanBeGenericParameter())
+                if (item is IXFieldRW rwField && rwField.FieldType.CanBeGenericParameter())
                 {
-                    var attributes = item.PropertyInfo
-                        .GetCustomAttributes(typeof(RWFieldAttribute), true)
-                        ?.OfType<RWFieldAttribute>()
-                        ?.ToList();
+                    var attributes = new List<RWFieldAttribute>(
+                        Unsafe.As<RWFieldAttribute[]>(
+                            item.PropertyInfo.GetCustomAttributes(typeof(RWFieldAttribute), true)
+                            )
+                        );
 
                     if (rwAttributes != null && rwAttributes.Length != 0)
                     {
                         foreach (var objectAttribute in rwAttributes)
                         {
-                            objectAttribute.OnLoadMember(type, item.PropertyInfo, ref attributes);
+                            objectAttribute.OnLoadMember(type, item.PropertyInfo, attributes);
                         }
                     }
 
                     if (attributes != null && attributes.Count != 0)
                     {
-                        // Attributed property allow access non-Public accessor.
-                        item.Initialize(item.propertyInfo, item.flags | XBindingFlags.NonPublic);
-
-                        foreach (RWFieldAttribute attribute in attributes)
+                        foreach (var attribute in attributes)
                         {
-                            XAttributedFieldRW attributedFieldRW = XAttributedFieldRW.Create(rwField, attribute, flags);
+                            var attributedFieldRW = item.WithAttribute(attribute);
 
                             if (attributedFieldRW.CanRead || attributedFieldRW.CanWrite)
                             {
@@ -274,26 +286,40 @@ namespace Swifter.Reflection
                 }
             }
 
+            methods.Sort((x, y) => x.MethodInfo.Name.CompareTo(y.MethodInfo.Name));
             rwFields.Sort((x, y) => x.Order.CompareTo(y.Order));
 
             if (rwAttributes != null && rwAttributes.Length != 0)
             {
-                var temp = rwFields.Cast<IObjectField>().ToList();
+                var tempRWFields = new List<IObjectField>(rwFields.Count);
+
+                foreach (var item in rwFields)
+                {
+                    tempRWFields.Add(item);
+                }
 
                 foreach (var item in rwAttributes)
                 {
-                    item.OnCreate(type, ref temp);
+                    item.OnCreate(type, tempRWFields);
                 }
 
-                rwFields = temp.Cast<IXFieldRW>().ToList();
+                rwFields.Clear();
+
+                foreach (var item in tempRWFields)
+                {
+                    rwFields.Add((IXFieldRW)item);
+                }
             }
 
-            this.fields = new Cache<string, XFieldInfo>();
-            this.properties = new Cache<string, XPropertyInfo>();
-            this.events = new Cache<string, XEventInfo>();
-            this.indexers = new Cache<RuntimeParamsSign, XIndexerInfo>();
-            this.methods = new Cache<RuntimeMethodSign, XMethodInfo>();
-            this.rwFields = new Cache<string, IXFieldRW>((flags & XBindingFlags.RWIgnoreCase) != 0 ? StringComparer.OrdinalIgnoreCase : null);
+            this.fields = new();
+            this.properties = new();
+            this.events = new();
+            this.indexers = new();
+            this.methods = new();
+            this.constructors = new();
+            this.rwFields = new(rwStringComparer);
+
+            // TODO: Capacity
 
             foreach (var item in fields)
             {
@@ -309,18 +335,38 @@ namespace Swifter.Reflection
             }
             foreach (var item in indexers)
             {
-                this.indexers.Add(ParametersToTypes(item.PropertyInfo.GetIndexParameters()), item);
+                this.indexers.Add(item);
             }
             foreach (var item in methods)
             {
-                this.methods.Add((item.MethodInfo.Name, ParametersToTypes(item.MethodInfo.GetParameters())), item);
+                this.methods.Add(item.Name, item);
+            }
+            foreach (var item in constructors)
+            {
+                this.constructors.Add(item);
             }
             foreach (var item in rwFields)
             {
+                if (this.rwFields.FindIndex(item.Name) >= 0)
+                {
+                    continue;
+                }
+
                 this.rwFields.Add(item.Name, item);
             }
 
-            GC.Collect();
+            var rwKeys = new string[this.rwFields.Count];
+
+            for (int i = 0; i < rwKeys.Length; i++)
+            {
+                rwKeys[i] = this.rwFields[i].Key;
+            }
+
+#if IMMUTABLE_COLLECTIONS
+            this.rwKeys = ImmutableArray.CreateRange(rwKeys);
+#else
+            this.rwKeys = new ReadOnlyCollection<string>(rwKeys);
+#endif
         }
 
         /// <summary>
@@ -331,7 +377,7 @@ namespace Swifter.Reflection
         /// <summary>
         /// 获取创建 XTypeInfo 的绑定标识。
         /// </summary>
-        public XBindingFlags Flags => flags;
+        public XBindingFlags Flags => flags & ~(Flags_RW);
 
         /// <summary>
         /// 获取字段数量。
@@ -359,11 +405,16 @@ namespace Swifter.Reflection
         public int MethodsCount => methods.Count;
 
         /// <summary>
+        /// 获取构造函数的数量。
+        /// </summary>
+        public int ConstructorsCount => constructors.Count;
+
+        /// <summary>
         /// 获取指定名称的字段信息。
         /// </summary>
         /// <param name="name">指定名称</param>
         /// <returns>返回字段信息或 Null</returns>
-        public XFieldInfo GetField(string name) => fields.GetFirstValue(name);
+        public XFieldInfo? GetField(string name) => fields.FindIndex(name) is int index && index >= 0 ? fields[index].Value : null;
 
         /// <summary>
         /// 获取指定索引处的字段信息。
@@ -377,7 +428,7 @@ namespace Swifter.Reflection
         /// </summary>
         /// <param name="name">指定名称</param>
         /// <returns>返回属性信息或 Null</returns>
-        public XPropertyInfo GetProperty(string name) => properties.GetFirstValue(name);
+        public XPropertyInfo? GetProperty(string name) => properties.FindIndex(name) is int index && index >= 0 ? properties[index].Value : null;
 
         /// <summary>
         /// 获取指定索引处的属性信息。
@@ -391,7 +442,7 @@ namespace Swifter.Reflection
         /// </summary>
         /// <param name="name">指定名称</param>
         /// <returns>返回事件信息或 Null</returns>
-        public XEventInfo GetEvent(string name) => events.GetFirstValue(name);
+        public XEventInfo? GetEvent(string name) => events.FindIndex(name) is int index && index >= 0 ? events[index].Value : null;
 
         /// <summary>
         /// 获取指定索引处的事件信息。
@@ -405,21 +456,25 @@ namespace Swifter.Reflection
         /// </summary>
         /// <param name="types">指定参数类型</param>
         /// <returns>返回索引器信息或 Null</returns>
-        public XIndexerInfo GetIndexer(Type[] types) => indexers.GetFirstValue(types);
+        public XIndexerInfo? GetIndexer(Type[] types)
+        {
+            foreach (var indexer in indexers)
+            {
+                if (indexer.Parameters.Equals(types))
+                {
+                    return indexer;
+                }
+            }
 
-        /// <summary>
-        /// 获取指定参数的索引器信息。
-        /// </summary>
-        /// <param name="parameters">指定参数</param>
-        /// <returns>返回索引器信息或 Null</returns>
-        public XIndexerInfo GetIndexer(object[] parameters)=> indexers.GetFirstValue(parameters);
+            return null;
+        }
 
         /// <summary>
         /// 获取指定索引处的索引器信息。
         /// </summary>
         /// <param name="index">指定索引</param>
         /// <returns>返回索引器信息</returns>
-        public XIndexerInfo GetIndexer(int index) => indexers[index].Value;
+        public XIndexerInfo GetIndexer(int index) => indexers[index];
 
         /// <summary>
         /// 获取指定名称和参数类型的方法信息。
@@ -427,21 +482,98 @@ namespace Swifter.Reflection
         /// <param name="name">方法名称</param>
         /// <param name="types">方法参数类型</param>
         /// <returns>返回方法信息或 Null</returns>
-        public XMethodInfo GetMethod(string name, Type[] types) => methods.GetFirstValue((name, types));
+        public XMethodInfo? GetMethod(string name, Type[] types)
+        {
+            var index = methods.FindIndex(name);
 
-        /// <summary>
-        /// 获取指定名称和参数的方法信息。
-        /// </summary>
-        /// <param name="name">方法名称</param>
-        /// <param name="parameters">方法参数</param>
-        /// <returns>返回方法信息或 Null</returns>
-        public XMethodInfo GetMethod(string name, object[] parameters) => methods.GetFirstValue((name, parameters));
+            while (index >= 0)
+            {
+                if (methods[index].Value.Parameters.Equals(types))
+                {
+                    return methods[index].Value;
+                }
+
+                index = methods.NextIndex(index);
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// 获取指定索引处的方法信息。
         /// </summary>
         /// <param name="index">指定索引</param>
-        /// <returns>返回索方法信息</returns>
+        /// <returns>返回方法信息</returns>
         public XMethodInfo GetMethod(int index) => methods[index].Value;
+
+        /// <summary>
+        /// 获取指定名称的方法集合。
+        /// </summary>
+        /// <param name="name">方法名称</param>
+        /// <returns>返回方法集合</returns>
+        public XMethodInfo[]? GetMethods(string name)
+        {
+            var index = methods.FindIndex(name);
+            var count = 0;
+
+            if (index >= 0)
+            {
+                Loop:
+
+                ++count;
+
+                var nextIndex = methods.NextIndex(index);
+
+                if (nextIndex is not -1)
+                {
+                    VersionDifferences.Assert(index == nextIndex + 1);
+
+                    index = nextIndex;
+
+                    goto Loop;
+                }
+            }
+
+            if (count is 0)
+            {
+                return null;
+            }
+
+            var result = new XMethodInfo[count];
+
+            for (int i = result.Length - 1; i >= 0; i--)
+            {
+                result[i] = methods[index].Value;
+
+                ++index;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 获取指定索引处的构造函数信息。
+        /// </summary>
+        /// <param name="index">指定索引</param>
+        /// <returns>返回构造函数信息</returns>
+        public XConstructorInfo GetConstructor(int index) => constructors[index];
+
+        /// <summary>
+        /// 获取指定参数类型的构造函数。
+        /// </summary>
+        /// <param name="types">指定参数类型</param>
+        /// <returns>返回构造函数信息或 Null</returns>
+        public XConstructorInfo? GetConstructor(Type[] types)
+        {
+            foreach (var constructor in constructors)
+            {
+                if (constructor.Parameters.Equals(types))
+                {
+                    return constructor;
+                }
+            }
+
+            return null;
+        }
     }
 }

@@ -11,12 +11,12 @@ namespace Swifter.Tools
     public abstract class BaseObjectPool<T> where T : class
     {
         [ThreadStatic]
-        private protected static T ThreadStatic;
+        private protected static T? ThreadStatic;
 
 
         /* 核心思想：拖延租借，尽早归还。*/
 
-        volatile Node first;
+        SinglyLinkedNode<T>? first;
 
         /// <summary>
         /// 借出一个实例。（借出的实例不一定要归还，平衡选择，如果归还成本大于实例本身，可以选择不归还实例。）
@@ -61,7 +61,7 @@ namespace Swifter.Tools
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void LockedReturn(T obj)
         {
-            var node = new Node(obj, first);
+            var node = new SinglyLinkedNode<T>(obj, first);
 
             while (Interlocked.CompareExchange(ref first, node, node.Next) != node.Next) node.Next = first;
         }
@@ -69,7 +69,7 @@ namespace Swifter.Tools
         [MethodImpl(MethodImplOptions.NoInlining)]
         private T LockedRent()
         {
-            if (first is Node node)
+            if (first is SinglyLinkedNode<T> node)
             {
                 if (Interlocked.CompareExchange(ref first, node.Next, node) == node)
                 {
@@ -86,18 +86,5 @@ namespace Swifter.Tools
         /// <returns>返回一个实例</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         protected abstract T CreateInstance();
-
-        sealed class Node
-        {
-            public readonly T Value;
-
-            public volatile Node Next;
-
-            public Node(T value, Node next)
-            {
-                Value = value;
-                Next = next;
-            }
-        }
     }
 }

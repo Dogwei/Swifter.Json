@@ -43,10 +43,66 @@ namespace Swifter.Tools
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static int ToISOString(DateTime value, char* chars, long uTCDifference)
+        private static int ToISOString(TimeSpan value, char* chars, long uTCDifference)
         {
             var c = chars;
             var dec = NumberHelper.Decimal;
+
+            c += ToDecimalString(checked((ulong)value.TotalHours), c);
+
+            *c = ':'; ++c;
+
+            DecimalAppendD2(c, (uint)value.Minutes); c += 2;
+
+            *c = ':'; ++c;
+
+            DecimalAppendD2(c, (uint)value.Seconds); c += 2;
+
+            *c = '.'; ++c;
+
+            DecimalAppendD3(c, (uint)value.Milliseconds); c += 3;
+
+            if (uTCDifference > 0)
+            {
+                *c = '+'; ++c;
+            }
+            else if (uTCDifference < 0)
+            {
+                *c = '-'; ++c;
+
+                uTCDifference = -uTCDifference;
+            }
+            else
+            {
+                *c = 'Z'; ++c;
+
+                goto Return;
+            }
+
+
+            long tDHour = uTCDifference / TimeSpan.TicksPerHour;
+
+            if (tDHour < 100)
+            {
+                DecimalAppendD2(c, (uint)tDHour); c += 2;
+            }
+            else
+            {
+                throw new FormatException("UTC Time Difference too big.");
+            }
+
+            *c = ':'; ++c;
+
+            DecimalAppendD2(c, (uint)((uTCDifference % TimeSpan.TicksPerHour) / TimeSpan.TicksPerMinute)); c += 2;
+
+        Return:
+            return (int)(c - chars);
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        private static int ToISOString(DateTime value, char* chars, long uTCDifference)
+        {
+            var c = chars;
 
             uint year = (uint)value.Year;
 
@@ -122,6 +178,18 @@ namespace Swifter.Tools
         /// <returns>返回写入结束位置，最后一个字符写入位置 + 1。</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public unsafe static int ToISOString(DateTime value, char* chars)
+        {
+            return ToISOString(value, chars, TicksPerUTCDifference);
+        }
+
+        /// <summary>
+        /// 将时间以 ISO8061 格式字符串写入到字符串中。
+        /// </summary>
+        /// <param name="value">日期和时间</param>
+        /// <param name="chars">字符串</param>
+        /// <returns>返回写入结束位置，最后一个字符写入位置 + 1。</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public unsafe static int ToISOString(TimeSpan value, char* chars)
         {
             return ToISOString(value, chars, TicksPerUTCDifference);
         }
@@ -830,26 +898,6 @@ namespace Swifter.Tools
             return false;
         }
 
-        /// <summary>
-        /// 尝试解析 ISO8061 格式日期和时间字符串。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <param name="value">成功返回日期和时间对象，失败返回日期和时间最小值。</param>
-        /// <returns>返回成功或失败。</returns>
-        public unsafe static bool TryParseISODateTime(
-#if Span
-            ReadOnlySpan<char>
-#else
-            string
-#endif
-            text, out DateTime value)
-        {
-            fixed (char* chars = text)
-            {
-                return TryParseISODateTime(chars, text.Length, out value);
-            }
-        }
-
 
         /// <summary>
         /// 尝试解析 ISO8061 格式日期和时间点字符串。
@@ -872,26 +920,6 @@ namespace Swifter.Tools
             value = DateTimeOffset.MinValue;
 
             return false;
-        }
-
-        /// <summary>
-        /// 尝试解析 ISO8061 格式日期和时间点字符串。
-        /// </summary>
-        /// <param name="text">字符串</param>
-        /// <param name="value">成功返回日期和时间点对象，失败返回日期和时间点最小值。</param>
-        /// <returns>返回成功或失败。</returns>
-        public unsafe static bool TryParseISODateTime(
-#if Span
-            ReadOnlySpan<char>
-#else
-            string
-#endif
-            text, out DateTimeOffset value)
-        {
-            fixed (char* chars = text)
-            {
-                return TryParseISODateTime(chars, text.Length, out value);
-            }
         }
     }
 }

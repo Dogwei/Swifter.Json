@@ -2,8 +2,6 @@
 using Swifter.Tools;
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Swifter.RW
 {
@@ -35,7 +33,7 @@ namespace Swifter.RW
     /// </summary>
     /// <typeparam name="TIn">输入类型</typeparam>
     /// <typeparam name="TOut">输出类型</typeparam>
-    public sealed class AsDataRW<TIn, TOut> : IDataRW<TOut>, IAsDataRW, IAsDataReader, IAsDataWriter
+    public sealed class AsDataRW<TIn, TOut> : IDataRW<TOut>, IAsDataRW, IAsDataReader, IAsDataWriter where TIn : notnull where TOut : notnull
     {
         /// <summary>
         /// 原始数据读写器。
@@ -56,16 +54,11 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="key">键</param>
         /// <returns>返回值读写器</returns>
-        public IValueRW this[TOut key] => dataRW[XConvert<TIn>.Convert(key)];
+        public IValueRW this[TOut key] => dataRW[XConvert.Convert<TOut, TIn>(key)!];
 
         IValueReader IDataReader<TOut>.this[TOut key] => this[key];
 
         IValueWriter IDataWriter<TOut>.this[TOut key] => this[key];
-
-        /// <summary>
-        /// 获取转换后的键集合。
-        /// </summary>
-        public IEnumerable<TOut> Keys => dataRW.Keys.Select(key => XConvert.Convert<TIn, TOut>(key));
 
         /// <summary>
         /// 获取数据源键的数量。
@@ -84,7 +77,7 @@ namespace Swifter.RW
         /// <summary>
         /// 获取或设置原数据读写器的数据源。
         /// </summary>
-        public object Content
+        public object? Content
         {
             get => dataRW.Content;
             set => dataRW.Content = value;
@@ -93,7 +86,12 @@ namespace Swifter.RW
         /// <summary>
         /// 获取原数据读写器的数据源类型。
         /// </summary>
-        public Type ContentType => dataRW.ContentType;
+        public Type? ContentType => dataRW.ContentType;
+
+        /// <summary>
+        /// 获取原数据读写器的值的类型。
+        /// </summary>
+        public Type? ValueType => dataRW.ValueType;
 
         /// <summary>
         /// 初始化数据源。
@@ -134,9 +132,10 @@ namespace Swifter.RW
         /// 将数据中的所有转换后的键与值写入到数据写入器中。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        public void OnReadAll(IDataWriter<TOut> dataWriter)
+        /// <param name="stopToken">停止令牌</param>
+        public void OnReadAll(IDataWriter<TOut> dataWriter, RWStopToken stopToken = default)
         {
-            dataRW.OnReadAll(new AsReadAllWriter<TIn, TOut>(dataWriter));
+            dataRW.OnReadAll(new AsReadAllWriter<TIn, TOut>(dataWriter), stopToken);
         }
 
         /// <summary>
@@ -146,16 +145,17 @@ namespace Swifter.RW
         /// <param name="valueWriter">值写入器</param>
         public void OnReadValue(TOut key, IValueWriter valueWriter)
         {
-            dataRW.OnReadValue(XConvert<TIn>.Convert(key), valueWriter);
+            dataRW.OnReadValue(XConvert.Convert<TOut, TIn>(key)!, valueWriter);
         }
 
         /// <summary>
         /// 将数据中的所有转换后的键从读取器中读取所有值写入到数据源中。
         /// </summary>
         /// <param name="dataReader"></param>
-        public void OnWriteAll(IDataReader<TOut> dataReader)
+        /// <param name="stopToken">停止令牌</param>
+        public void OnWriteAll(IDataReader<TOut> dataReader, RWStopToken stopToken = default)
         {
-            dataRW.OnWriteAll(new AsWriteAllReader<TIn, TOut>(dataReader));
+            dataRW.OnWriteAll(new AsWriteAllReader<TIn, TOut>(dataReader), stopToken);
         }
 
         /// <summary>
@@ -165,7 +165,7 @@ namespace Swifter.RW
         /// <param name="valueReader">值读取器</param>
         public void OnWriteValue(TOut key, IValueReader valueReader)
         {
-            dataRW.OnWriteValue(XConvert<TIn>.Convert(key), valueReader);
+            dataRW.OnWriteValue(XConvert.Convert<TOut, TIn>(key)!, valueReader);
         }
     }
 }

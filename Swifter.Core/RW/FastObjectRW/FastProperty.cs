@@ -1,9 +1,11 @@
 ﻿
+using InlineIL;
 using Swifter.Tools;
 
 using System;
 using System.Reflection;
 using System.Reflection.Emit;
+using static Swifter.RW.StaticFastObjectRW;
 
 namespace Swifter.RW
 {
@@ -11,11 +13,10 @@ namespace Swifter.RW
     {
         internal sealed class FastProperty : BaseField
         {
-            public PropertyInfo Property => (PropertyInfo)Member;
 
-            readonly FieldInfo AutoFieldInfo;
+            readonly FieldInfo? AutoFieldInfo;
 
-            public FastProperty(PropertyInfo property, RWFieldAttribute attribute)
+            public FastProperty(PropertyInfo property, RWFieldAttribute? attribute)
                 : base(property, attribute)
             {
                 if (TypeHelper.IsAutoProperty(property, out var fieldInfo) && fieldInfo != null)
@@ -23,6 +24,11 @@ namespace Swifter.RW
                     AutoFieldInfo = fieldInfo;
                 }
             }
+            public PropertyInfo Property => (PropertyInfo)Member;
+
+            public bool IsByRef => Property.PropertyType.IsByRef;
+
+            public bool IsPointer => Property.PropertyType.IsPointer;
 
             public override string Name
             {
@@ -50,11 +56,11 @@ namespace Swifter.RW
                     // 特性指定。
                     if (Attribute != null)
                     {
-                        return (Attribute.Access & RWFieldAccess.ReadOnly) != 0;
+                        return Attribute.Access.On(RWFieldAccess.ReadOnly);
                     }
 
                     // ref struct
-                    if (BeforeType.IsByRefLike())
+                    if (FieldType.IsByRefLike())
                     {
                         return false;
                     }
@@ -66,9 +72,9 @@ namespace Swifter.RW
                     }
 
                     // 自动属性 Set 方法可访问。
-                    if ((Options & FastObjectRWOptions.AutoPropertyDirectRW) != 0)
+                    if (Options.On(FastObjectRWOptions.AutoPropertyDirectRW))
                     {
-                        return SetMethod.IsPublic == true;
+                        return SetMethod?.IsPublic == true;
                     }
 
                     return false;
@@ -94,11 +100,11 @@ namespace Swifter.RW
                     // 特性指定。
                     if (Attribute != null)
                     {
-                        return (Attribute.Access & RWFieldAccess.WriteOnly) != 0;
+                        return Attribute.Access.On(RWFieldAccess.WriteOnly);
                     }
 
                     // ref struct
-                    if (BeforeType.IsByRefLike())
+                    if (FieldType.IsByRefLike())
                     {
                         return false;
                     }
@@ -110,7 +116,7 @@ namespace Swifter.RW
                     }
 
                     // 自动属性 Get 方法可访问。
-                    if ((Options & FastObjectRWOptions.AutoPropertyDirectRW) != 0)
+                    if (Options.On(FastObjectRWOptions.AutoPropertyDirectRW))
                     {
                         return GetMethod?.IsPublic == true;
                     }
@@ -118,41 +124,55 @@ namespace Swifter.RW
                     return false;
                 }
             }
-            
-            public MethodInfo GetMethod => Property.GetGetMethod(true);
 
-            public MethodInfo SetMethod => Property.GetSetMethod(true);
+            public MethodInfo? GetMethod => Property.GetGetMethod(true);
+
+            public MethodInfo? SetMethod => Property.GetSetMethod(true);
 
             public override bool IsPublicGet => true;
 
             public override bool IsPublicSet => true;
 
-            public override Type BeforeType => IsByRef ? Property.PropertyType.GetElementType() : Property.PropertyType.IsPointer ? typeof(IntPtr) : Property.PropertyType;
+            public override Type FieldType =>
+                IsByRef ? Property.PropertyType.GetElementType()! :
+                IsPointer ? typeof(IntPtr) :
+                Property.PropertyType;
 
-            public override Type AfterType => ReadValueMethod?.ReturnType ?? BeforeType;
+            public override Type ReadType => ReadValueMethod?.ReturnType ?? FieldType;
+
+            public override Type WriteType => WriteValueMethod?.GetParameters().First().ParameterType ?? FieldType;
 
             public override bool IsStatic => (GetMethod != null && GetMethod.IsStatic) || (SetMethod != null && SetMethod.IsStatic);
 
-            public override bool SkipDefaultValue => (Attribute?.SkipDefaultValue ?? RWBoolean.None) != RWBoolean.None ? (Attribute.SkipDefaultValue == RWBoolean.Yes) : (Options & FastObjectRWOptions.SkipDefaultValue) != 0;
+            public override bool SkipDefaultValue => Attribute != null && Attribute.SkipDefaultValue != RWBoolean.None ? (Attribute.SkipDefaultValue == RWBoolean.Yes) : Options.On(FastObjectRWOptions.SkipDefaultValue);
 
-            public override bool CannotGetException => (Attribute?.CannotGetException ?? RWBoolean.None) != RWBoolean.None ? (Attribute.CannotGetException == RWBoolean.Yes) : (Options & FastObjectRWOptions.CannotGetException) != 0;
+            public override bool CannotGetException => Attribute != null && Attribute.CannotGetException != RWBoolean.None ? (Attribute.CannotGetException == RWBoolean.Yes) : Options.On(FastObjectRWOptions.CannotGetException);
 
-            public override bool CannotSetException => (Attribute?.CannotSetException ?? RWBoolean.None) != RWBoolean.None ? (Attribute.CannotSetException == RWBoolean.Yes) : (Options & FastObjectRWOptions.CannotSetException) != 0;
+            public override bool CannotSetException => Attribute != null && Attribute.CannotSetException != RWBoolean.None ? (Attribute.CannotSetException == RWBoolean.Yes) : Options.On(FastObjectRWOptions.CannotSetException);
 
-
-            public bool IsByRef => Property.PropertyType.IsByRef;
 
             public override void GetValueAfter(ILGenerator ilGen)
             {
                 if (IsByRef)
                 {
-                    ilGen.Call(GetMethod);
+                    ilGen.AutoCall(GetMethod!);
 
-                    ilGen.LoadValue(BeforeType);
+                    ilGen.LoadValue(FieldType);
                 }
                 else
                 {
-                    if (GetMethod is null)
+                    if (GetMethod != null)
+                    {
+                        if (GetMethod.IsExternalVisible() == true || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
+                        {
+                            ilGen.AutoCall(GetMethod);
+                        }
+                        else
+                        {
+                            ilGen.UnsafeCall(GetMethod);
+                        }
+                    }
+                    else if (AutoFieldInfo != null)
                     {
                         if (AutoFieldInfo.IsExternalVisible())
                         {
@@ -163,18 +183,9 @@ namespace Swifter.RW
                             ilGen.UnsafeLoadField(AutoFieldInfo);
                         }
                     }
-                    else if (GetMethod?.IsExternalVisible() == true || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
-                    {
-                        ilGen.Call(GetMethod);
-                    }
                     else
                     {
-
-#if DEBUG
-                        Console.WriteLine($"{nameof(FastProperty)} : \"{typeof(T)}.{GetMethod}\" Use UnsafeCall");
-#endif
-
-                        ilGen.UnsafeCall(GetMethod);
+                        throw new NotSupportedException();
                     }
                 }
             }
@@ -183,11 +194,22 @@ namespace Swifter.RW
             {
                 if (IsByRef)
                 {
-                    ilGen.StoreValue(BeforeType);
+                    ilGen.StoreValue(FieldType);
                 }
                 else
                 {
-                    if (SetMethod is null)
+                    if (SetMethod != null)
+                    {
+                        if (SetMethod.IsExternalVisible() || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
+                        {
+                            ilGen.AutoCall(SetMethod);
+                        }
+                        else
+                        {
+                            ilGen.UnsafeCall(SetMethod);
+                        }
+                    }
+                    else if (AutoFieldInfo != null)
                     {
                         if (AutoFieldInfo.IsExternalVisible())
                         {
@@ -198,18 +220,9 @@ namespace Swifter.RW
                             ilGen.UnsafeStoreField(AutoFieldInfo);
                         }
                     }
-                    else if (SetMethod.IsExternalVisible() || DynamicAssembly.CanAccessNonPublicMembers || IsVisibleTo)
-                    {
-                        ilGen.Call(SetMethod);
-                    }
                     else
                     {
-
-#if DEBUG
-                        Console.WriteLine($"{nameof(FastProperty)} : \"{typeof(T)}.{SetMethod}\" Use UnsafeCall");
-#endif
-
-                        ilGen.UnsafeCall(SetMethod);
+                        throw new NotSupportedException();
                     }
                 }
             }
@@ -231,7 +244,7 @@ namespace Swifter.RW
 
                 if (IsByRef)
                 {
-                    ilGen.Call(GetMethod);
+                    ilGen.AutoCall(GetMethod!);
                 }
             }
 
@@ -244,11 +257,9 @@ namespace Swifter.RW
                         return;
                     }
 
-                    var index = Array.IndexOf(Fields, this);
+                    ilGen.LoadConstant(Array.IndexOf(Fields, this));
 
-                    ilGen.LoadConstant(index);
-
-                    ilGen.Call(GetValueInterfaceInstanceMethod);
+                    ilGen.AutoCall(GetGetValueInterfaceInstanceMethod());
                 }
             }
 
@@ -256,65 +267,40 @@ namespace Swifter.RW
             {
                 if (ReadValueMethod != null)
                 {
-                    ilGen.Call(ReadValueMethod);
+                    ilGen.AutoCall(ReadValueMethod);
 
-                    if (BeforeType != AfterType)
+                    if (FieldType != ReadType)
                     {
-                        if (AfterType.IsValueType)
+                        if (ReadType.IsValueType)
                         {
-                            ilGen.Box(AfterType);
+                            ilGen.Box(ReadType);
                         }
 
-                        ilGen.CastClass( BeforeType);
+                        ilGen.CastClass(FieldType);
 
-                        if (BeforeType.IsValueType)
+                        if (FieldType.IsValueType)
                         {
-                            ilGen.UnboxAny(BeforeType);
+                            ilGen.UnboxAny(FieldType);
                         }
                     }
-
-                    return;
                 }
-
-                var methodName = GetReadValueMethodName(BeforeType);
-
-                if (methodName != null)
+                else if (Options.On(FastObjectRWOptions.BasicTypeDirectCallMethod) && GetReadValueMethod(FieldType) is MethodInfo method)
                 {
-                    var method = typeof(IValueReader).GetMethod(methodName);
-
-                    if (methodName == nameof(IValueReader.ReadNullable) && method.IsGenericMethodDefinition)
-                    {
-                        method = method.MakeGenericMethod(Nullable.GetUnderlyingType(BeforeType));
-                    }
-
-                    ilGen.Call(method);
-
-                    return;
+                    ilGen.AutoCall(method);
                 }
-
-                var valueInterfaceType = typeof(ValueInterface<>).MakeGenericType(BeforeType);
-
-                var valueInterfaceReadValueMethod = valueInterfaceType.GetMethod(nameof(ValueInterface<object>.ReadValue), StaticDeclaredOnly);
-
-                ilGen.Call(valueInterfaceReadValueMethod);
+                else
+                {
+                    ilGen.AutoCall(ValueInterfaceReadValueMethod.MakeGenericMethod(FieldType));
+                }
             }
 
             public override void WriteValueBefore(ILGenerator ilGen)
             {
-                if (WriteValueMethod != null)
+                if (WriteValueMethod != null && !WriteValueMethod.IsStatic)
                 {
-                    if (ReadValueMethod.IsStatic)
-                    {
-                        return;
-                    }
+                    ilGen.LoadConstant(Array.IndexOf(Fields, this));
 
-                    var index = Array.IndexOf(Fields, this);
-
-                    ilGen.LoadConstant(index);
-
-                    ilGen.Call(GetValueInterfaceInstanceMethod);
-
-                    return;
+                    ilGen.AutoCall(GetGetValueInterfaceInstanceMethod());
                 }
             }
 
@@ -322,40 +308,31 @@ namespace Swifter.RW
             {
                 if (WriteValueMethod != null)
                 {
-                    if (BeforeType != AfterType)
+                    if (FieldType != WriteType)
                     {
-                        if (BeforeType.IsValueType)
+                        if (FieldType.IsValueType)
                         {
-                            ilGen.Box(BeforeType);
+                            ilGen.Box(FieldType);
                         }
 
-                        ilGen.CastClass(AfterType);
+                        ilGen.CastClass(WriteType);
 
-                        if (AfterType.IsValueType)
+                        if (WriteType.IsValueType)
                         {
-                            ilGen.UnboxAny(AfterType);
+                            ilGen.UnboxAny(WriteType);
                         }
                     }
 
-                    ilGen.Call(WriteValueMethod);
-
-                    return;
+                    ilGen.AutoCall(WriteValueMethod);
                 }
-
-                var methodName = GetWriteValueMethodName(BeforeType);
-
-                if (methodName != null)
+                else if (Options.On(FastObjectRWOptions.BasicTypeDirectCallMethod) && GetWriteValueMethod(FieldType) is MethodInfo method)
                 {
-                    ilGen.Call(typeof(IValueWriter).GetMethod(methodName));
-
-                    return;
+                    ilGen.AutoCall(method);
                 }
-
-                var valueInterfaceType = typeof(ValueInterface<>).MakeGenericType(BeforeType);
-
-                var valueInterfaceWriteValueMethod = valueInterfaceType.GetMethod(nameof(ValueInterface<object>.WriteValue), StaticDeclaredOnly);
-
-                ilGen.Call(valueInterfaceWriteValueMethod);
+                else
+                {
+                    ilGen.AutoCall(ValueInterfaceWriteValueMethod.MakeGenericMethod(FieldType));
+                }
             }
         }
     }

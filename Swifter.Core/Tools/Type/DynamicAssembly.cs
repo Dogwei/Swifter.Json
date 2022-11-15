@@ -3,6 +3,7 @@
 //#define Save
 //#endif
 
+using InlineIL;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -65,26 +66,33 @@ namespace Swifter.Tools
 
                 foreach (var assemblyName in assembly.GetReferencedAssemblies())
                 {
-                    Assembly item = null;
+                    Assembly item;
 
                     try
                     {
-                        item = Assembly.Load(assemblyName);
+                        if (Assembly.Load(assemblyName) is Assembly temp)
+                        {
+                            item = temp;
+
+                            goto Yield;
+                        }
                     }
                     catch
                     {
                     }
 
-                    if (!(item is null))
-                    {
-                        yield return item;
-                    }
+                    continue;
+
+                    Yield: yield return item;
                 }
             }
         }
 
         static DynamicAssembly()
         {
+            AssBuilder = default!;
+            ModBuilder = default!;
+
             lock (Lock)
             {
                 try
@@ -120,7 +128,7 @@ namespace Swifter.Tools
                 {
                     var DynamicMethodName = $"{nameof(TestClass.TestMethod)}_{Guid.NewGuid():N}";
 
-                    var method = DefineType($"{nameof(TestClass)}_{Guid.NewGuid():N}", TypeAttributes.Public, typeBuilder =>
+                    DefineType($"{nameof(TestClass)}_{Guid.NewGuid():N}", TypeAttributes.Public, typeBuilder =>
                     {
                         typeBuilder.DefineMethod(
                             DynamicMethodName,
@@ -130,27 +138,18 @@ namespace Swifter.Tools
                             Type.EmptyTypes,
                             (methodBuilder, ilGen) =>
                             {
-                                ilGen.Call(MethodOf(TestClass.TestMethod));
+                                ilGen.AutoCall( TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(TestClass), nameof(TestClass.TestMethod)))));
+
                                 ilGen.Return();
                             });
 
-                    }).GetMethod(DynamicMethodName);
-
-                    method.Invoke(null, null);
+                    }).GetMethod(DynamicMethodName)!.Invoke(null, null);
                 }
                 catch
                 {
                     CanAccessNonPublicMembers = false;
                 }
-
-#if DEBUG
-
-                Console.WriteLine($"{nameof(DynamicAssembly)} : CanAccessNonPublicTypes : {CanAccessNonPublicTypes}");
-                Console.WriteLine($"{nameof(DynamicAssembly)} : CanAccessNonPublicMembers : {CanAccessNonPublicMembers}");
-
-#endif
             }
-
         }
 
         private static void Reset()
@@ -220,11 +219,6 @@ namespace Swifter.Tools
                 return;
             }
 
-            if (assembly is null)
-            {
-                return;
-            }
-
             if (IgnoresAccessChecksToDic.ContainsKey(assembly))
             {
                 return;
@@ -266,14 +260,11 @@ namespace Swifter.Tools
         {
             var name = assembly.GetName();
 
-            if (name is null)
-            {
-                return null;
-            }
-
             var publicKey = name.GetPublicKey()?.ToHexString();
 
-            return string.IsNullOrEmpty(publicKey) ? name.Name : $"{name.Name}, PublicKey={publicKey}";
+            return string.IsNullOrEmpty(publicKey) 
+                ? name.Name! /* 我们认为程序集的名称不太可能为空 */
+                : $"{name.Name}, PublicKey={publicKey}";
         }
 
         /// <summary>
@@ -283,7 +274,7 @@ namespace Swifter.Tools
         /// <param name="attributes">类型属性</param>
         /// <param name="baseType">基类</param>
         /// <returns>返回一个类型生成器</returns>
-        public static TypeBuilder DefineType(string name, TypeAttributes attributes, Type baseType = null)
+        public static TypeBuilder DefineType(string name, TypeAttributes attributes, Type? baseType = null)
         {
             HaveDefinedType = true;
 
@@ -310,13 +301,13 @@ namespace Swifter.Tools
         /// <param name="baseType">基类</param>
         /// <param name="callback">类型生成器回调</param>
         /// <returns>返回一个运行时类型</returns>
-        public static Type DefineType(string name, TypeAttributes attributes, Type baseType, Action<TypeBuilder> callback)
+        public static Type DefineType(string name, TypeAttributes attributes, Type? baseType, Action<TypeBuilder> callback)
         {
             var typeBuilder = DefineType(name, attributes, baseType);
 
             callback(typeBuilder);
 
-            return typeBuilder.CreateTypeInfo();
+            return typeBuilder.CreateTypeInfo()!;
         }
 
         /// <summary>
@@ -350,27 +341,65 @@ namespace Swifter.Tools
             return typeBuilder;
         }
 
-        /// <summary>
-        /// 定义一个动态方法。
-        /// </summary>
-        /// <typeparam name="TDelegate">委托类型</typeparam>
-        /// <param name="callback">方法生成器回调</param>
-        /// <param name="restrictedSkipVisibility">是否跳过验证</param>
-        /// <returns>返回一个委托</returns>
-        public static TDelegate BuildDynamicMethod<TDelegate>(Action<DynamicMethod, ILGenerator> callback, bool restrictedSkipVisibility = false) where TDelegate : Delegate
+        private static DynamicMethod CreateDynamicMethod(
+            Type returnType, 
+            Type[] parameterTypes, 
+            Module module, 
+            bool skipVisibility = false
+            )
         {
-            GetParametersTypes(typeof(TDelegate), out var parameterTypes, out var returnType);
+            var methodName = $"{nameof(DynamicAssembly)}_{nameof(DynamicMethod)}_{Guid.NewGuid():N}";
 
-            var dynamicMethod = new DynamicMethod(
-                $"{nameof(DynamicAssembly)}_{nameof(DynamicMethod)}_{Guid.NewGuid():N}",
-                returnType,
-                parameterTypes,
-                restrictedSkipVisibility
-                );
+            DynamicMethod dynamicMethod;
 
-            callback(dynamicMethod, dynamicMethod.GetILGenerator());
+            try
+            {
+                dynamicMethod = new DynamicMethod(
+                   methodName,
+                   returnType,
+                   parameterTypes,
+                   module,
+                   skipVisibility
+                   );
+            }
+            catch (NotSupportedException)
+            {
+                if (returnType.IsByRef)
+                {
+                    // 早期 .NET 本身支持 ref 返回值方法；但由于 DynamicMethod 构造方法做了类型校验，导致创建示例失败。
+                    // 这里通过反射绕过该校验
+                    var pointerType = returnType.GetElementType()!.MakePointerType();
 
-            return CreateDelegate<TDelegate>(dynamicMethod);
+                    dynamicMethod = new DynamicMethod(
+                       methodName,
+                       pointerType,
+                       parameterTypes,
+                       module,
+                       skipVisibility
+                       );
+
+                    foreach (var field in dynamicMethod.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                    {
+                        if (typeof(Type).IsAssignableFrom(field.FieldType) && ReferenceEquals(field.GetValue(dynamicMethod), pointerType))
+                        {
+                            field.SetValue(dynamicMethod, returnType);
+
+                            if (dynamicMethod.ReturnType == returnType)
+                            {
+                                return dynamicMethod;
+                            }
+                            else
+                            {
+                                field.SetValue(dynamicMethod, pointerType);
+                            }
+                        }
+                    }
+                }
+
+                throw;
+            }
+
+            return dynamicMethod;
         }
 
         /// <summary>
@@ -381,21 +410,18 @@ namespace Swifter.Tools
         /// <param name="module">绑定模块</param>
         /// <param name="skipVisibility">是否跳过验证</param>
         /// <returns>返回一个委托</returns>
-        public static TDelegate BuildDynamicMethod<TDelegate>(Action<DynamicMethod, ILGenerator> callback, Module module, bool skipVisibility = false) where TDelegate : Delegate
+        public static TDelegate BuildDynamicMethod<TDelegate>(
+            Action<DynamicMethod, ILGenerator> callback, 
+            Module module, 
+            bool skipVisibility = false) where TDelegate : Delegate
         {
-            GetParametersTypes(typeof(TDelegate), out var parameterTypes, out var returnType);
+            GetSignature(typeof(TDelegate), out var parameterTypes, out var returnType);
 
-            var dynamicMethod = new DynamicMethod(
-                $"{nameof(DynamicAssembly)}_{nameof(DynamicMethod)}_{Guid.NewGuid():N}",
-                returnType,
-                parameterTypes,
-                module,
-                skipVisibility
-                );
+            var dynamicMethod = CreateDynamicMethod(returnType, parameterTypes, module, skipVisibility);
 
             callback(dynamicMethod, dynamicMethod.GetILGenerator());
 
-            return CreateDelegate<TDelegate>(dynamicMethod);
+            return CreateDelegate<TDelegate>(dynamicMethod, false) ?? throw new NotSupportedException();
         }
 
         /// <summary>
@@ -403,7 +429,7 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="typeName">动态类型名称</param>
         /// <returns>返回一个类型</returns>
-        public static Type GetType(string typeName)
+        public static Type? GetType(string typeName)
         {
             foreach (var assemblyBuilder in AssBuilders)
             {
@@ -423,17 +449,18 @@ namespace Swifter.Tools
         /// <returns>返回一个 <see cref="bool"/> 值。</returns>
         public static bool IsInternalsVisibleTo(Assembly assembly)
         {
-            if (assembly is null)
+            try
             {
-                return true;
-            }
-
-            foreach (InternalsVisibleToAttribute attribute in assembly.GetCustomAttributes(typeof(InternalsVisibleToAttribute),false))
-            {
-                if (attribute.AssemblyName == AssName)
+                foreach (InternalsVisibleToAttribute attribute in assembly.GetCustomAttributes(typeof(InternalsVisibleToAttribute), false))
                 {
-                    return true;
+                    if (attribute.AssemblyName == AssName)
+                    {
+                        return true;
+                    }
                 }
+            }
+            catch
+            {
             }
 
             return false;
@@ -446,11 +473,6 @@ namespace Swifter.Tools
         /// <returns>返回一个 <see cref="bool"/> 值。</returns>
         public static bool IsIgnoresAccessChecksTo(Assembly assembly)
         {
-            if (assembly is null)
-            {
-                return true;
-            }
-
             if (CanAccessNonPublicTypes)
             {
                 if (IgnoresAccessChecksToDic.ContainsKey(assembly))
@@ -480,6 +502,17 @@ namespace Swifter.Tools
             FieldAttributes fieldAttributes = FieldAttributes.Private | FieldAttributes.SpecialName,
             MethodAttributes methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName)
         {
+            var isStatic = fieldAttributes.On(FieldAttributes.Static);
+
+            if (isStatic)
+            {
+                methodAttributes |= MethodAttributes.Static;
+            }
+            else
+            {
+                methodAttributes &= ~MethodAttributes.Static;
+            }
+
             var fieldBuilder = typeBuilder.DefineField(
                 $"_{name}_{Guid.NewGuid():N}",
                 type,
@@ -489,13 +522,20 @@ namespace Swifter.Tools
             return typeBuilder.DefineProperty(name, attributes, type,
                 (propertyBuilder, methodBuilder, ilGen) =>
                 {
-                    ilGen.LoadArgument(0);
+                    if (!isStatic)
+                    {
+                        ilGen.LoadArgument(0);
+                    }
+
                     ilGen.LoadField(fieldBuilder);
                     ilGen.Return();
                 }, (propertyBuilder, methodBuilder, ilGen) =>
                 {
+                    if (!isStatic)
+                    {
+                        ilGen.LoadArgument(0);
+                    }
 
-                    ilGen.LoadArgument(0);
                     ilGen.LoadArgument(1);
                     ilGen.StoreField(fieldBuilder);
                     ilGen.Return();
@@ -518,8 +558,8 @@ namespace Swifter.Tools
             string name,
             PropertyAttributes attributes,
             Type type,
-            Action<PropertyBuilder, MethodBuilder, ILGenerator> getCallback,
-            Action<PropertyBuilder, MethodBuilder, ILGenerator> setCallback,
+            Action<PropertyBuilder, MethodBuilder, ILGenerator>? getCallback,
+            Action<PropertyBuilder, MethodBuilder, ILGenerator>? setCallback,
             MethodAttributes methodAttributes = MethodAttributes.Public | MethodAttributes.SpecialName)
         {
             var propertyBuilder = typeBuilder.DefineProperty(
@@ -548,13 +588,13 @@ namespace Swifter.Tools
                 typeBuilder.DefineMethod(
                     $"{"set"}_{name}_{Guid.NewGuid():N}",
                     methodAttributes,
-                    type,
-                    Type.EmptyTypes,
+                    typeof(void),
+                    new Type[] { type },
                     (methodBuilder, ilGen) =>
                     {
                         setCallback(propertyBuilder, methodBuilder, ilGen);
 
-                        propertyBuilder.SetGetMethod(methodBuilder);
+                        propertyBuilder.SetSetMethod(methodBuilder);
                     });
             }
 
@@ -571,7 +611,13 @@ namespace Swifter.Tools
         /// <param name="parameterTypes">参数类型集合</param>
         /// <param name="callback">方法生成器回调</param>
         /// <returns>返回当前类型生成器</returns>
-        public static TypeBuilder DefineMethod(this TypeBuilder typeBuilder, string name, MethodAttributes attributes, Type returnType, Type[] parameterTypes, Action<MethodBuilder, ILGenerator> callback)
+        public static TypeBuilder DefineMethod(
+            this TypeBuilder typeBuilder, 
+            string name, 
+            MethodAttributes attributes,
+            Type returnType, 
+            Type[] parameterTypes,
+            Action<MethodBuilder, ILGenerator> callback)
         {
             var methodBuilder = typeBuilder.DefineMethod(name, attributes, returnType, parameterTypes);
 
@@ -584,7 +630,7 @@ namespace Swifter.Tools
         /// 将特性转换为特性生成器。
         /// </summary>
         /// <param name="attribute">特性实例</param>
-        /// <returns>返回一个将特性转换为特性生成器</returns>
+        /// <returns>返回一个特性生成器</returns>
         public static CustomAttributeBuilder ToCustomAttributeBuilder(this Attribute attribute)
         {
             object[] emptyValues = new object[0];
@@ -595,29 +641,35 @@ namespace Swifter.Tools
 
             bool HaveField(ParameterInfo par)
             {
-                if (type.GetProperty(par.Name, bindingFlags) is PropertyInfo propertyInfo && propertyInfo.CanRead)
+                if (par.Name is string parName)
                 {
-                    return true;
-                }
+                    if (type.GetProperty(parName, bindingFlags) is PropertyInfo propertyInfo && propertyInfo.CanRead)
+                    {
+                        return true;
+                    }
 
-                if (type.GetField(par.Name, bindingFlags) is FieldInfo fieldInfo)
-                {
-                    return true;
+                    if (type.GetField(parName, bindingFlags) is FieldInfo fieldInfo)
+                    {
+                        return true;
+                    }
                 }
 
                 return false;
             }
 
-            object GetValue(ParameterInfo par)
+            object? GetValue(ParameterInfo par)
             {
-                if (type.GetProperty(par.Name, bindingFlags) is PropertyInfo propertyInfo && propertyInfo.CanRead)
+                if (par.Name is string parName)
                 {
-                    return propertyInfo.GetValue(attribute, emptyValues);
-                }
+                    if (type.GetProperty(parName, bindingFlags) is PropertyInfo propertyInfo && propertyInfo.CanRead)
+                    {
+                        return propertyInfo.GetValue(attribute, emptyValues);
+                    }
 
-                if (type.GetField(par.Name, bindingFlags) is FieldInfo fieldInfo)
-                {
-                    return fieldInfo.GetValue(attribute);
+                    if (type.GetField(parName, bindingFlags) is FieldInfo fieldInfo)
+                    {
+                        return fieldInfo.GetValue(attribute);
+                    }
                 }
 
                 return null;
@@ -642,8 +694,10 @@ namespace Swifter.Tools
                                 var x = property.GetValue(attribute, emptyValues);
                                 var y = property.GetValue(newObj, emptyValues);
 
-                                if (!Equals(x, y))
+                                if (x != null && !x.Equals(y))
                                 {
+                                    // TODO: 对原对象的该属性进行赋值。
+
                                     properties.Add(property, x);
                                 }
                             }
@@ -656,11 +710,15 @@ namespace Swifter.Tools
                             var x = field.GetValue(attribute);
                             var y = field.GetValue(newObj);
 
-                            if (!Equals(x, y))
+                            if (x != null && !x.Equals(y))
                             {
+                                // TODO: 对原对象的该字段进行赋值。
+
                                 fields.Add(field, x);
                             }
                         }
+
+                        // TODO: 检查新对象是否可原对象一致
 
                         return new CustomAttributeBuilder(
                             constructor, constructorArgs,

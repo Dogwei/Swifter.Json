@@ -2,6 +2,7 @@
 using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
@@ -12,87 +13,69 @@ namespace Swifter.RW
     public static class RWHelper
     {
         /// <summary>
-        /// 获取一个所有方法均为获取 default 值的值读取器。
-        /// </summary>
-        public static readonly IValueReader DefaultValueReader = new DefaultValueReader();
-
-        /// <summary>
-        /// 获取一个所有方法均为获取 default 值或空实现的值读写器。
+        /// 获取一个所有方法均为获取 <see langword="default"/> 值或空实现的值读写器。
         /// </summary>
         public static readonly IValueRW DefaultValueRW = new AuxiliaryValueRW();
 
         /// <summary>
-        /// 为实例创建读取器。
+        /// 为实例创建读取器。无法创建则返回 null。
         /// </summary>
         /// <typeparam name="T">实例类型</typeparam>
-        /// <param name="throwException">是否抛出异常</param>
         /// <param name="obj">实例</param>
         /// <returns>返回一个读取器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataReader CreateReader<T>(T obj, bool throwException = true)
+        public static IDataReader? CreateReader<T>(T obj)
         {
             var auxiliary = new AuxiliaryValueRW();
 
             ValueInterface<T>.WriteValue(auxiliary, obj);
 
-            return auxiliary.GetDataReader() ??
-                (throwException ? throw new NotSupportedException($"Unable create data reader of '{typeof(T)}'.") : default(IDataReader));
+            return auxiliary.GetDataReader();
         }
 
         /// <summary>
-        /// 为实例创建读写器。
+        /// 为实例创建读写器。无法创建则返回 null。
         /// </summary>
         /// <typeparam name="T">实例类型</typeparam>
-        /// <param name="throwException">是否抛出异常</param>
         /// <param name="obj">实例</param>
         /// <returns>返回一个读写器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataRW CreateRW<T>(T obj, bool throwException = true)
+        public static IDataRW? CreateRW<T>(T obj)
         {
             var auxiliary = new AuxiliaryValueRW();
 
             ValueInterface<T>.WriteValue(auxiliary, obj);
 
-            return auxiliary.GetDataRW() ??
-                (throwException ? throw new NotSupportedException($"Unable create data reader-writer of '{typeof(T)}'.") : default(IDataRW));
+            return auxiliary.GetDataRW();
         }
 
         /// <summary>
-        /// 为类型创建一个写入器。
+        /// 为类型创建一个写入器。无法创建则返回 null。
         /// </summary>
         /// <typeparam name="T">类型</typeparam>
-        /// <param name="throwException">是否抛出异常</param>
         /// <returns>返回一个写入器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataWriter CreateWriter<T>(bool throwException = true)
+        public static IDataWriter? CreateWriter<T>()
         {
             var auxiliary = new AuxiliaryValueRW();
 
             ValueInterface<T>.ReadValue(auxiliary);
 
-            return auxiliary.GetDataWriter() ??
-                (throwException ? throw new NotSupportedException($"Unable create data writer of '{typeof(T)}'.") : default(IDataWriter));
+            return auxiliary.GetDataWriter();
         }
 
         /// <summary>
-        /// 为一个实例创建数据写入器。
+        /// 为一个实例创建数据写入器。无法创建则返回 null。
         /// </summary>
         /// <typeparam name="T">实例类型</typeparam>
-        /// <param name="throwException">是否抛出异常</param>
         /// <param name="obj">实例</param>
         /// <returns>返回一个写入器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataWriter CreateWriter<T>(T obj, bool throwException = true)
+        public static IDataWriter? CreateWriter<T>(T obj)
         {
             var auxiliary = new AuxiliaryValueRW();
 
-            try
-            {
-                ValueInterface<T>.WriteValue(auxiliary, obj);
-            }
-            catch
-            {
-            }
+            ValueInterface<T>.WriteValue(auxiliary, obj);
 
             var writer = auxiliary.GetDataWriter();
 
@@ -105,96 +88,69 @@ namespace Swifter.RW
 
             writer = auxiliary.GetDataWriter();
 
-            if (writer is null)
+            if (writer != null)
             {
-                return auxiliary.GetDataWriter() ??
-                    (throwException ? throw new NotSupportedException($"Unable create data writer of  '{typeof(T)}'.") : default(IDataWriter));
+                writer.Content = obj;
+
+                return writer;
             }
 
-            writer.Content = obj;
-
-            return writer;
+            return null;
         }
 
         /// <summary>
-        /// 为实例创建一个读取器。
+        /// 为实例创建一个读取器。无法创建则返回 null。
         /// </summary>
         /// <param name="obj">实例</param>
-        /// <param name="throwException">是否抛出异常</param>
         /// <returns>返回一个读取器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataReader CreateReader(object obj, bool throwException = true)
+        public static IDataReader? CreateReader(object obj)
         {
-            if (obj is null)
-            {
-                throw new ArgumentNullException(nameof(obj));
-            }
-
             var auxiliary = new AuxiliaryValueRW();
 
             ValueInterface.GetInterface(obj).Write(auxiliary, obj);
 
-            return auxiliary.GetDataReader() ??
-                (throwException ? throw new NotSupportedException($"Unable create data reader of '{obj.GetType()}'.") : default(IDataReader));
+            return auxiliary.GetDataReader();
         }
 
         /// <summary>
-        /// 为实例创建一个读写器。
+        /// 为实例创建一个读写器。无法创建则返回 null。
         /// </summary>
         /// <param name="obj">实例</param>
-        /// <param name="throwException">是否抛出异常</param>
         /// <returns>返回一个读写器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataRW CreateRW(object obj, bool throwException = true)
+        public static IDataRW? CreateRW(object obj)
         {
-            if (obj is null)
-            {
-                throw new ArgumentNullException(nameof(obj));
-            }
-
             var auxiliary = new AuxiliaryValueRW();
 
             ValueInterface.GetInterface(obj).Write(auxiliary, obj);
 
-            return auxiliary.GetDataRW() ??
-                (throwException ? throw new NotSupportedException($"Unable create data reader-writer of '{obj.GetType()}'.") : default(IDataRW));
+            return auxiliary.GetDataRW();
         }
 
         /// <summary>
-        /// 为类型创建一个写入器。
+        /// 为类型创建一个写入器。无法创建则返回 null。
         /// </summary>
         /// <param name="type">类型</param>
-        /// <param name="throwException">是否抛出异常</param>
         /// <returns>返回一个写入器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataWriter CreateWriter(Type type, bool throwException = true)
+        public static IDataWriter? CreateWriter(Type type)
         {
-            if (type is null)
-            {
-                throw new ArgumentNullException(nameof(type));
-            }
-
             var auxiliary = new AuxiliaryValueRW();
 
             ValueInterface.GetInterface(type).Read(auxiliary);
 
-            return auxiliary.GetDataWriter() ?? (throwException ? throw new NotSupportedException($"Unable create data writer of '{type}'.") : default(IDataRW));
+            return auxiliary.GetDataWriter();
         }
 
         /// <summary>
-        /// 为一个实例创建数据写入器。
+        /// 为一个实例创建数据写入器。无法创建则返回 null。
         /// </summary>
         /// <param name="obj">实例</param>
-        /// <param name="throwException">是否抛出异常</param>
         /// <returns>返回一个写入器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataWriter CreateWriter(object obj, bool throwException = true)
+        public static IDataWriter? CreateWriter(object obj)
         {
-            if (obj is null)
-            {
-                throw new ArgumentNullException(nameof(obj));
-            }
-
             var auxiliary = new AuxiliaryValueRW();
 
             var @interface = ValueInterface.GetInterface(obj);
@@ -212,135 +168,163 @@ namespace Swifter.RW
 
             writer = auxiliary.GetDataWriter();
 
-            if (writer is null)
+            if (writer != null)
             {
-                return auxiliary.GetDataWriter() ??
-                    (throwException ? throw new NotSupportedException($"Unable create data writer of  '{obj.GetType()}'.") : default(IDataWriter));
+                writer.Content = obj;
+
+                return writer;
             }
 
-            writer.Content = obj;
-
-            return writer;
+            return null;
         }
 
         /// <summary>
-        /// 为读取器中的字段创建数据读取器。
+        /// 为读取器中的字段创建数据读取器。无法创建则返回 null。
         /// </summary>
         /// <typeparam name="TKey">键的类型</typeparam>
         /// <param name="dataReader">数据读取器</param>
         /// <param name="key">字段的键</param>
-        /// <param name="throwException">是否抛出异常</param>
         /// <returns>返回一个读取器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataReader CreateItemReader<TKey>(IDataReader<TKey> dataReader, TKey key, bool throwException = true)
+        public static IDataReader? CreateItemReader<TKey>(IDataReader<TKey> dataReader, TKey key) where TKey : notnull
         {
             var auxiliary = new AuxiliaryValueRW();
 
             dataReader.OnReadValue(key, auxiliary);
 
-            return auxiliary.GetDataReader() ??
-                (throwException ? throw new NotSupportedException($"Failed to create data reader of field : '{key}' in {dataReader}.") : default(IDataReader));
+            return auxiliary.GetDataReader();
         }
 
         /// <summary>
-        /// 为读取器中的字段创建数据读写器。
+        /// 为写入器中的字段创建数据写入器。无法创建则返回 null。
+        /// </summary>
+        /// <typeparam name="TKey">键的类型</typeparam>
+        /// <param name="dataWriter">数据读取器</param>
+        /// <param name="key">字段的键</param>
+        /// <returns>返回一个写入器</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static IDataWriter? CreateItemWriter<TKey>(IDataWriter<TKey> dataWriter, TKey key) where TKey : notnull
+        {
+            var dataReader = dataWriter as IDataReader;
+
+            if (dataReader is null && dataWriter.ContentType is not null && dataWriter.Content is object content)
+            {
+                dataReader = CreateReader(content);
+            }
+
+            if (dataReader is null)
+            {
+                return null;
+            }
+
+            var auxiliary = new AuxiliaryValueRW();
+
+            dataReader.As<TKey>().OnReadValue(key, auxiliary);
+
+            return auxiliary.GetDataWriter();
+        }
+
+        /// <summary>
+        /// 为读取器中的字段创建数据读写器。无法创建则返回 null。
         /// </summary>
         /// <typeparam name="TKey">键的类型</typeparam>
         /// <param name="dataReader">数据读取器</param>
         /// <param name="key">字段的键</param>
-        /// <param name="throwException">是否抛出异常</param>
         /// <returns>返回一个读写器</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static IDataRW CreateItemRW<TKey>(IDataReader<TKey> dataReader, TKey key, bool throwException = true)
+        public static IDataRW? CreateItemRW<TKey>(IDataReader<TKey> dataReader, TKey key) where TKey : notnull
         {
             var auxiliary = new AuxiliaryValueRW();
 
             dataReader.OnReadValue(key, auxiliary);
 
-            return auxiliary.GetDataRW() ??
-                (throwException ? throw new NotSupportedException($"Failed to create data reader-writer of field : '{key}' in {dataReader}.") : default(IDataRW));
+            return auxiliary.GetDataRW();
         }
 
 
         /// <summary>
-        /// 获取数据读写器中指定键的值的类型。
+        /// 尝试设置数据写入器的数据源。
         /// </summary>
-        /// <typeparam name="TKey">键类型</typeparam>
-        /// <param name="dataRW">数据读写器</param>
-        /// <param name="key">指定键</param>
-        /// <returns>返回一个类型</returns>
-        public static Type GetItemType<TKey>(IDataRW<TKey> dataRW, TKey key)
+        /// <param name="dataWriter">对象写入器</param>
+        /// <param name="content">数据源</param>
+        internal static bool TrySetContent(this IDataWriter dataWriter, object content)
         {
-            var auxiliary = new AuxiliaryValueRW();
+            if (dataWriter.ContentType is Type contentType)
+            {
+                if (contentType.IsInstanceOfType(content))
+                {
+                    dataWriter.Content = content;
 
-            dataRW.OnReadValue(key, auxiliary);
+                    return true;
+                }
+                else if (XConvert.IsEffectiveConvert(content.GetType(), contentType))
+                {
+                    dataWriter.Content = XConvert.Convert(content, contentType);
 
-            return auxiliary.GetValueType();
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
-        /// 获取数据读取器中指定键的值的类型。
+        /// 尝试将数据读取器的数据源复制到数据写入器。
         /// </summary>
-        /// <typeparam name="TKey">键类型</typeparam>
-        /// <param name="dataReader">数据读取器</param>
-        /// <param name="key">指定键</param>
-        /// <returns>返回一个类型</returns>
-        public static Type GetItemType<TKey>(IDataReader<TKey> dataReader, TKey key)
+        /// <param name="destinationWriter">对象写入器</param>
+        /// <param name="sourceReader">对象读取器</param>
+        internal static bool TryCopyFromContent(this IDataWriter destinationWriter, IDataReader sourceReader)
         {
-            var auxiliary = new AuxiliaryValueRW();
+            if (destinationWriter.ContentType is Type destinationContentType && sourceReader.ContentType is Type sourceContentType)
+            {
+                if (destinationContentType.IsAssignableFrom(sourceContentType))
+                {
+                    destinationWriter.Content = sourceReader.Content;
 
-            dataReader.OnReadValue(key, auxiliary);
+                    return true;
+                }
+                else if (XConvert.IsEffectiveConvert(sourceContentType, destinationContentType))
+                {
+                    destinationWriter.Content = XConvert.Convert(sourceReader.Content, destinationContentType);
 
-            return auxiliary.GetValueType();
-        }
+                    return true;
+                }
+            }
 
-        /// <summary>
-        /// 获取数据写入器中指定键的值的类型。
-        /// </summary>
-        /// <typeparam name="TKey">键类型</typeparam>
-        /// <param name="dataWriter">数据写入器</param>
-        /// <param name="key">指定键</param>
-        /// <returns>返回一个类型</returns>
-        public static Type GetItemType<TKey>(IDataWriter<TKey> dataWriter, TKey key)
-        {
-            var auxiliary = new AuxiliaryValueRW();
-
-            dataWriter.OnWriteValue(key, auxiliary);
-
-            return auxiliary.GetValueType();
+            return false;
         }
 
         /// <summary>
         /// 将数据读取器转换为具有键的类型的具体数据读取器。
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        /// <typeparam name="T">键的类型</typeparam>
+        /// <typeparam name="TKey">键的类型</typeparam>
         /// <returns>返回具体数据读取器</returns>
-        public static IDataReader<T> As<T>(this IDataReader dataReader)
+        public static IDataReader<TKey> As<TKey>(this IDataReader dataReader) where TKey : notnull
         {
-            if (dataReader is IDataReader<T> tReader)
+            if (dataReader is IDataReader<TKey> tReader)
             {
                 return tReader;
             }
 
             if (dataReader is IAsDataReader @asReader)
             {
-                return As<T>(@asReader.Original);
+                return As<TKey>(@asReader.Original);
             }
 
             if (dataReader is IDataReader<string> strReader)
             {
-                return new AsDataReader<string, T>(strReader);
+                return new AsDataReader<string, TKey>(strReader);
             }
 
             if (dataReader is IDataReader<int> intReader)
             {
-                return new AsDataReader<int, T>(intReader);
+                return new AsDataReader<int, TKey>(intReader);
             }
 
             if (AsHelper.GetInstance(dataReader) is AsHelper asHelper)
             {
-                return asHelper.As<T>(dataReader);
+                return asHelper.As<TKey>(dataReader);
             }
 
             throw new NotSupportedException("Unsupported object.");
@@ -350,33 +334,33 @@ namespace Swifter.RW
         /// 将数据写入器转换为具有键的类型的具体数据写入器。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        /// <typeparam name="T">键的类型</typeparam>
+        /// <typeparam name="TKey">键的类型</typeparam>
         /// <returns>返回具体数据写入器</returns>
-        public static IDataWriter<T> As<T>(this IDataWriter dataWriter)
+        public static IDataWriter<TKey> As<TKey>(this IDataWriter dataWriter) where TKey : notnull
         {
-            if (dataWriter is IDataWriter<T> tWriter)
+            if (dataWriter is IDataWriter<TKey> tWriter)
             {
                 return tWriter;
             }
 
             if (dataWriter is IAsDataWriter asWriter)
             {
-                return As<T>(asWriter.Original);
+                return As<TKey>(asWriter.Original);
             }
 
             if (dataWriter is IDataWriter<string> strWriter)
             {
-                return new AsDataWriter<string, T>(strWriter);
+                return new AsDataWriter<string, TKey>(strWriter);
             }
 
             if (dataWriter is IDataWriter<int> intWriter)
             {
-                return new AsDataWriter<int, T>(intWriter);
+                return new AsDataWriter<int, TKey>(intWriter);
             }
 
             if (AsHelper.GetInstance(dataWriter) is AsHelper asHelper)
             {
-                return asHelper.As<T>(dataWriter);
+                return asHelper.As<TKey>(dataWriter);
             }
 
             throw new NotSupportedException("Unsupported object.");
@@ -386,64 +370,41 @@ namespace Swifter.RW
         /// 将数据写入器转换为具有键的类型的具体数据写入器。
         /// </summary>
         /// <param name="dataRW">数据写入器</param>
-        /// <typeparam name="T">键的类型</typeparam>
+        /// <typeparam name="TKey">键的类型</typeparam>
         /// <returns>返回具体数据写入器</returns>
-        public static IDataRW<T> As<T>(this IDataRW dataRW)
+        public static IDataRW<TKey> As<TKey>(this IDataRW dataRW) where TKey : notnull
         {
-            if (dataRW is IDataRW<T> tRW)
+            if (dataRW is IDataRW<TKey> tRW)
             {
                 return tRW;
             }
 
             if (dataRW is IAsDataRW asRW)
             {
-                return As<T>(asRW.Original);
+                return As<TKey>(asRW.Original);
             }
 
             if (dataRW is IDataRW<string> strRW)
             {
-                return new AsDataRW<string, T>(strRW);
+                return new AsDataRW<string, TKey>(strRW);
             }
 
             if (dataRW is IDataRW<int> intRW)
             {
-                return new AsDataRW<int, T>(intRW);
+                return new AsDataRW<int, TKey>(intRW);
+            }
+
+            if (dataRW is IDataRW<object> objectRW)
+            {
+                return new AsDataRW<object, TKey>(objectRW);
             }
 
             if (AsHelper.GetInstance(dataRW) is AsHelper asHelper)
             {
-                return asHelper.As<T>(dataRW);
+                return asHelper.As<TKey>(dataRW);
             }
 
             throw new NotSupportedException("Unsupported object.");
-        }
-
-        /// <summary>
-        /// 获取一个 键类型 是否可作为数组索引。
-        /// </summary>
-        /// <typeparam name="TKey">键类型</typeparam>
-        /// <returns>返回一个 bool 值。</returns>
-        public static bool IsArrayKey<TKey>()
-        {
-            if (typeof(TKey).IsEnum)
-            {
-                return false;
-            }
-
-            switch (Type.GetTypeCode(typeof(TKey)))
-            {
-                case TypeCode.SByte:
-                case TypeCode.Byte:
-                case TypeCode.Int16:
-                case TypeCode.UInt16:
-                case TypeCode.Int32:
-                case TypeCode.UInt32:
-                case TypeCode.Int64:
-                case TypeCode.UInt64:
-                    return true;
-                default:
-                    return false;
-            }
         }
 
         /// <summary>
@@ -453,13 +414,13 @@ namespace Swifter.RW
         /// <typeparam name="TValue">值的类型</typeparam>
         /// <param name="valueReader">值读取器</param>
         /// <returns>返回一个字典</returns>
-        public static Dictionary<TKey, TValue> ReadDictionary<TKey, TValue>(this IValueReader valueReader)
+        public static Dictionary<TKey, TValue?>? ReadDictionary<TKey, TValue>(this IValueReader valueReader) where TKey : notnull
         {
-            var rw = new DictionaryRW<Dictionary<TKey, TValue>, TKey, TValue>();
+            var rw = new DictionaryRW<Dictionary<TKey, TValue?>, TKey, TValue>();
 
             valueReader.ReadObject(rw.As<string>());
 
-            return rw.content;
+            return rw.Content;
         }
 
         /// <summary>
@@ -469,12 +430,9 @@ namespace Swifter.RW
         /// <typeparam name="TValue">值的类型</typeparam>
         /// <param name="valueWriter">值读取器</param>
         /// <param name="dictionary">字典</param>
-        public static void WriteDictionary<TKey, TValue>(this IValueWriter valueWriter, Dictionary<TKey, TValue> dictionary)
+        public static void WriteDictionary<TKey, TValue>(this IValueWriter valueWriter, Dictionary<TKey, TValue?> dictionary) where TKey : notnull
         {
-            valueWriter.WriteObject(new DictionaryRW<Dictionary<TKey, TValue>, TKey, TValue>
-            {
-                content = dictionary
-            }.As<string>());
+            valueWriter.WriteObject(new DictionaryRW<Dictionary<TKey, TValue?>, TKey, TValue> { Content = dictionary }.As<string>());
         }
 
         /// <summary>
@@ -483,13 +441,13 @@ namespace Swifter.RW
         /// <typeparam name="TValue">值的类型</typeparam>
         /// <param name="valueReader">值读取器</param>
         /// <returns>返回一个列表</returns>
-        public static List<TValue> ReadList<TValue>(this IValueReader valueReader)
+        public static List<TValue?>? ReadList<TValue>(this IValueReader valueReader)
         {
-            var rw = new ListRW<List<TValue>, TValue>();
+            var rw = new ListRW<List<TValue?>, TValue>();
 
             valueReader.ReadArray(rw);
 
-            return rw.content;
+            return rw.Content;
         }
 
         /// <summary>
@@ -498,12 +456,9 @@ namespace Swifter.RW
         /// <typeparam name="TValue">值的类型</typeparam>
         /// <param name="valueWriter">值读取器</param>
         /// <param name="list">列表</param>
-        public static void WriteList<TValue>(this IValueWriter valueWriter, List<TValue> list)
+        public static void WriteList<TValue>(this IValueWriter valueWriter, List<TValue?> list)
         {
-            valueWriter.WriteArray(new ListRW<List<TValue>, TValue>
-            {
-                content = list
-            });
+            valueWriter.WriteArray(new ListRW<List<TValue?>, TValue> { Content = list });
         }
 
         /// <summary>
@@ -512,13 +467,13 @@ namespace Swifter.RW
         /// <typeparam name="T">元素类型</typeparam>
         /// <param name="valueReader">值读取器</param>
         /// <returns>返回一个数组</returns>
-        public static T[] ReadArray<T>(this IValueReader valueReader)
+        public static T?[]? ReadArray<T>(this IValueReader valueReader)
         {
             var rw = new ArrayRW<T>();
 
             valueReader.ReadArray(rw);
 
-            return rw.GetContent();
+            return rw.Content;
         }
 
         /// <summary>
@@ -527,9 +482,9 @@ namespace Swifter.RW
         /// <typeparam name="T">元素类型</typeparam>
         /// <param name="valueWriter">值写入器</param>
         /// <param name="array">数组</param>
-        public static void WriteArray<T>(this IValueWriter valueWriter, T[] array)
+        public static void WriteArray<T>(this IValueWriter valueWriter, T?[] array)
         {
-            valueWriter.WriteArray(new ArrayRW<T>(array));
+            valueWriter.WriteArray(new ArrayRW<T> { Content = array });
         }
 
         /// <summary>
@@ -538,7 +493,7 @@ namespace Swifter.RW
         /// <typeparam name="T">对象类型</typeparam>
         /// <param name="valueReader">值读取器</param>
         /// <returns>返回一个对象</returns>
-        public static T FastReadObject<T>(this IValueReader valueReader)
+        public static T? FastReadObject<T>(this IValueReader valueReader)
         {
             var rw = FastObjectRW<T>.Create();
 
@@ -569,13 +524,13 @@ namespace Swifter.RW
         /// <param name="valueReader">值读取器</param>
         /// <param name="flags">创建 <see cref="XObjectRW"/> 的标识符</param>
         /// <returns>返回对象</returns>
-        public static T XReadObject<T>(this IValueReader valueReader, XBindingFlags flags = XBindingFlags.UseDefault)
+        public static T? XReadObject<T>(this IValueReader valueReader, XBindingFlags flags = XBindingFlags.UseDefault)
         {
             var rw = XObjectRW.Create<T>(flags);
 
             valueReader.ReadObject(rw);
 
-            return (T)rw.Content;
+            return (T?)rw.Content;
         }
 
         /// <summary>
@@ -592,6 +547,14 @@ namespace Swifter.RW
             rw.Content = obj;
 
             valueWriter.WriteObject(rw);
+        }
+
+        /// <summary>
+        /// 写入一个空数组。
+        /// </summary>
+        public static unsafe void WriteEmptyArray<T>(this IFastArrayValueWriter valueWriter)
+        {
+            valueWriter.WriteArray(ref Unsafe.AsRef<T?>(null), 0);
         }
     }
 }

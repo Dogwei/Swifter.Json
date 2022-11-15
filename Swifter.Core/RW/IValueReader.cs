@@ -1,5 +1,6 @@
 ﻿
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Swifter.RW
 {
@@ -9,126 +10,134 @@ namespace Swifter.RW
     public interface IValueReader
     {
         /// <summary>
-        /// 读取 Int64 值。
+        /// 读取 <see cref="Int64"/> 值。
         /// </summary>
-        /// <returns>返回一个 long 值。</returns>
         long ReadInt64();
 
         /// <summary>
-        /// 读取 Double 值。
+        /// 读取 <see cref="Double"/> 值。
         /// </summary>
-        /// <returns>返回一个 double 值。</returns>
         double ReadDouble();
 
         /// <summary>
-        /// 读取 String 值。
+        /// 读取 <see cref="String"/> 值。
         /// </summary>
-        /// <returns>返回一个 string 值。</returns>
-        string ReadString();
+        string? ReadString();
 
         /// <summary>
-        /// 读取 Boolean 值。
+        /// 读取 <see cref="Boolean"/> 值。
         /// </summary>
-        /// <returns>返回一个 bool 值。</returns>
         bool ReadBoolean();
 
         /// <summary>
-        /// 读取 Byte 值。
+        /// 读取 <see cref="Byte"/> 值。
         /// </summary>
-        /// <returns>返回一个 byte 值。</returns>
         byte ReadByte();
 
         /// <summary>
-        /// 读取 Char 值。
+        /// 读取 <see cref="Char"/> 值。
         /// </summary>
-        /// <returns>返回一个 char 值。</returns>
         char ReadChar();
 
         /// <summary>
-        /// 读取 DateTime 值。
+        /// 读取 <see cref="DateTime"/> 值。
         /// </summary>
-        /// <returns>返回一个 DateTime 值。</returns>
         DateTime ReadDateTime();
 
         /// <summary>
-        /// 读取 Decimal 值。
+        /// 读取一个 <see cref="DateTimeOffset"/> 值。
         /// </summary>
-        /// <returns>返回一个 decimal 值。</returns>
+        DateTimeOffset ReadDateTimeOffset();
+
+        /// <summary>
+        /// 读取一个 <see cref="TimeSpan"/> 值。
+        /// </summary>
+        TimeSpan ReadTimeSpan();
+
+        /// <summary>
+        /// 读取一个 <see cref="Guid"/> 值。
+        /// </summary>
+        Guid ReadGuid();
+
+        /// <summary>
+        /// 读取 <see cref="Decimal"/> 值。
+        /// </summary>
         decimal ReadDecimal();
 
         /// <summary>
-        /// 读取 Int16 值。
+        /// 读取 <see cref="Int16"/> 值。
         /// </summary>
-        /// <returns>返回一个 short 值。</returns>
         short ReadInt16();
 
         /// <summary>
-        /// 读取 Int32 值。
+        /// 读取 <see cref="Int32"/> 值。
         /// </summary>
-        /// <returns>返回一个 int 值。</returns>
         int ReadInt32();
 
         /// <summary>
-        /// 读取 SByte 值。
+        /// 读取 <see cref="SByte"/> 值。
         /// </summary>
-        /// <returns>返回一个 sbyte 值。</returns>
         sbyte ReadSByte();
 
         /// <summary>
-        /// 读取 Single 值。
+        /// 读取 <see cref="Single"/> 值。
         /// </summary>
-        /// <returns>返回一个 float 值。</returns>
         float ReadSingle();
 
         /// <summary>
-        /// 读取 UInt16 值。
+        /// 读取 <see cref="UInt16"/> 值。
         /// </summary>
-        /// <returns>返回一个 ushort 值。</returns>
         ushort ReadUInt16();
 
         /// <summary>
-        /// 读取 UInt32 值。
+        /// 读取 <see cref="UInt32"/> 值。
         /// </summary>
-        /// <returns>返回一个 uint 值。</returns>
         uint ReadUInt32();
 
         /// <summary>
-        /// 读取 UInt64 值。
+        /// 读取 <see cref="UInt64"/> 值。
         /// </summary>
-        /// <returns>返回一个 ulong 值。</returns>
         ulong ReadUInt64();
 
         /// <summary>
         /// 读取一个对象数据结构。
         /// </summary>
-        /// <param name="valueWriter">数据写入器</param>
-        void ReadObject(IDataWriter<string> valueWriter);
+        /// <param name="dataWriter">数据写入器</param>
+        void ReadObject(IDataWriter<string> dataWriter);
 
         /// <summary>
         /// 读取一个数组数据结构。
         /// </summary>
-        /// <param name="valueWriter">数据写入器</param>
-        void ReadArray(IDataWriter<int> valueWriter);
+        /// <param name="dataWriter">数组结构的写入器</param>
+        void ReadArray(IDataWriter<int> dataWriter);
 
         /// <summary>
-        /// 直接读取一个值。
+        /// 直接获取该值。
         /// </summary>
-        /// <returns>返回一个未知类型的值。</returns>
-        object DirectRead();
+        object? DirectRead();
+
+        /// <summary>
+        /// 舍弃当前值。
+        /// </summary>
+        void Pop();
 
         /// <summary>
         /// 读取一个可空类型。注意：不可依赖此方法读取非空类型的值。
         /// </summary>
-        /// <typeparam name="T">一个值类型</typeparam>
-        /// <returns>返回一个可空类型的值</returns>
+        /// <typeparam name="T">值类型</typeparam>
         T? ReadNullable<T>() where T : struct;
 
         /// <summary>
         /// 读取一个枚举。
         /// </summary>
         /// <typeparam name="T">枚举类型</typeparam>
-        /// <returns>返回一个枚举值</returns>
         T ReadEnum<T>() where T : struct, Enum;
+
+        /// <summary>
+        /// 获取值的类型。
+        /// <see langword="null"/> 表示未知类型。
+        /// </summary>
+        Type? ValueType { get; }
     }
 
     /// <summary>
@@ -141,6 +150,6 @@ namespace Swifter.RW
         /// 读取该类型的值。
         /// </summary>
         /// <returns>返回该类型的值</returns>
-        T ReadValue();
+        T? ReadValue();
     }
 }

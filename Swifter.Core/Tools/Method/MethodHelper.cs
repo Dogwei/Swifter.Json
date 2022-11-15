@@ -1,29 +1,14 @@
-﻿using System;
+﻿using InlineIL;
+using System;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-
 using static Swifter.Tools.InternalMethodHelper;
-
-#pragma warning disable
-
 
 namespace Swifter.Tools
 {
-    static class InternalMethodHelper
-    {
-        public static readonly int _methodPtrAux =
-            typeof(Delegate).GetField(nameof(_methodPtrAux), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) is FieldInfo fieldInfo ? TypeHelper.OffsetOf(fieldInfo) : -1;
-
-        public static readonly int _methodPtr =
-            typeof(Delegate).GetField(nameof(_methodPtr), BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) is FieldInfo fieldInfo ? TypeHelper.OffsetOf(fieldInfo) : -1;
-
-        public static bool? override_is_available = null;
-
-    }
-
     /// <summary>
     /// 函数帮助工具类。
     /// </summary>
@@ -32,7 +17,6 @@ namespace Swifter.Tools
         private const string InvokeMethodName = nameof(Action.Invoke);
         private const string DynamicInvokeImplName = "DynamicInvokeImpl";
 
-
         /// <summary>
         /// 创建一个指定类型的委托。
         /// </summary>
@@ -40,20 +24,9 @@ namespace Swifter.Tools
         /// <param name="methodInfo">需要创建委托的方法</param>
         /// <param name="throwExceptions">当参数或返回值类型不兼容时是否发生异常。</param>
         /// <returns>返回一个委托或 Null。</returns>
-        public static T CreateDelegate<T>(MethodBase methodInfo, bool throwExceptions = true) where T : Delegate
+        public static T? CreateDelegate<T>(MethodBase methodInfo, bool throwExceptions = true) where T : Delegate
         {
-            return Underlying.As<T>(CreateDelegate(typeof(T), methodInfo, throwExceptions));
-        }
-
-        /// <summary>
-        /// 创建一个未知类型的委托。
-        /// </summary>
-        /// <param name="methodInfo">需要创建委托的方法</param>
-        /// <param name="throwExceptions">当参数或返回值类型不兼容时是否发生异常。</param>
-        /// <returns>返回一个委托或 Null。</returns>
-        public static Delegate CreateDelegate(MethodBase methodInfo, bool throwExceptions = true)
-        {
-            return CreateDelegate(null, methodInfo, throwExceptions);
+            return Unsafe.As<T>(CreateDelegate(typeof(T), methodInfo, throwExceptions));
         }
 
         /// <summary>
@@ -63,39 +36,22 @@ namespace Swifter.Tools
         /// <param name="methodBase">需要创建委托的方法</param>
         /// <param name="throwExceptions">当参数或返回值类型不兼容时是否发生异常。</param>
         /// <returns>返回一个委托或 Null。</returns>
-        public static Delegate CreateDelegate(Type delegateType, MethodBase methodBase, bool throwExceptions)
+        public static Delegate? CreateDelegate(Type delegateType, MethodBase methodBase, bool throwExceptions)
         {
-            if (methodBase is null) 
-                throw new ArgumentNullException(nameof(methodBase));
-
             if (methodBase.ContainsGenericParameters)
-                throw new ArgumentException("Can't create a delegate for a generic method.");
+                return throwExceptions ? throw new ArgumentException("Can't create a delegate for a generic method.") : default(Delegate);
 
-            var constructorInfo = methodBase as ConstructorInfo;
-            var methodInfo = methodBase as MethodInfo;
+            if (methodBase is not ConstructorInfo and not MethodInfo)
+                return throwExceptions ? throw new ArgumentException("Can't create a delegate for a unknow method.") : default(Delegate);
 
-            if (constructorInfo is null && methodInfo is null)
-                throw new ArgumentException("Can't create a delegate for a unknow method.");
-
-            GetParametersTypes(methodBase, out var targetParametersTypes, out var sourceReturnType);
-
-            if (delegateType is null)
-            {
-                delegateType = InternalGetDelegateType(targetParametersTypes, sourceReturnType);
-
-                if (delegateType is null)
-                    goto Failed;
-
-                goto Create;
-            }
-
-            GetParametersTypes(delegateType, out var sourceParametersTypes, out var targetReturnType);
+            GetSignature(methodBase, out var targetParametersTypes, out var sourceReturnType);
+            GetSignature(delegateType, out var sourceParametersTypes, out var targetReturnType);
 
             if (sourceParametersTypes.Length != targetParametersTypes.Length)
-                throw new ArgumentException("Parameter quantity does not match.");
+                return throwExceptions ? throw new ArgumentException("Parameter quantity does not match.") : default(Delegate);
 
             if (sourceReturnType != targetReturnType && (sourceReturnType == typeof(void) || targetReturnType == typeof(void)))
-                throw new ArgumentException("Return type does not match.");
+                return throwExceptions ? throw new ArgumentException("Return type does not match.") : default(Delegate);
 
             if (throwExceptions)
             {
@@ -107,27 +63,30 @@ namespace Swifter.Tools
                     throw new ArgumentException("Return type does not match.");
             }
 
-            Create:
+            {
+                if (methodBase is ConstructorInfo && InternalCreateDelegateByPointer(delegateType, methodBase) is Delegate result)
+                    return result;
+            }
 
-            if (methodInfo != null && methodInfo is DynamicMethod dynamicMethod)
-                return dynamicMethod.CreateDelegate(delegateType);
+            if (methodBase is DynamicMethod dynamicMethod)
+            {
+                try
+                {
+                    return dynamicMethod.CreateDelegate(delegateType);
+                }
+                catch (ArgumentException)
+                {
+                    return InternalCreateDelegateByPointer(delegateType, dynamicMethod);
+                }
+            }
 
-            if (constructorInfo != null)
-                return InternalCreateDelegateByPointer(delegateType, constructorInfo);
-
-            if (methodInfo.IsStatic)
-                return InternalCreateDelegateByPointer(delegateType, methodInfo);
-
-            if (InternalCreateDelegateBySystem(delegateType, methodInfo) is Delegate result)
-                return result;
+            {
+                if (InternalCreateDelegateBySystem(delegateType, Unsafe.As<MethodInfo>(methodBase)) is Delegate result)
+                    return result;
+            }
 
             if (VersionDifferences.IsSupportEmit)
-                return InternalCreateDelegateByProxy(delegateType, methodInfo);
-
-            if (InternalCreateDelegateByDefault(methodInfo) is Delegate @delegate)
-                return @delegate;
-
-            Failed:
+                return InternalCreateDelegateByDynamicMethodProxy(delegateType, Unsafe.As<MethodInfo>(methodBase));
 
             if (throwExceptions)
                 throw new NotSupportedException("Failed to create delegate.");
@@ -136,32 +95,92 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="methodBase"></param>
+        /// <returns></returns>
+        public static Delegate? CreateDynamicDelegate(MethodBase methodBase)
+        {
+            GetSignature(methodBase, out var parameterTypes, out var returnType);
+
+            Type? delegateType;
+
+            if (VersionDifferences.IsSupportEmit)
+            {
+                delegateType = DefineDelegateType(parameterTypes, returnType);
+            }
+            else
+            {
+                for (int i = 0; i < parameterTypes.Length; i++)
+                {
+                    ref var parameterType = ref parameterTypes[i];
+
+                    if (parameterType.IsPointer || parameterType.IsByRef)
+                    {
+                        parameterType = typeof(IntPtr);
+                    }
+                }
+
+                if (returnType.IsPointer || returnType.IsByRef)
+                {
+                    returnType = typeof(IntPtr);
+                }
+
+                delegateType = MakeGenericDelegateType(parameterTypes, returnType);
+            }
+
+            if (delegateType is null)
+            {
+                return null;
+            }
+
+            return CreateDelegate(delegateType, methodBase, false);
+        }
+
+        /// <summary>
         /// 使用系统绑定方式创建委托。
         /// </summary>
-        private static Delegate InternalCreateDelegateBySystem(Type delegateType, MethodInfo methodInfo)
+        private static Delegate? InternalCreateDelegateBySystem(Type delegateType, MethodInfo methodInfo)
         {
-            return Delegate.CreateDelegate(delegateType, methodInfo, false);
+            try
+            {
+                return Delegate.CreateDelegate(delegateType, methodInfo, false);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
         /// 使用函数指针方式创建委托。
         /// </summary>
-        private static Delegate InternalCreateDelegateByPointer(Type delegateType, MethodBase methodInfo)
+        private static Delegate? InternalCreateDelegateByPointer(Type delegateType, MethodBase methodInfo)
         {
-            return (Delegate)Activator.CreateInstance(
-                delegateType,
-                BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
-                null,
-                new object[] { null, methodInfo.MethodHandle.GetFunctionPointer() },
-                null);
+            try
+            {
+                var constructor = delegateType
+                    .GetConstructor(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance, null, new Type[] { typeof(object), typeof(IntPtr) }, null);
+
+                if (constructor is null)
+                {
+                    return null;
+                }
+
+                return (Delegate)constructor.Invoke(new object?[] { null, methodInfo.GetFunctionPointer() });
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
         /// 使用动态方法代理模式创建委托。
         /// </summary>
-        private static Delegate InternalCreateDelegateByProxy(Type delegateType, MethodInfo methodInfo)
+        private static Delegate InternalCreateDelegateByDynamicMethodProxy(Type delegateType, MethodInfo methodInfo)
         {
-            GetParametersTypes(delegateType, out var parameterTypes, out var returnType);
+            GetSignature(delegateType, out var parameterTypes, out var returnType);
 
             var dynamicMethod = new DynamicMethod(
                 $"{nameof(MethodHelper)}_{Guid.NewGuid():N}",
@@ -177,28 +196,11 @@ namespace Swifter.Tools
                 ilGen.LoadArgument(i);
             }
 
-            ilGen.Call(methodInfo);
+            ilGen.AutoCall(methodInfo);
 
             ilGen.Return();
 
             return dynamicMethod.CreateDelegate(delegateType);
-        }
-
-        /// <summary>
-        /// 使用默认方式创建委托。
-        /// </summary>
-        private static Delegate InternalCreateDelegateByDefault(MethodInfo methodInfo)
-        {
-            GetParametersTypes(methodInfo, out var parametersTypes, out var returnType);
-
-            var delegateType = InternalGetDelegateType(parametersTypes, returnType);
-
-            if (delegateType is null)
-            {
-                return null;
-            }
-
-            return InternalCreateDelegateBySystem(delegateType, methodInfo);
         }
 
         /// <summary>
@@ -207,11 +209,11 @@ namespace Swifter.Tools
         /// <param name="delegateType">委托类型</param>
         /// <param name="parameterTypes">返回参数类型集合</param>
         /// <param name="returnType">返回返回值类型</param>
-        public static void GetParametersTypes(Type delegateType, out Type[] parameterTypes, out Type returnType)
+        public static void GetSignature(Type delegateType, out Type[] parameterTypes, out Type returnType)
         {
-            var method = delegateType.GetMethod(InvokeMethodName);
+            var method = delegateType.GetMethod(InvokeMethodName)!;
 
-            parameterTypes = method.GetParameters().Map(item => item.ParameterType);
+            parameterTypes = method.GetParameterTypes();
 
             returnType = method.ReturnType;
         }
@@ -222,13 +224,14 @@ namespace Swifter.Tools
         /// <param name="methodInfo">方法</param>
         /// <param name="parameterTypes">返回参数类型集合</param>
         /// <param name="returnType">返回返回值类型</param>
-        public static void GetParametersTypes(MethodBase methodInfo, out Type[] parameterTypes, out Type returnType)
+        public static void GetSignature(MethodBase methodInfo, out Type[] parameterTypes, out Type returnType)
         {
-            returnType = (methodInfo as MethodInfo)?.ReturnType ?? typeof(void);
+            returnType = (methodInfo as MethodInfo)?.ReturnType 
+                ?? typeof(void);
 
             if (methodInfo.IsStatic)
             {
-                parameterTypes = methodInfo.GetParameters().Map(element => element.ParameterType);
+                parameterTypes = methodInfo.GetParameterTypes();
             }
             else
             {
@@ -236,9 +239,8 @@ namespace Swifter.Tools
 
                 parameterTypes = new Type[parameters.Length + 1];
 
-                parameterTypes[0] = methodInfo.DeclaringType switch
+                parameterTypes[0] = methodInfo.DeclaringType! switch
                 {
-                    var declaringType when declaringType.IsByRefLike() => MakeByRefType(declaringType),
                     var declaringType when declaringType.IsValueType => declaringType.MakeByRefType(),
                     var declaringType => declaringType
                 };
@@ -248,27 +250,24 @@ namespace Swifter.Tools
                     parameterTypes[i + 1] = parameters[i].ParameterType;
                 }
             }
+        }
 
-            static Type MakeByRefType(Type declaringType)
+        /// <summary>
+        /// 获取方法的参数类型集合。
+        /// </summary>
+        /// <param name="methodBase">方法</param>
+        /// <returns>返回参数类型集合</returns>
+        public static Type[] GetParameterTypes(this MethodBase methodBase)
+        {
+            var parameters = methodBase.GetParameters();
+            var parameterTypes = new Type[parameters.Length];
+
+            for (int i = 0; i < parameters.Length; i++)
             {
-                try
-                {
-                    return declaringType.MakeByRefType();
-                }
-                catch
-                {
-                }
-
-                try
-                {
-                    return declaringType.MakePointerType();
-                }
-                catch
-                {
-                }
-
-                return typeof(IntPtr);
+                parameterTypes[i] = parameters[i].ParameterType;
             }
+
+            return parameterTypes;
         }
 
         /// <summary>
@@ -278,7 +277,7 @@ namespace Swifter.Tools
         /// <param name="parameterTypes">参数类型集合</param>
         /// <param name="returnType">返回值类型</param>
         /// <returns>返回一个委托类型</returns>
-        public static Type MakeDelegateType(Type[] parameterTypes, Type returnType)
+        public static Type? MakeGenericDelegateType(Type[] parameterTypes, Type returnType)
         {
             foreach (var item in parameterTypes)
             {
@@ -319,27 +318,31 @@ namespace Swifter.Tools
                     return null;
                 }
 
-                var tParameterTypes = ArrayHelper.Merge(parameterTypes, returnType);
+                var genericTypes = parameterTypes;
+
+                Array.Resize(ref genericTypes, genericTypes.Length + 1);
+
+                genericTypes.Last() = returnType;
 
                 return parameterTypes.Length switch
                 {
-                    00 => typeof(Func<>).MakeGenericType(tParameterTypes),
-                    01 => typeof(Func<,>).MakeGenericType(tParameterTypes),
-                    02 => typeof(Func<,,>).MakeGenericType(tParameterTypes),
-                    03 => typeof(Func<,,,>).MakeGenericType(tParameterTypes),
-                    04 => typeof(Func<,,,,>).MakeGenericType(tParameterTypes),
-                    05 => typeof(Func<,,,,,>).MakeGenericType(tParameterTypes),
-                    06 => typeof(Func<,,,,,,>).MakeGenericType(tParameterTypes),
-                    07 => typeof(Func<,,,,,,,>).MakeGenericType(tParameterTypes),
-                    08 => typeof(Func<,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    09 => typeof(Func<,,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    10 => typeof(Func<,,,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    11 => typeof(Func<,,,,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    12 => typeof(Func<,,,,,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    13 => typeof(Func<,,,,,,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    14 => typeof(Func<,,,,,,,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    15 => typeof(Func<,,,,,,,,,,,,,,,>).MakeGenericType(tParameterTypes),
-                    16 => typeof(Func<,,,,,,,,,,,,,,,,>).MakeGenericType(tParameterTypes),
+                    00 => typeof(Func<>).MakeGenericType(genericTypes),
+                    01 => typeof(Func<,>).MakeGenericType(genericTypes),
+                    02 => typeof(Func<,,>).MakeGenericType(genericTypes),
+                    03 => typeof(Func<,,,>).MakeGenericType(genericTypes),
+                    04 => typeof(Func<,,,,>).MakeGenericType(genericTypes),
+                    05 => typeof(Func<,,,,,>).MakeGenericType(genericTypes),
+                    06 => typeof(Func<,,,,,,>).MakeGenericType(genericTypes),
+                    07 => typeof(Func<,,,,,,,>).MakeGenericType(genericTypes),
+                    08 => typeof(Func<,,,,,,,,>).MakeGenericType(genericTypes),
+                    09 => typeof(Func<,,,,,,,,,>).MakeGenericType(genericTypes),
+                    10 => typeof(Func<,,,,,,,,,,>).MakeGenericType(genericTypes),
+                    11 => typeof(Func<,,,,,,,,,,,>).MakeGenericType(genericTypes),
+                    12 => typeof(Func<,,,,,,,,,,,,>).MakeGenericType(genericTypes),
+                    13 => typeof(Func<,,,,,,,,,,,,,>).MakeGenericType(genericTypes),
+                    14 => typeof(Func<,,,,,,,,,,,,,,>).MakeGenericType(genericTypes),
+                    15 => typeof(Func<,,,,,,,,,,,,,,,>).MakeGenericType(genericTypes),
+                    16 => typeof(Func<,,,,,,,,,,,,,,,,>).MakeGenericType(genericTypes),
                     _ => null
                 };
             }
@@ -351,38 +354,75 @@ namespace Swifter.Tools
         /// <param name="parameterTypes">参数类型集合</param>
         /// <param name="returnType">返回值类型</param>
         /// <returns>返回一个字符串</returns>
-        private static string GetDefineDelegateName(Type[] parameterTypes, Type returnType)
+        private static string GetDelegateDefinitionName(Type[] parameterTypes, Type returnType)
         {
-            const string Prefix = "Swifter.Dynamic.";
-            var delegateName = returnType == typeof(void) ? "Action" : "Func";
+            var numberHelper = NumberHelper.GetOrCreateInstance(62);
+            var maxHandle = parameterTypes.Max(x => (ulong)x.TypeHandle.Value);
 
-            var text = StringHelper.MakeString((parameterTypes.Length + 1) * NumberHelper.GuidStringLength);
+            bool isVoidReturnType = returnType == typeof(void);
 
-            fixed(char* ptr = text)
+            var delegateName
+                = isVoidReturnType
+                ? "Swifter.Dynamic.Action"
+                : "Swifter.Dynamic.Func";
+
+            if (!isVoidReturnType)
+            {
+                maxHandle = Math.Max(maxHandle, (ulong)returnType.TypeHandle.Value);
+            }
+
+            var maxHandleLength = numberHelper.GetLength(maxHandle);
+
+            var resultLength = delegateName.Length + maxHandleLength * parameterTypes.Length;
+
+            if (!isVoidReturnType)
+            {
+                resultLength += maxHandleLength;
+            }
+
+            var result = StringHelper.MakeString(resultLength);
+
+            fixed (char* chars = result)
             {
                 int offset = 0;
 
-                for (int i = 0; i < parameterTypes.Length; i++)
+                Unsafe.CopyBlock(
+                    ref Unsafe.As<char, byte>(ref Unsafe.AsRef(StringHelper.GetRawStringData(delegateName))),
+                    ref Unsafe.As<char, byte>(ref chars[offset]),
+                    (uint)(delegateName.Length * sizeof(char))
+                    );
+                offset += delegateName.Length;
+
+                foreach (var parameterType in parameterTypes)
                 {
-                    offset += NumberHelper.ToString(parameterTypes[i].GUID, ptr + offset, false);
+                    numberHelper.ToString(
+                        (ulong)parameterType.TypeHandle.Value,
+                        maxHandleLength,
+                        chars + offset
+                        );
+                    offset += maxHandleLength;
                 }
 
-                offset += NumberHelper.ToString(returnType.GUID, ptr + offset, false);
-
-                if (offset != text.Length)
+                if (!isVoidReturnType)
                 {
-                    throw new NotSupportedException();
+                    numberHelper.ToString(
+                        (ulong)returnType.TypeHandle.Value,
+                        maxHandleLength,
+                        chars + offset
+                        );
+                    offset += maxHandleLength;
                 }
+
+                VersionDifferences.Assert(offset == resultLength);
             }
 
-            var sign = text.ComputeHash<MD5>();
-
-            return $"{Prefix}{delegateName}_{sign}";
+            return result;
         }
 
         /// <summary>
-        /// 在动态程序集中定义一个委托类型。如果动态程序集中已有相同的委托类型，则直接返回该委托类型。
-        /// 如果创建失败（仅当平台不支持 Emit 时）则返回 Null。
+        /// 在动态程序集中定义一个委托类型。如果动态程序集中已有相同的委托类型，则直接返回该委托类型。<br/>
+        /// 如果创建失败则返回 Null。<br/>
+        /// 通常情况下仅当平台不支持 Emit 时会创建失败。<br/>
         /// </summary>
         /// <param name="parameterTypes">参数类型集合</param>
         /// <param name="returnType">返回值类型</param>
@@ -391,10 +431,10 @@ namespace Swifter.Tools
         {
             if (!VersionDifferences.IsSupportEmit)
             {
-                return null;
+                throw new NotSupportedException("Does not support Emit.");
             }
 
-            var delegateName = GetDefineDelegateName(parameterTypes, returnType);
+            var delegateName = GetDelegateDefinitionName(parameterTypes, returnType);
 
             if (DynamicAssembly.GetType(delegateName) is Type definedType)
             {
@@ -422,108 +462,84 @@ namespace Swifter.Tools
 
             invokeBuilder.SetImplementationFlags(MethodImplAttributes.Runtime);
 
-            InternalOverrideDynamicInvokeImpl(delegateBuilder, invokeBuilder, parameterTypes, returnType);
+            OverrideDynamicInvokeImpl(delegateBuilder, invokeBuilder, parameterTypes, returnType);
 
-            return delegateBuilder.CreateTypeInfo();
+            return delegateBuilder.CreateTypeInfo()!;
 
-            static void InternalOverrideDynamicInvokeImpl(TypeBuilder delegateBuilder, MethodInfo invokeMethod, Type[] parametersTypes, Type returnType)
+        }
+
+        private static void OverrideDynamicInvokeImpl(TypeBuilder delegateBuilder, MethodInfo invokeMethod, Type[] parametersTypes, Type returnType)
+        {
+            var dynamicInvokeMethodBuilder = delegateBuilder.DefineMethod(
+                DynamicInvokeImplName,
+                MethodAttributes.Family | MethodAttributes.HideBySig | MethodAttributes.Virtual,
+                CallingConventions.Standard,
+                typeof(object),
+                new Type[] { typeof(object[]) });
+
+            var ilGen = dynamicInvokeMethodBuilder.GetILGenerator();
+            
+            ilGen.LoadArgument(0);
+
+            for (int i = 0; i < parametersTypes.Length; i++)
             {
-                if (returnType.IsByRef || returnType.IsByRefLike())
-                {
-                    return;
-                }
+                var item = parametersTypes[i];
 
-                foreach (var item in parametersTypes)
+                ilGen.LoadArgument(1);
+                ilGen.LoadConstant(i);
+
+                if (item.IsAddressType())
                 {
-                    if (item.IsByRefLike())
+                    ilGen.LoadReferenceElement();
+                    ilGen.Duplicate();
+                    ilGen.IsInstance(typeof(IntPtr));
+
+                    var nextLabel = ilGen.DefineLabel();
+
+                    ilGen.BranchTrue(nextLabel);
+
+                    if (item.IsPointer || item.IsByRef)
                     {
-                        return;
-                    }
-                }
-
-                var dynamicInvokeMethodBuilder = delegateBuilder.DefineMethod(
-                    DynamicInvokeImplName,
-                    MethodAttributes.Family | MethodAttributes.HideBySig | MethodAttributes.Virtual,
-                    CallingConventions.Standard,
-                    typeof(object),
-                    new Type[] { typeof(object[]) });
-
-                var ilGen = dynamicInvokeMethodBuilder.GetILGenerator();
-
-                ilGen.LoadArgument(0);
-
-                for (int i = 0; i < parametersTypes.Length; i++)
-                {
-                    var item = parametersTypes[i];
-
-                    ilGen.LoadArgument(1);
-                    ilGen.LoadConstant(i);
-
-                    if (item.IsByRef)
-                    {
-                        item = item.GetElementType();
-
-                        ilGen.LoadReferenceElement();
-                        ilGen.CastClass(item);
-
-                        if (item.IsValueType)
-                        {
-                            ilGen.Unbox(item);
-                        }
-                        else
-                        {
-                            ilGen.Pop();
-                            ilGen.LoadArgument(1);
-                            ilGen.LoadConstant(i);
-                            ilGen.LoadElementAddress(typeof(object));
-                        }
-
-                        continue;
+                        ilGen.ThrowException(typeof(ArgumentException));
                     }
                     else
                     {
-                        ilGen.LoadReferenceElement();
                         ilGen.CastClass(item);
-
-                        if (item.IsValueType)
-                        {
-                            ilGen.UnboxAny(item);
-                        }
+                        ilGen.UnboxAny(item);
                     }
-                }
 
-                ilGen.Call(invokeMethod);
-
-                if (returnType == typeof(void))
-                {
-                    ilGen.LoadNull();
+                    ilGen.MarkLabel(nextLabel);
+                    ilGen.UnboxAny(typeof(IntPtr));
                 }
-                else if (returnType.IsPointer)
+                else if (item.IsClass)
                 {
-                    ilGen.Box(typeof(IntPtr));
+                    ilGen.LoadReferenceElement();
+                    ilGen.CastClass(item);
                 }
-                else if (returnType.IsValueType)
+                else
                 {
-                    ilGen.Box(returnType);
+                    ilGen.LoadReferenceElement();
+                    ilGen.CastClass(item);
+                    ilGen.UnboxAny(item);
                 }
-
-                ilGen.Return();
             }
-        }
 
-        private static Type InternalGetDelegateType(Type[] parameterTypes, Type returnType)
-        {
-            if (DefineDelegateType(parameterTypes, returnType) is Type dynamicDelegateType)
+            ilGen.AutoCall(invokeMethod);
+
+            if (returnType == typeof(void))
             {
-                return dynamicDelegateType;
+                ilGen.LoadNull();
             }
-
-            if (MakeDelegateType(parameterTypes, returnType) is Type genericDelegateType)
+            else if (returnType.IsAddressType())
             {
-                return genericDelegateType;
+                ilGen.Box(typeof(IntPtr));
+            }
+            else if (returnType.IsValueType)
+            {
+                ilGen.Box(returnType);
             }
 
-            return null;
+            ilGen.Return();
         }
 
         /// <summary>
@@ -545,7 +561,7 @@ namespace Swifter.Tools
         /// <returns>返回是否成功</returns>
         public static unsafe bool Override(MethodBase sourceMethod, IntPtr targetMethodPointer)
         {
-            if (override_is_available == false)
+            if (OverrideIsAvailable == false)
             {
                 return false;
             }
@@ -562,7 +578,7 @@ namespace Swifter.Tools
 
             var jmp = new Jmp((int)offset);
 
-            Underlying.CopyBlockUnaligned(source, &jmp, (uint)sizeof(Jmp));
+            Unsafe.CopyBlockUnaligned(source, &jmp, (uint)sizeof(Jmp));
 
             return true;
         }
@@ -570,92 +586,36 @@ namespace Swifter.Tools
         /// <summary>
         /// 获取 Override 方法是否可用。
         /// </summary>
-        public static bool OverrideIsAvailable
-        {
-            get
-            {
-                if (override_is_available is null)
-                {
-                    try
-                    {
-                        Override(
-                            typeof(MethodHelper).GetMethod(nameof(TestSource), BindingFlags.NonPublic | BindingFlags.Static),
-                            typeof(MethodHelper).GetMethod(nameof(TestTarget), BindingFlags.NonPublic | BindingFlags.Static)
-                            );
-
-                        override_is_available = TestSource(12, 18) == TestTarget(12, 18);
-                    }
-                    catch
-                    {
-                        override_is_available = false;
-                    }
-
-                }
-
-                return override_is_available.Value;
-            }
-        }
-
-        [MethodImpl(MethodImplOptions.NoOptimization | MethodImplOptions.NoInlining)]
-        static int TestSource(int x, int y) => x + y;
-
-        [MethodImpl(MethodImplOptions.NoOptimization | MethodImplOptions.NoInlining)]
-        static int TestTarget(int x, int y) => x * y;
+        public static bool OverrideIsAvailable => GetOverrideIsAvailable();
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static RuntimeMethodHandle GetMethodDescriptor(DynamicMethod dynamicMethod)
         {
-            MethodInfo method = null;
-
-            try
+            if (GetPtrOfGetMethodDescriptor() is null)
             {
-                method = typeof(DynamicMethod).GetMethod(nameof(GetMethodDescriptor), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-
-                if (method != null)
-                {
-                    if (method.GetParameters().Length != 0 || method.ReturnType != typeof(RuntimeMethodHandle))
-                    {
-                        method = null;
-                    }
-                }
-
-                return (RuntimeMethodHandle)method.Invoke(dynamicMethod, null);
+                throw new NotSupportedException();
             }
-            finally
-            {
-                if (method != null && OverrideIsAvailable)
-                {
-                    Override(MethodOf<DynamicMethod, RuntimeMethodHandle>(GetMethodDescriptor), method);
-                }
-            }
+
+            IL.Push(dynamicMethod);
+            IL.Push(GetPtrOfGetMethodDescriptor());
+            IL.Emit.Calli(StandAloneMethodSig.ManagedMethod(CallingConventions.HasThis, typeof(RuntimeMethodHandle)));
+
+            return IL.Return<RuntimeMethodHandle>();
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static IntPtr GetNativeFunctionPointer(Delegate @delegate)
         {
-            MethodInfo method = null;
-
-            try
+            if (GetPtrOfGetNativeFunctionPointer() is null)
             {
-                method = typeof(Delegate).GetMethod(nameof(GetNativeFunctionPointer), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-
-                if (method != null)
-                {
-                    if (method.GetParameters().Length != 0 || method.ReturnType != typeof(IntPtr))
-                    {
-                        method = null;
-                    }
-                }
-
-                return (IntPtr)method.Invoke(@delegate, null);
+                throw new NotSupportedException();
             }
-            finally
-            {
-                if (method != null && OverrideIsAvailable)
-                {
-                    Override(MethodOf<Delegate, IntPtr>(GetNativeFunctionPointer), method);
-                }
-            }
+
+            IL.Push(@delegate);
+            IL.Push(GetPtrOfGetNativeFunctionPointer());
+            IL.Emit.Calli(StandAloneMethodSig.ManagedMethod(CallingConventions.HasThis, typeof(IntPtr)));
+
+            return IL.Return<IntPtr>();
         }
 
         /// <summary>
@@ -681,26 +641,14 @@ namespace Swifter.Tools
                 }
             }
 
-            if (!(@delegate.Target is null) && InternalMethodHelper._methodPtr >= 0)
+            if (@delegate.Target is not null && GetOffsetOfMethodPtr() >= 0)
             {
-                try
-                {
-                    return Underlying.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), InternalMethodHelper._methodPtr);
-                }
-                catch
-                {
-                }
+                return TypeHelper.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), GetOffsetOfMethodPtr());
             }
 
-            if (@delegate.Target is null && InternalMethodHelper._methodPtrAux >= 0)
+            if (@delegate.Target is null && GetOffsetOfMethodPtrAux() >= 0)
             {
-                try
-                {
-                    return Underlying.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), InternalMethodHelper._methodPtrAux);
-                }
-                catch
-                {
-                }
+                return TypeHelper.AddByteOffset(ref TypeHelper.Unbox<IntPtr>(@delegate), GetOffsetOfMethodPtrAux());
             }
 
             /* try MONO */
@@ -734,7 +682,9 @@ namespace Swifter.Tools
 
                 try
                 {
-                    if (CreateDelegate(dynamicMethod) is Delegate @delegate)
+                    GetSignature(methodBase, out var parameterTypes, out var returnType);
+
+                    if (CreateDelegate(DefineDelegateType(parameterTypes, returnType), methodBase, false) is Delegate @delegate)
                     {
                         return @delegate.GetFunctionPointer();
                     }
@@ -746,19 +696,5 @@ namespace Swifter.Tools
 
             return methodBase.MethodHandle.GetFunctionPointer();
         }
-
-        public static MethodInfo MethodOf(Action action) => action.Method;
-
-        public static MethodInfo MethodOf<TIn>(Action<TIn> action) => action.Method;
-
-        public static MethodInfo MethodOf<TIn1, TIn2>(Action<TIn1, TIn2> action) => action.Method;
-
-        public static MethodInfo MethodOf<TIn1, TIn2, TIn3>(Action<TIn1, TIn2, TIn3> action) => action.Method;
-
-        public static MethodInfo MethodOf<TOut>(Func<TOut> func) => func.Method;
-
-        public static MethodInfo MethodOf<TIn, TOut>(Func<TIn, TOut> func) => func.Method;
-
-        public static MethodInfo MethodOf<TIn1, TIn2, TOut>(Func<TIn1, TIn2, TOut> func) => func.Method;
     }
 }

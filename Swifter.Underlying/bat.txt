@@ -1,2 +1,0 @@
-ilmerge /t:library /v4 /xmlDocs /out:Swifter.Merged.dll Swifter.Json.dll Swifter.Core.dll Swifter.Unsafe.dll
-ilasm /dll /optimize /output:Swifter.Underlying.dll Swifter.Underlying.il /key:../Swifter.Underlying.snk /mdv:v2.0

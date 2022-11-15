@@ -1,11 +1,10 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 
 
-
-#pragma warning disable 1591
 
 namespace Swifter.RW
 {
@@ -19,11 +18,14 @@ namespace Swifter.RW
         /// </summary>
         public virtual string Format { get; set; }
         
+        /// <summary>
+        /// 此值无效。
+        /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public override Type InterfaceType
         {
-            get => typeof(Interface<>);
-            set { }
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
         }
 
         /// <summary>
@@ -42,13 +44,17 @@ namespace Swifter.RW
         /// <param name="firstArgument">值读写器实例</param>
         /// <param name="readValueMethod">值读取方法</param>
         /// <param name="writeValueMethod">值写入方法</param>
-        public override void GetBestMatchInterfaceMethod(Type fieldType, out object firstArgument, out MethodInfo readValueMethod, out MethodInfo writeValueMethod)
+        public override void GetBestMatchInterfaceMethod(Type fieldType, out object? firstArgument, out MethodInfo? readValueMethod, out MethodInfo? writeValueMethod)
         {
             if (typeof(IFormattable).IsAssignableFrom(fieldType))
             {
                 var type = typeof(Interface<>).MakeGenericType(fieldType);
 
-                firstArgument = Activator.CreateInstance(type, Format);
+                firstArgument = type.GetConstructor(
+                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance,
+                    Type.DefaultBinder, 
+                    new Type[] { typeof(string) }, 
+                    null)!.Invoke(new object[] { Format });
 
                 GetBestMatchInterfaceMethod(type, fieldType, out readValueMethod, out writeValueMethod);
             }
@@ -58,24 +64,46 @@ namespace Swifter.RW
             }
         }
 
+        /// <summary>
+        /// 格式化器值接口。
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public sealed class Interface<T> : IValueInterface<T> where T : IFormattable
         {
             readonly string format;
 
-            public Interface(string format)
+            internal Interface(string format)
             {
                 this.format = format;
             }
 
+            /// <summary>
+            /// 读取值。
+            /// </summary>
+            /// <param name="valueReader">值读取器</param>
+            /// <returns>返回值</returns>
+            [return: MaybeNull]
             public T ReadValue(IValueReader valueReader)
             {
                 return ValueInterface<T>.ReadValue(valueReader);
             }
 
-            public void WriteValue(IValueWriter valueWriter, T value)
+            /// <summary>
+            /// 写入格式化后的字符串。
+            /// </summary>
+            /// <param name="valueWriter">写入器</param>
+            /// <param name="value">值</param>
+            public void WriteValue(IValueWriter valueWriter, [AllowNull]T value)
             {
-                valueWriter.WriteString(value.ToString(format, CultureInfo.CurrentCulture));
+                if (value is null)
+                {
+                    valueWriter.DirectWrite(null);
+                }
+                else
+                {
+                    valueWriter.WriteString(value.ToString(format, CultureInfo.CurrentCulture));
+                }
             }
         }
     }

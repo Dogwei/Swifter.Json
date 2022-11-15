@@ -1,10 +1,9 @@
 ﻿using System.Runtime.CompilerServices;
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Buffers;
+using InlineIL;
+using System.Text;
 
-#if Vector
+#if Span
 
 using System.Numerics;
 
@@ -15,12 +14,9 @@ namespace Swifter.Tools
     /// <summary>
     /// 字符串辅助类
     /// </summary>
-    public static unsafe partial class StringHelper
+    public static unsafe class StringHelper
     {
-        /// <summary>
-        /// HashCode 的乘数。
-        /// </summary>
-        const int Mult = unchecked((int)0x97121819);
+        const ulong Seed = 0x97121819UL;
 
         /// <summary>
         /// 获取指定 utf-8 字符串的长度。
@@ -52,37 +48,23 @@ namespace Swifter.Tools
                 return false;
             }
 
-            var i = utf16x.Length;
+            var x = (ulong*)utf16x.Pointer;
+            var y = (ulong*)utf16y.Pointer;
+            var length = utf16x.Length;
 
-            while (i >= 4)
+            while (length >= 4)
             {
-                i -= 4;
-
-                if (*(long*)(utf16x.Pointer + i) != *(long*)(utf16y.Pointer + i))
+                if (*x != *y)
                 {
                     return false;
                 }
+
+                length -= 4;
+                ++x;
+                ++y;
             }
 
-            if (i >= 2)
-            {
-                i -= 2;
-
-                if (*(int*)(utf16x.Pointer + i) != *(int*)(utf16y.Pointer + i))
-                {
-                    return false;
-                }
-            }
-
-            if (i >= 1)
-            {
-                if (*(utf16x.Pointer) != *(utf16y.Pointer))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return ((*x ^ *y) & (~(ulong.MaxValue << (length * 16)))) == 0;
         }
 
         /// <summary>
@@ -99,47 +81,23 @@ namespace Swifter.Tools
                 return false;
             }
 
-            var i = utf8x.Length;
+            var x = (ulong*)utf8x.Pointer;
+            var y = (ulong*)utf8y.Pointer;
+            var length = utf8x.Length;
 
-            while (i >= 8)
+            while (length >= 8)
             {
-                i -= 8;
-
-                if (*(long*)(utf8x.Pointer + i) != *(long*)(utf8y.Pointer + i))
+                if (*x != *y)
                 {
                     return false;
                 }
+
+                length -= 8;
+                ++x;
+                ++y;
             }
 
-            if (i >= 4)
-            {
-                i -= 4;
-
-                if (*(int*)(utf8x.Pointer + i) != *(int*)(utf8y.Pointer + i))
-                {
-                    return false;
-                }
-            }
-
-            if (i >= 2)
-            {
-                i -= 2;
-
-                if (*(short*)(utf8x.Pointer + i) != *(short*)(utf8y.Pointer + i))
-                {
-                    return false;
-                }
-            }
-
-            if (i >= 1)
-            {
-                if (*(utf8x.Pointer) != *(utf8y.Pointer))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return ((*x ^ *y) & (~(ulong.MaxValue << (length * 8)))) == 0;
         }
 
         /// <summary>
@@ -150,7 +108,30 @@ namespace Swifter.Tools
         /// <returns>返回一个 bool 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool Equals(string strx, string stry)
-            => strx.Equals(stry);
+        {
+            if (strx.Length != stry.Length)
+            {
+                return false;
+            }
+
+            ref var x = ref Unsafe.As<char, ulong>(ref GetRawStringData(strx));
+            ref var y = ref Unsafe.As<char, ulong>(ref GetRawStringData(stry));
+            var length = strx.Length;
+
+            while (length >= 4)
+            {
+                if (x != y)
+                {
+                    return false;
+                }
+
+                length -= 4;
+                x = ref Unsafe.Add(ref x, 1);
+                y = ref Unsafe.Add(ref y, 1);
+            }
+
+            return ((x ^ y) & (~(ulong.MaxValue << (length * 16)))) == 0;
+        }
 
         /// <summary>
         /// 获取一个 utf-16 字符串的 Hash 值。
@@ -160,14 +141,22 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int GetHashCode(Ps<char> utf16)
         {
-            int r = 0;
+            var ptr = (ulong*)utf16.Pointer;
+            var length = utf16.Length;
 
-            for (int i = 0; i < utf16.Length; ++i)
+            ulong hash = Seed;
+
+            while (length >= 4)
             {
-                r ^= (utf16.Pointer[i] + i) * Mult;
+                hash ^= *ptr * hash;
+
+                length -= 4;
+                ++ptr;
             }
 
-            return r;
+            hash ^= (*ptr & (~(ulong.MaxValue << (length * 16)))) * hash;
+
+            return ((int)(hash >> 32)) ^ (int)hash;
         }
 
         /// <summary>
@@ -178,14 +167,22 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int GetHashCode(Ps<Utf8Byte> utf8)
         {
-            int r = 0;
+            var ptr = (ulong*)utf8.Pointer;
+            var length = utf8.Length;
 
-            for (int i = 0; i < utf8.Length; ++i)
+            ulong hash = Seed;
+
+            while (length >= 8)
             {
-                r ^= (utf8.Pointer[i] + i) * Mult;
+                hash ^= *ptr * hash;
+
+                length -= 8;
+                ++ptr;
             }
 
-            return r;
+            hash ^= (*ptr & (~(ulong.MaxValue << (length * 8)))) * hash;
+
+            return ((int)(hash >> 32)) ^ (int)hash;
         }
 
         /// <summary>
@@ -196,14 +193,22 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int GetHashCode(string str)
         {
-            int r = 0;
+            ref var ptr = ref Unsafe.As<char, ulong>(ref GetRawStringData(str));
+            var length = str.Length;
 
-            for (int i = 0; i < str.Length; ++i)
+            ulong hash = Seed;
+
+            while (length >= 4)
             {
-                r ^= (str[i] + i) * Mult;
+                hash ^= ptr * hash;
+
+                length -= 4;
+                ptr = ref Unsafe.Add(ref ptr, 1);
             }
 
-            return r;
+            hash ^= (ptr & (~(ulong.MaxValue << (length * 16)))) * hash;
+
+            return ((int)(hash >> 32)) ^ (int)hash;
         }
 
         /// <summary>
@@ -215,20 +220,30 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool EqualsWithIgnoreCase(Ps<char> utf16x, Ps<char> utf16y)
         {
+            const ulong lower = 0x2020202020202020;
+
             if (utf16x.Length != utf16y.Length)
             {
                 return false;
             }
 
-            for (int i = 0; i < utf16x.Length; i++)
+            var x = (ulong*)utf16x.Pointer;
+            var y = (ulong*)utf16y.Pointer;
+            var length = utf16x.Length;
+
+            while (length >= 4)
             {
-                if (utf16x.Pointer[i] != utf16y.Pointer[i] && ToLower(utf16x.Pointer[i]) != ToLower(utf16y.Pointer[i]))
+                if ((*x | lower) != (*y | lower))
                 {
                     return false;
                 }
+
+                length -= 4;
+                ++x;
+                ++y;
             }
 
-            return true;
+            return (((*x | lower) ^ (*y | lower)) & (~(ulong.MaxValue << (length * 16)))) == 0;
         }
 
         /// <summary>
@@ -240,31 +255,31 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool EqualsWithIgnoreCase(Ps<char> utf16, string str)
         {
+            const ulong lower = 0x2020202020202020;
+
             if (utf16.Length != str.Length)
             {
                 return false;
             }
 
-            for (int i = 0; i < utf16.Length; i++)
+            var x = (ulong*)utf16.Pointer;
+            ref var y = ref Unsafe.As<char, ulong>(ref GetRawStringData(str));
+            var length = utf16.Length;
+
+            while (length >= 4)
             {
-                if (utf16.Pointer[i] != str[i] && ToLower(utf16.Pointer[i]) != ToLower(str[i]))
+                if ((*x | lower) != (y | lower))
                 {
                     return false;
                 }
+
+                length -= 4;
+                ++x;
+                y = ref Unsafe.Add(ref y, 1);
             }
 
-            return true;
+            return (((*x | lower) ^ (y | lower)) & (~(ulong.MaxValue << (length * 16)))) == 0;
         }
-
-        /// <summary>
-        /// 判断一个 utf8 字符串和一个字符串是否相等。
-        /// </summary>
-        /// <param name="utf8">x</param>
-        /// <param name="str">y</param>
-        /// <returns>返回一个 bool 值</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static bool EqualsWithIgnoreCase(Ps<Utf8Byte> utf8, string str)
-            => Equals((byte*)utf8.Pointer, utf8.Length, ref GetRawStringData(str), str.Length, true);
 
         /// <summary>
         /// 判断两个 utf-8 字符串是否相等。
@@ -275,20 +290,30 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool EqualsWithIgnoreCase(Ps<Utf8Byte> utf8x, Ps<Utf8Byte> utf8y)
         {
+            const ulong lower = 0x2020202020202020;
+
             if (utf8x.Length != utf8y.Length)
             {
                 return false;
             }
 
-            for (int i = 0; i < utf8x.Length; i++)
+            var x = (ulong*)utf8x.Pointer;
+            var y = (ulong*)utf8y.Pointer;
+            var length = utf8x.Length;
+
+            while (length >= 8)
             {
-                if (utf8x.Pointer[i] != utf8y.Pointer[i] && ToLower(utf8x.Pointer[i]) != ToLower(utf8y.Pointer[i]))
+                if ((*x | lower) != (*y | lower))
                 {
                     return false;
                 }
+
+                length -= 8;
+                ++x;
+                ++y;
             }
 
-            return true;
+            return (((*x | lower) ^ (*y | lower)) & (~(ulong.MaxValue << (length * 8)))) == 0;
         }
 
         /// <summary>
@@ -299,7 +324,32 @@ namespace Swifter.Tools
         /// <returns>返回一个 bool 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool EqualsWithIgnoreCase(string strx, string stry)
-            => strx.Equals(stry, StringComparison.OrdinalIgnoreCase);
+        {
+            const ulong lower = 0x2020202020202020;
+
+            if (strx.Length != stry.Length)
+            {
+                return false;
+            }
+
+            ref var x = ref Unsafe.As<char, ulong>(ref GetRawStringData(strx));
+            ref var y = ref Unsafe.As<char, ulong>(ref GetRawStringData(stry));
+            var length = strx.Length;
+
+            while (length >= 4)
+            {
+                if ((x | lower) != (y | lower))
+                {
+                    return false;
+                }
+
+                length -= 4;
+                x = ref Unsafe.Add(ref x, 1);
+                y = ref Unsafe.Add(ref y, 1);
+            }
+
+            return (((x | lower) ^ (y | lower)) & (~(ulong.MaxValue << (length * 16)))) == 0;
+        }
 
         /// <summary>
         /// 获取一个 utf-16 字符串的 Hash 值。
@@ -309,14 +359,24 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int GetHashCodeWithIgnoreCase(Ps<char> utf16)
         {
-            int r = 0;
+            const ulong lower = 0x2020202020202020;
 
-            for (int i = 0; i < utf16.Length; ++i)
+            var ptr = (ulong*)utf16.Pointer;
+            var length = utf16.Length;
+
+            ulong hash = Seed;
+
+            while (length >= 4)
             {
-                r ^= (ToLower(utf16.Pointer[i]) + i) * Mult;
+                hash ^= (*ptr | lower) * hash;
+
+                length -= 4;
+                ++ptr;
             }
 
-            return r;
+            hash ^= ((*ptr & (~(ulong.MaxValue << (length * 16)))) | lower) * hash;
+
+            return ((int)(hash >> 32)) ^ (int)hash;
         }
 
         /// <summary>
@@ -327,14 +387,24 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int GetHashCodeWithIgnoreCase(Ps<Utf8Byte> utf8)
         {
-            int r = 0;
+            const ulong lower = 0x2020202020202020;
 
-            for (int i = 0; i < utf8.Length; ++i)
+            var ptr = (ulong*)utf8.Pointer;
+            var length = utf8.Length;
+
+            ulong hash = Seed;
+
+            while (length >= 8)
             {
-                r ^= (ToLower(utf8.Pointer[i]) + i) * Mult;
+                hash ^= (*ptr | lower) * hash;
+
+                length -= 8;
+                ++ptr;
             }
 
-            return r;
+            hash ^= ((*ptr & (~(ulong.MaxValue << (length * 8)))) | lower) * hash;
+
+            return ((int)(hash >> 32)) ^ (int)hash;
         }
 
         /// <summary>
@@ -345,14 +415,24 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int GetHashCodeWithIgnoreCase(string str)
         {
-            int r = 0;
+            const ulong lower = 0x2020202020202020;
 
-            for (int i = 0; i < str.Length; ++i)
+            ref var ptr = ref Unsafe.As<char, ulong>(ref GetRawStringData(str));
+            var length = str.Length;
+
+            ulong hash = Seed;
+
+            while (length >= 4)
             {
-                r ^= (ToLower(str[i]) + i) * Mult;
+                hash ^= (ptr | lower) * hash;
+
+                length -= 4;
+                ptr = ref Unsafe.Add(ref ptr, 1);
             }
 
-            return r;
+            hash ^= ((ptr & (~(ulong.MaxValue << (length * 16)))) | lower) * hash;
+
+            return ((int)(hash >> 32)) ^ (int)hash;
         }
 
         /// <summary>
@@ -374,9 +454,14 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static string ToStringEx(this Ps<Utf8Byte> utf8)
         {
-            var chars = HGlobalCacheExtensions.CharsPool.Current().Grow(GetUtf8MaxCharsLength(utf8.Length)).First;
+            var result = MakeString(Encoding.UTF8.GetCharCount((byte*)utf8.Pointer, utf8.Length));
 
-            return ToString(chars, GetUtf8Chars((byte*)utf8.Pointer, utf8.Length, ref chars[0]));
+            fixed(char* pResult = result)
+            {
+                VersionDifferences.Assert(Encoding.UTF8.GetChars((byte*)utf8.Pointer, utf8.Length, pResult, result.Length) == result.Length);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -403,7 +488,7 @@ namespace Swifter.Tools
         /// <param name="value">utf-8 字节码</param>
         /// <returns>返回字节码</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static byte AsByte(Utf8Byte value) => Underlying.As<Utf8Byte, byte>(ref value);
+        public static byte AsByte(Utf8Byte value) => Unsafe.As<Utf8Byte, byte>(ref value);
 
         /// <summary>
         /// 去除字符串两端的空白字符，然后返回一个新的字符串。
@@ -536,7 +621,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int IndexOf(char* chars, int length, char c)
         {
-#if Vector
+#if Span
 
             if (Vector.IsHardwareAccelerated)
             {
@@ -558,7 +643,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static int IndexOfAny(char* chars, int length, char c1, char c2)
         {
-#if Vector
+#if Span
 
             if (Vector.IsHardwareAccelerated)
             {
@@ -579,7 +664,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static bool Contains(char* chars, int length, char c)
         {
-#if Vector
+#if Span
 
             if (Vector.IsHardwareAccelerated)
             {
@@ -597,7 +682,18 @@ namespace Swifter.Tools
         /// <returns>返回第一个字符的引用</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static ref char GetRawStringData(string str)
-            => ref Underlying.As<IntPtr, char>(ref Underlying.AddByteOffset(ref Underlying.GetMethodTablePointer(str), RuntimeHelpers.OffsetToStringData));
+        {
+#if NET5_0_OR_GREATER || NETCOREAPP3_0_OR_GREATER
+            return ref Unsafe.AsRef(str.GetPinnableReference());
+#else
+            IL.Emit.Ldarg_0();
+            IL.Emit.Conv_I();
+            IL.Push(RuntimeHelpers.OffsetToStringData);
+            IL.Emit.Add();
+
+            return ref IL.ReturnRef<char>();
+#endif
+        }
 
         /// <summary>
         /// 判断一个字符串是否所有的字符都为 ASCII 字符。
@@ -611,20 +707,20 @@ namespace Swifter.Tools
 
             ref var first = ref GetRawStringData(str);
 
-#if Vector
+#if Span
             if (Vector.IsHardwareAccelerated && length >= Vector<ushort>.Count)
             {
                 var comparison = new Vector<ushort>(0x7f);
 
                 do
                 {
-                    if (Vector.GreaterThan(Underlying.As<char, Vector<ushort>>(ref first), comparison) != Vector<ushort>.Zero)
+                    if (Vector.GreaterThan(Unsafe.As<char, Vector<ushort>>(ref first), comparison) != Vector<ushort>.Zero)
                     {
                         return false;
                     }
 
                     length -= Vector<ushort>.Count;
-                    first = ref Underlying.Add(ref first, Vector<ushort>.Count);
+                    first = ref Unsafe.Add(ref first, Vector<ushort>.Count);
 
                 } while (length >= Vector<ushort>.Count);
             }
@@ -633,20 +729,20 @@ namespace Swifter.Tools
 
             while (length >= 4)
             {
-                if ((Underlying.As<char, ulong>(ref first) & 0xff80ff80ff80ff80) != 0)
+                if ((Unsafe.As<char, ulong>(ref first) & 0xff80ff80ff80ff80) != 0)
                 {
                     return false;
                 }
 
                 length -= 4;
-                first = ref Underlying.Add(ref first, 4);
+                first = ref Unsafe.Add(ref first, 4);
             }
 
-            if (length > 0 && Underlying.Add(ref first, 0) > 0x7f)
+            if (length > 0 && Unsafe.Add(ref first, 0) > 0x7f)
                 return false;
-            if (length > 1 && Underlying.Add(ref first, 1) > 0x7f)
+            if (length > 1 && Unsafe.Add(ref first, 1) > 0x7f)
                 return false;
-            if (length > 2 && Underlying.Add(ref first, 2) > 0x7f)
+            if (length > 2 && Unsafe.Add(ref first, 2) > 0x7f)
                 return false;
 
             return true;
@@ -690,6 +786,7 @@ namespace Swifter.Tools
         /// <param name="chars">字符串内容</param>
         /// <param name="length">字符串长度</param>
         /// <returns>返回一个新的字符串</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static string ToString(char* chars, int length)
         {
             return new string(chars, 0, length);
@@ -802,23 +899,23 @@ namespace Swifter.Tools
         }
 
 
-#if Vector
+#if Span
 
         private const ulong XorPowerOfTwoToHighChar = (0x03ul | 0x02ul << 16 | 0x01ul << 32) + 1;
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         private static int LocateFirstFoundChar(Vector<ushort> matches)
         {
-            var match = Underlying.As<Vector<ushort>, Vector<ulong>>(ref matches)[0];
+            var match = Unsafe.As<Vector<ushort>, Vector<ulong>>(ref matches)[0];
             if (match != 0) return 0 + LocateFirstFoundChar(match);
 
-            match = Underlying.As<Vector<ushort>, Vector<ulong>>(ref matches)[1];
+            match = Unsafe.As<Vector<ushort>, Vector<ulong>>(ref matches)[1];
             if (match != 0) return 4 + LocateFirstFoundChar(match);
 
-            match = Underlying.As<Vector<ushort>, Vector<ulong>>(ref matches)[2];
+            match = Unsafe.As<Vector<ushort>, Vector<ulong>>(ref matches)[2];
             if (match != 0) return 8 + LocateFirstFoundChar(match);
 
-            match = Underlying.As<Vector<ushort>, Vector<ulong>>(ref matches)[3];
+            match = Unsafe.As<Vector<ushort>, Vector<ulong>>(ref matches)[3];
             return 12 + LocateFirstFoundChar(match);
         }
 

@@ -1,147 +1,205 @@
-﻿using System;
+﻿using Swifter.RW;
+using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.Tools
 {
+    delegate TDestination? XConvertFunc<TSource, TDestination>(TSource? value);
+
     /// <summary>
-    /// 高级类型转换静态工具类。
+    /// 高级类型转换工具。
     /// </summary>
-    public static partial class XConvert
+    public static class XConvert
     {
         /// <summary>
-        /// 添加一个类型转换函数实现类工厂。
+        /// 添加类型转换器工厂。
         /// </summary>
-        /// <param name="factory">转换函数实现类工厂</param>
-        public static void AddImplFactory(IConverterFactory factory)
+        /// <param name="factory">类型转换器工厂</param>
+        public static void AddFactory(IXConverterFactory factory)
         {
-            lock (InternalConvert.factories)
+            InternalXConvertFactories.Add(factory);
+        }
+
+        internal static TDestination? OfNull<TDestination>()
+        {
+            if (typeof(TDestination) == typeof(DBNull))
             {
-                InternalConvert.factories.Add(factory);
+                return TypeHelper.As<DBNull, TDestination>(DBNull.Value);
             }
+
+            return default;
+        }
+
+        internal static object? OfNull(Type destinationType)
+        {
+            if (destinationType == typeof(DBNull))
+            {
+                return DBNull.Value;
+            }
+
+            if (destinationType.IsValueType)
+            {
+                return TypeHelper.GetDefaultValue(destinationType);
+            }
+
+            return null;
+        }
+
+        internal static bool IsNull<T>([NotNullWhen(false)] T? value)
+        {
+            return value == null || value is DBNull;
         }
 
         /// <summary>
-        /// 将指定原类型的实例转换为指定的目标类型的实例。转换失败将引发异常。
+        /// 将原类型的值转换为目标类型的值。
         /// </summary>
-        /// <typeparam name="TSource">指定原类型</typeparam>
-        /// <typeparam name="TDestination">指定目标类型</typeparam>
-        /// <param name="value">原类型的实例</param>
-        /// <returns>返回目标类型的实例</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TDestination Convert<TSource, TDestination>(TSource value)
+        /// <typeparam name="TSource">原类型</typeparam>
+        /// <typeparam name="TDestination">目标类型</typeparam>
+        /// <param name="value">原类型的值</param>
+        /// <returns>返回目标类型的值</returns>
+        /// <exception cref="InvalidCastException">没有从原类型转换到目标类型的转换方式</exception>
+        public static TDestination? Convert<TSource, TDestination>(TSource? value)
         {
             if (typeof(TSource) == typeof(TDestination))
             {
-                return Underlying.As<TSource, TDestination>(ref value);
+                return Unsafe.As<TSource?, TDestination?>(ref value);
             }
 
-            return InternalConvert<TSource, TDestination>.Instance.Convert(value);
+            if (IsNull(value))
+            {
+                return OfNull<TDestination>();
+            }
+
+            if (!ValueInterface<TSource>.IsFinalType && value.GetType() != typeof(TSource))
+            {
+                return TypeHelper.GenericHelper.GetOrCreate(value).XConvertTo<TDestination>(value);
+            }
+
+            return InternalXConvert<TSource, TDestination>.Convert(value);
         }
 
         /// <summary>
-        /// 判断源类型是否可以隐式转换为目标类型。
-        /// 隐式转换包括：
-        /// 从小范围的基础类型转换为兼容的大范围基础基础类型；
-        /// 从子类型转换为基类型；
-        /// 已定义从源类型隐式转换为目标类型函数的类型。
+        /// 将原类型的值转换为目标类型的值。
+        /// </summary>
+        /// <typeparam name="TSource">原类型</typeparam>
+        /// <param name="value">原类型的值</param>
+        /// <param name="destinationType">目标类型</param>
+        /// <returns>返回目标类型的值</returns>
+        /// <exception cref="InvalidCastException">没有从原类型转换到目标类型的转换方式</exception>
+        public static object? Convert<TSource>(TSource? value, Type destinationType)
+        {
+            if (IsNull(value))
+            {
+                return OfNull(destinationType);
+            }
+
+            if (!ValueInterface<TSource>.IsFinalType && value.GetType() != typeof(TSource))
+            {
+                return InternalNonGenericXConvert.Convert(value, destinationType);
+            }
+
+            return TypeHelper.GenericHelper.GetOrCreate(destinationType).XConvertFrom(value);
+        }
+
+        /// <summary>
+        /// 将一个对象转换为目标类型的值。
+        /// </summary>
+        /// <param name="value">对象</param>
+        /// <param name="destinationType">目标类型</param>
+        /// <returns>返回目标类型的值</returns>
+        /// <exception cref="InvalidCastException">没有从原类型转换到目标类型的转换方式</exception>
+        public static object? Convert(object? value, Type destinationType)
+        {
+            if (IsNull(value))
+            {
+                return OfNull(destinationType);
+            }
+
+            return InternalNonGenericXConvert.Convert(value, destinationType);
+        }
+
+        /// <summary>
+        /// 将一个对象转换为目标类型的值。
+        /// </summary>
+        /// <typeparam name="TDestination">目标类型</typeparam>
+        /// <param name="value">对象</param>
+        /// <returns>返回目标类型的值</returns>
+        /// <exception cref="InvalidCastException">没有从原类型转换到目标类型的转换方式</exception>
+        public static TDestination? Convert<TDestination>(object? value)
+        {
+            if (IsNull(value))
+            {
+                return OfNull<TDestination>();
+            }
+
+            return TypeHelper.GenericHelper.GetOrCreate(value).XConvertTo<TDestination>(value);
+        }
+
+        /// <summary>
+        /// 判断原类型能否隐式转换为目标类型。
         /// </summary>
         /// <param name="sourceType">源类型</param>
         /// <param name="destinationType">目标类型</param>
-        /// <returns>返回一个 <see cref="bool"/> 值</returns>
+        /// <returns>返回一个布尔值</returns>
         public static bool IsImplicitConvert(Type sourceType, Type destinationType)
         {
-            return CastImpl.GetImpl(sourceType, destinationType).IsImplicitConvert;
+            return InternalNonGenericXConvert.GetConverter(sourceType, destinationType).Mode switch
+            {
+                XConvertMode.BasicImplicit or XConvertMode.Covariant or XConvertMode.Implicit => true,
+                _ => false,
+            };
         }
 
         /// <summary>
-        /// 判断源类型是否可以显式转换为目标类型。
-        /// 显式转换包括：
-        /// 隐式转换；
-        /// 从大范围的基础类型转换为兼容的小范围基础基础类型；
-        /// 从基类型转换为子类型；
-        /// 已定义从源类型显式转换为目标类型函数的类型。
+        /// 判断原类型能否显示转换为目标类型。注意：如果可以隐式转换，那么也将允许显示转换。
         /// </summary>
         /// <param name="sourceType">源类型</param>
         /// <param name="destinationType">目标类型</param>
-        /// <returns>返回一个 <see cref="bool"/> 值</returns>
+        /// <returns>返回一个布尔值</returns>
         public static bool IsExplicitConvert(Type sourceType, Type destinationType)
         {
-            return CastImpl.GetImpl(sourceType, destinationType).IsExplicitConvert;
+            return InternalNonGenericXConvert.GetConverter(sourceType, destinationType).Mode switch
+            {
+                XConvertMode.BasicImplicit or XConvertMode.Covariant or XConvertMode.Implicit or XConvertMode.BasicExplicit or XConvertMode.Explicit => true,
+                _ => false,
+            };
         }
 
         /// <summary>
-        /// 判断源类型和目标类型是否为基础类型，并且可以相互转换。
+        /// 判断源类型是否能有效的转换为目标类型。
         /// </summary>
         /// <param name="sourceType">源类型</param>
         /// <param name="destinationType">目标类型</param>
-        /// <returns>返回一个 <see cref="bool"/> 值</returns>
-        public static bool IsBasicConvert(Type sourceType, Type destinationType)
+        /// <returns>返回一个布尔值</returns>
+        public static bool IsEffectiveConvert(Type sourceType, Type destinationType)
         {
-            return CastImpl.GetImpl(sourceType, destinationType).IsBasicConvert;
+            var converter = InternalNonGenericXConvert.GetConverter(sourceType, destinationType);
+
+            return converter.Mode switch
+            {
+                XConvertMode.BasicImplicit or XConvertMode.Covariant or XConvertMode.Implicit or XConvertMode.BasicExplicit or XConvertMode.Explicit or XConvertMode.Extended => true,
+                XConvertMode.Custom => converter.Method is not null,
+                _ => false,
+            };
         }
 
         /// <summary>
-        /// 判断源类型是否可以通过自定义方式转换为目标类型。
-        /// 自定义方式包括：
-        /// 使用 <see cref="AddImplFactory(IConverterFactory)"/> 方法添加的转换方式；
-        /// 已定义从源类型转换为目标类型的 Parse, ValueOf To 函数。
-        /// 目标类型已定义从源类型构造的构造函数。
+        /// 获取源类型到目标类型的转换方式。
         /// </summary>
         /// <param name="sourceType">源类型</param>
         /// <param name="destinationType">目标类型</param>
-        /// <returns>返回一个 <see cref="bool"/> 值</returns>
-        public static bool IsCustomConvert(Type sourceType, Type destinationType)
+        /// <returns>返回一个可能为空的转换方式枚举</returns>
+        public static XConvertMode? GetConvertMode(Type sourceType, Type destinationType)
         {
-            return CastImpl.GetImpl(sourceType, destinationType).IsCustomConvert;
+            var converter = InternalNonGenericXConvert.GetConverter(sourceType, destinationType);
+
+            if (converter.Mode == XConvertMode.Custom && converter.Method is null)
+            {
+                return null;
+            }
+
+            return converter.Mode;
         }
-
-        /// <summary>
-        /// 将指定原类型的实例转换为指定的目标类型的实例。转换失败将引发异常。
-        /// </summary>
-        /// <typeparam name="TSource">指定原类型</typeparam>
-        /// <param name="value">原类型的实例</param>
-        /// <param name="outType">指定目标类型</param>
-        /// <returns>返回目标类型的实例</returns>
-        public static object ToObject<TSource>(TSource value, Type outType) => ToObjectImpl.ToObject(value, outType);
-
-        /// <summary>
-        /// 将一个任意实例转换为指定类型的实例。转换失败将引发异常。
-        /// </summary>
-        /// <typeparam name="TDestination">指定目标类型</typeparam>
-        /// <param name="value">任意实例</param>
-        /// <returns>返回目标类型的实例</returns>
-        public static TDestination FromObject<TDestination>(object value) => FromObjectImpl.FromObject<TDestination>(value);
-
-        /// <summary>
-        /// 将一个任意实例转换为指定类型的实例。转换失败将引发异常。
-        /// </summary>
-        /// <param name="value">任意实例</param>
-        /// <param name="outType">指定目标类型</param>
-        /// <returns>返回目标类型的实例</returns>
-        public static object Cast(object value, Type outType) => CastImpl.Cast(value, outType);
-    }
-
-    /// <summary>
-    /// 指定目标类型的高级类型转换工具。
-    /// </summary>
-    /// <typeparam name="TDestination">指定目标类型</typeparam>
-    public static class XConvert<TDestination>
-    {
-        /// <summary>
-        /// 将指定原类型的实例转换为目标类型的实例。
-        /// </summary>
-        /// <typeparam name="TSource">指定原类型</typeparam>
-        /// <param name="value">原类型的实例</param>
-        /// <returns>返回目标类型的实例</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TDestination Convert<TSource>(TSource value) => XConvert.Convert<TSource, TDestination>(value);
-
-        /// <summary>
-        /// 将任意类型的实例转换为目标类型的实例。
-        /// </summary>
-        /// <param name="obj">任意类型的实例</param>
-        /// <returns>返回目标类型的实例</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TDestination FromObject(object obj) => XConvert.FromObject<TDestination>(obj);
     }
 }

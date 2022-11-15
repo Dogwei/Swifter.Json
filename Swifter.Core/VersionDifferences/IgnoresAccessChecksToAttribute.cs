@@ -4,7 +4,7 @@
     /// 表示忽略对指定程序集的访问检查的特性。
     /// </summary>
     [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
-    public class IgnoresAccessChecksToAttribute : Attribute
+    /* TODO: 改用 internal */public class IgnoresAccessChecksToAttribute : Attribute
     {
         /// <summary>
         /// 初始化特性。

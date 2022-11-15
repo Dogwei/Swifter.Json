@@ -140,7 +140,7 @@ namespace Swifter.Tools
         {
             const ulong SpecialValue = 0x7FF0000000000000;
 
-            return (Underlying.As<double, ulong>(ref value) & SpecialValue) == SpecialValue;
+            return (Unsafe.As<double, ulong>(ref value) & SpecialValue) == SpecialValue;
         }
 
         /// <summary>
@@ -153,7 +153,7 @@ namespace Swifter.Tools
         {
             const uint SpecialValue = 0x7F800000;
 
-            return (Underlying.As<float, uint>(ref value) & SpecialValue) == SpecialValue;
+            return (Unsafe.As<float, uint>(ref value) & SpecialValue) == SpecialValue;
         }
 
         /// <summary>
@@ -271,6 +271,7 @@ namespace Swifter.Tools
             }
             else
             {
+                // TODO: 改变移动方向
                 ToString(mantissa, (byte)(lengthOfInteger + lengthOfFractional), offset);
                 
                 offset += lengthOfInteger;

@@ -4,76 +4,117 @@ using System;
 namespace Swifter.RW
 {
     /// <summary>
-    /// 提供直接读写器的基本实现。
+    /// 提供直接值读写器的基本实现。
     /// </summary>
-    public abstract class BaseDirectRW :
-        IValueReader,
-        IValueWriter,
-        IValueReader<Guid>,
-        IValueWriter<Guid>,
-        IValueReader<DateTimeOffset>,
-        IValueWriter<DateTimeOffset>,
-        IValueReader<TimeSpan>,
-        IValueWriter<TimeSpan>
+    public abstract class BaseDirectRW : IValueRW
     {
         /// <summary>
         /// 子类需要实现的直接读取。
         /// </summary>
         /// <returns></returns>
-        public abstract object DirectRead();
+        public abstract object? DirectRead();
 
         /// <summary>
         /// 子类需要实现的直接写入。
         /// </summary>
         /// <param name="value"></param>
-        public abstract void DirectWrite(object value);
+        public abstract void DirectWrite(object? value);
+
+        /// <inheritdoc/>
+        public virtual void Pop()
+        {
+            DirectRead();
+        }
+
+        /// <summary>
+        /// 获取值的类型。
+        /// <see langword="null"/> 表示未知类型。
+        /// </summary>
+        public abstract Type? ValueType { get; }
 
         /// <summary>
         /// 读取一个数组。
         /// </summary>
-        /// <param name="valueWriter">数据写入器</param>
-        public virtual void ReadArray(IDataWriter<int> valueWriter)
+        /// <param name="dataWriter">数据写入器</param>
+        public virtual void ReadArray(IDataWriter<int> dataWriter)
         {
-            var obj = DirectRead();
-
-            if (obj != null)
+            if (ValueType is Type valueType && dataWriter.ContentType is Type contentType && XConvert.IsEffectiveConvert(valueType, contentType))
             {
-                if (valueWriter.ContentType?.IsInstanceOfType(obj) == true)
-                {
-                    valueWriter.Content = obj;
-                }
-                else
-                {
-                    ValueCopyer.ValueOf(obj).ReadArray(valueWriter);
-                }
+                dataWriter.Content = XConvert.Convert(DirectRead(), contentType);
+            }
+            else
+            {
+                var valueCopyer = new ValueCopyer();
+
+                valueCopyer.DirectWrite(DirectRead());
+
+                valueCopyer.ReadArray(dataWriter);
             }
         }
 
         /// <summary>
         /// 读取一个对象。
         /// </summary>
-        /// <param name="valueWriter">对象写入器</param>
-        public virtual void ReadObject(IDataWriter<string> valueWriter)
+        /// <param name="dataWriter">对象写入器</param>
+        public virtual void ReadObject(IDataWriter<string> dataWriter)
         {
-            var obj = DirectRead();
-
-            if (obj != null)
+            if (ValueType is Type valueType && dataWriter.ContentType is Type contentType && XConvert.IsEffectiveConvert(valueType, contentType))
             {
-                if (valueWriter.ContentType?.IsInstanceOfType(obj) == true)
-                {
-                    valueWriter.Content = obj;
-                }
-                else
-                {
-                    ValueCopyer.ValueOf(obj).ReadObject(valueWriter);
-                }
+                dataWriter.Content = XConvert.Convert(DirectRead(), contentType);
+            }
+            else
+            {
+                var valueCopyer = new ValueCopyer();
+
+                valueCopyer.DirectWrite(DirectRead());
+
+                valueCopyer.ReadObject(dataWriter);
+            }
+        }
+
+        /// <summary>
+        /// 写入一个对象。
+        /// </summary>
+        /// <param name="dataReader">对象读取器</param>
+        public virtual void WriteObject(IDataReader<string> dataReader)
+        {
+            if (ValueType is Type valueType && dataReader.ContentType is Type contentType && XConvert.IsEffectiveConvert(contentType, valueType))
+            {
+                DirectWrite(XConvert.Convert(dataReader.Content, valueType));
+            }
+            else
+            {
+                var valueCopyer = new ValueCopyer();
+
+                valueCopyer.WriteObject(dataReader);
+
+                DirectWrite(valueCopyer.DirectRead());
+            }
+        }
+
+        /// <summary>
+        /// 写入一个数组。
+        /// </summary>
+        /// <param name="dataReader">数组读取器</param>
+        public virtual void WriteArray(IDataReader<int> dataReader)
+        {
+            if (ValueType is Type valueType && dataReader.ContentType is Type contentType && XConvert.IsEffectiveConvert(contentType, valueType))
+            {
+                DirectWrite(XConvert.Convert(dataReader.Content, valueType));
+            }
+            else
+            {
+                var valueCopyer = new ValueCopyer();
+
+                valueCopyer.WriteArray(dataReader);
+
+                DirectWrite(valueCopyer.DirectRead());
             }
         }
 
         /// <summary>
         /// 读取一个布尔值。
         /// </summary>
-        /// <returns>返回一个 <see cref="bool"/> 值</returns>
         public bool ReadBoolean()
         {
             return Convert.ToBoolean(DirectRead());
@@ -82,7 +123,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个单字节无符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="byte"/> 值</returns>
         public byte ReadByte()
         {
             return Convert.ToByte(DirectRead());
@@ -91,7 +131,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个字符。
         /// </summary>
-        /// <returns>返回一个 <see cref="char"/> 值</returns>
         public char ReadChar()
         {
             return Convert.ToChar(DirectRead());
@@ -100,7 +139,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个日期和时间。
         /// </summary>
-        /// <returns>返回一个 <see cref="DateTime"/> 值</returns>
         public DateTime ReadDateTime()
         {
             return Convert.ToDateTime(DirectRead());
@@ -109,7 +147,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个十进制数字。
         /// </summary>
-        /// <returns>返回一个 <see cref="decimal"/> 值</returns>
         public decimal ReadDecimal()
         {
             return Convert.ToDecimal(DirectRead());
@@ -118,7 +155,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个双精度浮点数。
         /// </summary>
-        /// <returns>返回一个 <see cref="double"/> 值</returns>
         public double ReadDouble()
         {
             return Convert.ToDouble(DirectRead());
@@ -127,7 +163,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个双字节有符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="short"/> 值</returns>
         public short ReadInt16()
         {
             return Convert.ToInt16(DirectRead());
@@ -136,7 +171,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个四字节有符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="int"/> 值</returns>
         public int ReadInt32()
         {
             return Convert.ToInt32(DirectRead());
@@ -145,7 +179,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个八字节有符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="long"/> 值</returns>
         public long ReadInt64()
         {
             return Convert.ToInt64(DirectRead());
@@ -154,7 +187,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个单字节有符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="sbyte"/> 值</returns>
         public sbyte ReadSByte()
         {
             return Convert.ToSByte(DirectRead());
@@ -163,7 +195,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个单精度浮点数。
         /// </summary>
-        /// <returns>返回一个 <see cref="float"/> 值</returns>
         public float ReadSingle()
         {
             return Convert.ToSingle(DirectRead());
@@ -172,8 +203,7 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个字符串。
         /// </summary>
-        /// <returns>返回一个 <see cref="string"/> 值</returns>
-        public string ReadString()
+        public string? ReadString()
         {
             var value = DirectRead();
 
@@ -193,7 +223,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个双字节无符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="ushort"/> 值</returns>
         public ushort ReadUInt16()
         {
             return Convert.ToUInt16(DirectRead());
@@ -202,7 +231,6 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个四字节无符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="uint"/> 值</returns>
         public uint ReadUInt32()
         {
             return Convert.ToUInt32(DirectRead());
@@ -211,17 +239,15 @@ namespace Swifter.RW
         /// <summary>
         /// 读取一个八字节无符号整数。
         /// </summary>
-        /// <returns>返回一个 <see cref="ulong"/> 值</returns>
         public ulong ReadUInt64()
         {
             return Convert.ToUInt64(DirectRead());
         }
 
         /// <summary>
-        /// 读取一个枚举。
+        /// 读取一个枚举值。
         /// </summary>
-        /// <typeparam name="T">枚举类型</typeparam>
-        /// <returns>返回该枚举类型的值</returns>
+        /// <typeparam name="T">枚举的类型</typeparam>
         public T ReadEnum<T>() where T : struct, Enum
         {
             var value = DirectRead();
@@ -241,13 +267,12 @@ namespace Swifter.RW
                 return default;
             }
 
-            return (T)Enum.ToObject(typeof(T), DirectRead());
+            return (T)Enum.ToObject(typeof(T), value);
         }
 
         /// <summary>
         /// 读取一个全局唯一标识符。
         /// </summary>
-        /// <returns>返回一个 <see cref="Guid"/> 值</returns>
         public Guid ReadGuid()
         {
             var value = DirectRead();
@@ -267,13 +292,12 @@ namespace Swifter.RW
                 return default;
             }
 
-            return XConvert<Guid>.FromObject(value);
+            return XConvert.Convert<Guid>(value);
         }
 
         /// <summary>
         /// 读取一个包含偏移量的日期和时间。
         /// </summary>
-        /// <returns>返回一个 <see cref="DateTimeOffset"/> 值</returns>
         public DateTimeOffset ReadDateTimeOffset()
         {
             var value = DirectRead();
@@ -293,13 +317,12 @@ namespace Swifter.RW
                 return default;
             }
 
-            return XConvert<DateTimeOffset>.FromObject(value);
+            return XConvert.Convert<DateTimeOffset>(value);
         }
 
         /// <summary>
         /// 读取一个时间间隔。
         /// </summary>
-        /// <returns>返回一个 <see cref="TimeSpan"/> 值</returns>
         public TimeSpan ReadTimeSpan()
         {
             var value = DirectRead();
@@ -319,14 +342,13 @@ namespace Swifter.RW
                 return default;
             }
 
-            return XConvert<TimeSpan>.FromObject(value);
+            return XConvert.Convert<TimeSpan>(value);
         }
 
         /// <summary>
         /// 读取一个可空值。
         /// </summary>
         /// <typeparam name="T">值的类型</typeparam>
-        /// <returns>该类型的值或 Null</returns>
         public T? ReadNullable<T>() where T : struct
         {
             var value = DirectRead();
@@ -341,220 +363,160 @@ namespace Swifter.RW
                 return null;
             }
 
-            return XConvert<T?>.FromObject(value);
+            return XConvert.Convert<T?>(value);
         }
-
-
 
         /// <summary>
         /// 写入一个布尔值。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteBoolean(bool value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个单字节无符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteByte(byte value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个单字节有符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteSByte(sbyte value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个双字节有符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteInt16(short value)
         {
-            throw new NotImplementedException();
+            DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个字符。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteChar(char value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个双字节无符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteUInt16(ushort value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个四字节有符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteInt32(int value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个单精度浮点数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteSingle(float value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个四字节无符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteUInt32(uint value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个八字节有符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteInt64(long value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个双精度浮点数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteDouble(double value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个八字节无符号整数。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteUInt64(ulong value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个字符串。
         /// </summary>
-        /// <param name="value"></param>
-        public void WriteString(string value)
+        public void WriteString(string? value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个日期和时间。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteDateTime(DateTime value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 读取一个十进制数字。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteDecimal(decimal value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个枚举值。
         /// </summary>
-        /// <param name="dataReader"></param>
-        public void WriteObject(IDataReader<string> dataReader)
-        {
-            DirectWrite(dataReader.Content);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="dataReader"></param>
-        public void WriteArray(IDataReader<int> dataReader)
-        {
-            DirectWrite(dataReader.Content);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="value"></param>
+        /// <typeparam name="T">枚举的类型</typeparam>
         public void WriteEnum<T>(T value) where T : struct, Enum
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个全局唯一标识符。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteGuid(Guid value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个包含偏移量的日期和时间。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteDateTimeOffset(DateTimeOffset value)
         {
             DirectWrite(value);
         }
 
         /// <summary>
-        /// 
+        /// 写入一个时间间隔。
         /// </summary>
-        /// <param name="value"></param>
         public void WriteTimeSpan(TimeSpan value)
         {
             DirectWrite(value);
-        }
-
-        Guid IValueReader<Guid>.ReadValue() => ReadGuid();
-
-        DateTimeOffset IValueReader<DateTimeOffset>.ReadValue() => ReadDateTimeOffset();
-
-        TimeSpan IValueReader<TimeSpan>.ReadValue() => ReadTimeSpan();
-
-        void IValueWriter<Guid>.WriteValue(Guid value)
-        {
-            throw new NotImplementedException();
-        }
-
-        void IValueWriter<DateTimeOffset>.WriteValue(DateTimeOffset value)
-        {
-            throw new NotImplementedException();
-        }
-
-        void IValueWriter<TimeSpan>.WriteValue(TimeSpan value)
-        {
-            throw new NotImplementedException();
         }
     }
 }

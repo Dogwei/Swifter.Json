@@ -6,79 +6,39 @@ namespace Swifter.RW
 {
     internal sealed class GenericCollectionInterfaceMapper : IValueInterfaceMaper
     {
-        public IValueInterface<T> TryMap<T>()
+        public IValueInterface<T>? TryMap<T>()
         {
             if (typeof(T).IsArray)
             {
                 return null;
             }
 
-            var das = GetDas().ToList();
+            var interfaceMap = typeof(T)
+                .GetInterfaces()
+                .Where(x => x.IsGenericType)
+                .ToDictionary(x => x.GetGenericTypeDefinition(), x => x.GetGenericArguments());
 
-            foreach (var (definition, arguments) in das)
+            if (typeof(T).IsInterface && typeof(T).IsGenericType)
             {
-                if (definition == typeof(IDictionary<,>))
-                {
-                    return CreateInstance(typeof(DictionaryInterface<,,>).MakeGenericType(typeof(T), arguments[0], arguments[1]));
-                }
+                interfaceMap.Add(typeof(T).GetGenericTypeDefinition(), typeof(T).GetGenericArguments());
             }
 
-            foreach (var (definition, arguments) in das)
-            {
-                if (definition == typeof(IList<>))
-                {
-                    return CreateInstance(typeof(ListInterface<,>).MakeGenericType(typeof(T), arguments[0]));
-                }
-            }
+            Type[]? arguments;
 
-            foreach (var (definition, arguments) in das)
-            {
-                if (definition == typeof(ICollection<>))
-                {
-                    return CreateInstance(typeof(CollectionInterface<,>).MakeGenericType(typeof(T), arguments[0]));
-                }
-            }
+            var valueInterfaceType 
+                = interfaceMap.TryGetValue(typeof(IDictionary<,>), out arguments) ? typeof(DictionaryInterface<,,>).MakeGenericType(typeof(T), arguments[0], arguments[1])
+                : interfaceMap.TryGetValue(typeof(IList<>), out arguments) ? typeof(ListInterface<,>).MakeGenericType(typeof(T), arguments[0])
+                : interfaceMap.TryGetValue(typeof(ICollection<>), out arguments) ? typeof(CollectionInterface<,>).MakeGenericType(typeof(T), arguments[0])
+                : interfaceMap.TryGetValue(typeof(IEnumerable<>), out arguments) ? typeof(EnumerableInterface<,>).MakeGenericType(typeof(T), arguments[0])
+                : interfaceMap.TryGetValue(typeof(IEnumerator<>), out arguments) ? typeof(EnumeratorInterface<,>).MakeGenericType(typeof(T), arguments[0])
+                : null;
 
-            foreach (var (definition, arguments) in das)
+            if (valueInterfaceType is not null)
             {
-                if (definition == typeof(IEnumerable<>))
-                {
-                    return CreateInstance(typeof(EnumerableInterface<,>).MakeGenericType(typeof(T), arguments[0]));
-                }
-            }
-
-            foreach (var (definition, arguments) in das)
-            {
-                if (definition == typeof(IEnumerator<>))
-                {
-                    return CreateInstance(typeof(EnumeratorInterface<,>).MakeGenericType(typeof(T), arguments[0]));
-                }
+                return (IValueInterface<T>)Activator.CreateInstance(valueInterfaceType)!;
             }
 
             return null;
-
-            static IEnumerable<(Type definition, Type[] arguments)> GetDas()
-            {
-                if (typeof(T).IsInterface && typeof(T).IsGenericType)
-                {
-                    yield return As(typeof(T));
-                }
-
-                foreach (var item in typeof(T).GetInterfaces())
-                {
-                    if (item.IsGenericType)
-                    {
-                        yield return As(item);
-                    }
-                }
-
-                static (Type definition, Type[] arguments) As(Type type) => (type.GetGenericTypeDefinition(), type.GetGenericArguments());
-            }
-
-            static IValueInterface <T> CreateInstance(Type type)
-            {
-                return (IValueInterface<T>)Activator.CreateInstance(type);
-            }
         }
     }
 }

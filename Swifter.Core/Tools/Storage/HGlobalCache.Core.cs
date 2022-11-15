@@ -9,13 +9,27 @@ namespace Swifter.Tools
         /// 返回全局缓存中的空间 Span。
         /// </summary>
         /// <param name="hGCache">全局缓存</param>
-        public static implicit operator Span<T>(HGlobalCache<T> hGCache) => new Span<T>(hGCache.First, hGCache.Available);
+        public static implicit operator Span<T>(HGlobalCache<T> hGCache)
+        {
+            var span = new Span<T>(hGCache.First, hGCache.Available);
+
+            GC.KeepAlive(hGCache);
+
+            return span;
+        }
 
         /// <summary>
         /// 返回全局缓存中的内容 Span。
         /// </summary>
         /// <param name="hGCache">全局缓存</param>
-        public static implicit operator ReadOnlySpan<T>(HGlobalCache<T> hGCache) => new ReadOnlySpan<T>(hGCache.First, hGCache.Count);
+        public static implicit operator ReadOnlySpan<T>(HGlobalCache<T> hGCache)
+        {
+            var span = new ReadOnlySpan<T>(hGCache.First, hGCache.Count);
+
+            GC.KeepAlive(hGCache);
+
+            return span;
+        }
 
         /// <summary>
         /// 返回全局缓存中的空间 Memory。

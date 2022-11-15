@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using static Swifter.RW.FastObjectRW;
 
@@ -35,19 +34,12 @@ namespace Swifter.RW
             {
                 return TypeOptions.GetOrAdd(type, t =>
                 {
-                    // 对匿名类型进行 Allocate 和 AutoPropertyDirectRW
-                    if (t.IsDefined(typeof(CompilerGeneratedAttribute), false))
+                    if (t.IsRecordType() || t.IsTupleType())
                     {
                         return DefaultOptions | FastObjectRWOptions.Allocate | FastObjectRWOptions.AutoPropertyDirectRW;
                     }
 
-                    // 对元组类型进行 Allocate 和 AutoPropertyDirectRW
-                    if (t.IsClass && t.IsGenericType && t.Name.Contains("Tuple") && t.GetConstructor(Type.EmptyTypes) is null)
-                    {
-                        return DefaultOptions | FastObjectRWOptions.Allocate | FastObjectRWOptions.AutoPropertyDirectRW;
-                    }
-
-                    if ((t.BaseType ?? typeof(object)) == typeof(object))
+                    if (t.BaseType is null || t.BaseType == typeof(object))
                     {
                         return DefaultOptions;
                     }
@@ -61,7 +53,7 @@ namespace Swifter.RW
         {
             lock (TypeOptions)
             {
-                if (TypeOptions.TryGetValue(type, out var currentOptions) && (currentOptions & Initialized) != 0)
+                if (TypeOptions.TryGetValue(type, out var currentOptions) && currentOptions.On(Initialized))
                 {
                     throw new InvalidOperationException("Invalid modification option After type has been initialized.");
                 }
@@ -76,7 +68,7 @@ namespace Swifter.RW
             {
                 var currentOptions = GetCurrentOptions(type);
 
-                if ((currentOptions & Initialized) != 0)
+                if (currentOptions.On(Initialized))
                 {
                     throw new InvalidOperationException("Invalid modification option After type has been initialized.");
                 }
@@ -90,9 +82,7 @@ namespace Swifter.RW
         /// <summary>
         /// FastObjectRW 全局默认配置。
         /// </summary>
-        public static
-            FastObjectRWOptions DefaultOptions
-        { get; set; } =
+        public static FastObjectRWOptions DefaultOptions { get; set; } =
             // FastObjectRWOptions.NotFoundException |
             // FastObjectRWOptions.CannotGetException |
             // FastObjectRWOptions.CannotSetException |
@@ -107,14 +97,8 @@ namespace Swifter.RW
     /// FastObjectRW 基于 Emit 实现的几乎完美效率的对象读写器。
     /// </summary>
     /// <typeparam name="T">数据源对象的类型</typeparam>
-    public abstract unsafe partial class FastObjectRW<T> : IDataRW<string>, IDataRW<Ps<char>>, IDataRW<Ps<Utf8Byte>>, IDataRW<int>
+    public abstract unsafe partial class FastObjectRW<T> : IObjectRW, IHasKeysDataRW<Ps<char>>, IHasKeysDataRW<Ps<Utf8Byte>>, IDataRW<int>
     {
-        /// <summary>
-        /// 获取当前类型的读写接口是否为 FastObjectInterface。
-        /// </summary>
-        public static bool IsFastObjectInterface =>
-            ValueInterface<T>.Content is IFastObjectRWCreater<T>/* || ValueInterface<T>.Content is FastObjectInterface<T>*/;
-
         /// <summary>
         /// 读取或设置该类型的 FastObjectRWOptions 枚举配置项。
         /// 如果该类型已经初始化完成，则无法设置该值，且发生异常。
@@ -142,7 +126,7 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="index">索引</param>
         /// <returns>返回读写接口实例</returns>
-        protected internal static object GetValueInterfaceInstance(int index)
+        protected internal static object? GetValueInterfaceInstance(int index)
         {
             return StaticFastObjectRW<T>.Fields[index].InterfaceInstance;
         }
@@ -150,7 +134,7 @@ namespace Swifter.RW
         /// <summary>
         /// 数据源。
         /// </summary>
-        public T content;
+        public T? content;
 
         /// <summary>
         /// 调用默认无参的构造函数初始化数据源。
@@ -182,13 +166,15 @@ namespace Swifter.RW
         /// 将数据源中的所有成员写入到数据写入器中。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        public abstract void OnReadAll(IDataWriter<string> dataWriter);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnReadAll(IDataWriter<string> dataWriter, RWStopToken stopToken = default);
 
         /// <summary>
         /// 从数据读取器中读取所有数据源字段到数据源的值
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        public abstract void OnWriteAll(IDataReader<string> dataReader);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnWriteAll(IDataReader<string> dataReader, RWStopToken stopToken = default);
 
         /// <summary>
         /// 获取指定名称的成员的值读写器。
@@ -201,19 +187,19 @@ namespace Swifter.RW
             {
                 var ordinal = GetOrdinal(key);
 
-                if (ordinal == -1)
+                if (ordinal >= 0)
                 {
-                    if ((StaticFastObjectRW<T>.Options & FastObjectRWOptions.NotFoundException) != 0)
-                    {
-                        throw new MissingMemberException(typeof(T).FullName, key);
-                    }
-                    else
-                    {
-                        return RWHelper.DefaultValueRW;
-                    }
+                    return GetValueRW(ordinal);
                 }
 
-                return new ValueCopyer<int>(this, ordinal);
+                if (StaticFastObjectRW<T>.Options.On(FastObjectRWOptions.NotFoundException))
+                {
+                    throw new MissingMemberException(typeof(T).FullName, key);
+                }
+                else
+                {
+                    return RWHelper.DefaultValueRW;
+                }
             }
         }
 
@@ -228,19 +214,19 @@ namespace Swifter.RW
             {
                 var ordinal = GetOrdinal(key);
 
-                if (ordinal == -1)
+                if (ordinal >= 0)
                 {
-                    if ((StaticFastObjectRW<T>.Options & FastObjectRWOptions.NotFoundException) != 0)
-                    {
-                        throw new MissingMemberException(typeof(T).FullName, key.ToStringEx());
-                    }
-                    else
-                    {
-                        return RWHelper.DefaultValueRW;
-                    }
+                    return GetValueRW(ordinal);
                 }
 
-                return new ValueCopyer<int>(this, ordinal);
+                if (StaticFastObjectRW<T>.Options.On(FastObjectRWOptions.NotFoundException))
+                {
+                    throw new MissingMemberException(typeof(T).FullName, key.ToStringEx());
+                }
+                else
+                {
+                    return RWHelper.DefaultValueRW;
+                }
             }
         }
 
@@ -255,19 +241,19 @@ namespace Swifter.RW
             {
                 var ordinal = GetOrdinal(key);
 
-                if (ordinal == -1)
+                if (ordinal >= 0)
                 {
-                    if ((StaticFastObjectRW<T>.Options & FastObjectRWOptions.NotFoundException) != 0)
-                    {
-                        throw new MissingMemberException(typeof(T).FullName, key.ToStringEx());
-                    }
-                    else
-                    {
-                        return RWHelper.DefaultValueRW;
-                    }
+                    return GetValueRW(ordinal);
                 }
 
-                return new ValueCopyer<int>(this, ordinal);
+                if (StaticFastObjectRW<T>.Options.On(FastObjectRWOptions.NotFoundException))
+                {
+                    throw new MissingMemberException(typeof(T).FullName, key.ToStringEx());
+                }
+                else
+                {
+                    return RWHelper.DefaultValueRW;
+                }
             }
         }
 
@@ -276,12 +262,13 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="index">指定索引</param>
         /// <returns>返回值读写器</returns>
-        public IValueRW this[int index] => new ValueCopyer<int>(this, index);
-
-        /// <summary>
-        /// 获取该类型所有的成员。
-        /// </summary>
-        public IEnumerable<string> Keys => StaticFastObjectRW<T>.Keys;
+        public IValueRW this[int index]
+        {
+            get
+            {
+                return GetValueRW(index);
+            }
+        }
 
         /// <summary>
         /// 获取该类型所有的成员的数量。
@@ -299,7 +286,8 @@ namespace Swifter.RW
         /// 将数据源中的所有成员写入到数据写入器中。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        public abstract void OnReadAll(IDataWriter<Ps<char>> dataWriter);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnReadAll(IDataWriter<Ps<char>> dataWriter, RWStopToken stopToken = default);
 
         /// <summary>
         /// 将值读取器中的值写入到指定名称的成员中。
@@ -312,7 +300,8 @@ namespace Swifter.RW
         /// 从数据读取器中读取所有数据源字段到数据源的值
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        public abstract void OnWriteAll(IDataReader<Ps<char>> dataReader);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnWriteAll(IDataReader<Ps<char>> dataReader, RWStopToken stopToken = default);
 
         /// <summary>
         /// 将指定名称的成员的值写入到值写入器中。
@@ -325,7 +314,8 @@ namespace Swifter.RW
         /// 将数据源中的所有成员写入到数据写入器中。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        public abstract void OnReadAll(IDataWriter<Ps<Utf8Byte>> dataWriter);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnReadAll(IDataWriter<Ps<Utf8Byte>> dataWriter, RWStopToken stopToken = default);
 
         /// <summary>
         /// 将值读取器中的值写入到指定名称的成员中。
@@ -338,7 +328,8 @@ namespace Swifter.RW
         /// 从数据读取器中读取所有数据源字段到数据源的值
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        public abstract void OnWriteAll(IDataReader<Ps<Utf8Byte>> dataReader);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnWriteAll(IDataReader<Ps<Utf8Byte>> dataReader, RWStopToken stopToken = default);
 
         /// <summary>
         /// 将指定索引处的成员的值写入到值写入器中。
@@ -351,7 +342,8 @@ namespace Swifter.RW
         /// 将数据源中的所有成员写入到数据写入器中。
         /// </summary>
         /// <param name="dataWriter">数据写入器</param>
-        public abstract void OnReadAll(IDataWriter<int> dataWriter);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnReadAll(IDataWriter<int> dataWriter, RWStopToken stopToken = default);
 
         /// <summary>
         /// 将值读取器中的值写入到指定索引处的成员中。
@@ -364,7 +356,8 @@ namespace Swifter.RW
         /// 从数据读取器中读取所有数据源字段到数据源的值
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        public abstract void OnWriteAll(IDataReader<int> dataReader);
+        /// <param name="stopToken">停止令牌</param>
+        public abstract void OnWriteAll(IDataReader<int> dataReader, RWStopToken stopToken = default);
 
         /// <summary>
         /// 获取指定名称的字段的序号。
@@ -404,7 +397,7 @@ namespace Swifter.RW
         /// <param name="name">返回字段名称</param>
         public void GetKey(int ordinal, out Ps<char> name)
         {
-            name = StaticFastObjectRW<T>.UTF16Keys[ordinal];
+            name = StaticFastObjectRW<T>._UTF16Keys[ordinal];
         }
 
         /// <summary>
@@ -414,8 +407,23 @@ namespace Swifter.RW
         /// <param name="name">返回字段名称</param>
         public void GetKey(int ordinal, out Ps<Utf8Byte> name)
         {
-            name = StaticFastObjectRW<T>.UTF8Keys[ordinal];
+            name = StaticFastObjectRW<T>._UTF8Keys[ordinal];
         }
+
+        /// <summary>
+        /// 获取指定索引处的值读取器。此函数仅为内部调用。
+        /// </summary>
+        internal protected abstract IValueRW GetValueRW(int ordinal);
+
+        /// <summary>
+        /// 加载指定索引处的值。此函数仅为内部调用。
+        /// </summary>
+        internal protected abstract void LoadValue(int ordinal, ref object value);
+
+        /// <summary>
+        /// 将值存储到指定索引处。此函数仅为内部调用。
+        /// </summary>
+        internal protected abstract void StoreValue(int ordinal, ref object value);
 
         /// <summary>
         /// 获取该读写器的名称。
@@ -426,10 +434,10 @@ namespace Swifter.RW
         /// <summary>
         /// 读取或设置该读写器的数据源。
         /// </summary>
-        public object Content
+        public object? Content
         {
             get => content;
-            set => content = (T)value;
+            set => content = (T?)value;
         }
 
         /// <summary>
@@ -437,23 +445,28 @@ namespace Swifter.RW
         /// </summary>
         public Type ContentType => typeof(T);
 
-        IEnumerable<Ps<char>> IDataRW<Ps<char>>.Keys => Enumerable.Range(0, Count).Select(i => StaticFastObjectRW<T>.UTF16Keys[i]);
+        /// <summary>
+        /// 此值对此读写器无效。
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public Type? ValueType => null;
 
-        IEnumerable<Ps<char>> IDataReader<Ps<char>>.Keys => ((IDataRW<Ps<char>>)this).Keys;
+        /// <summary>
+        /// 成员名称集合。
+        /// </summary>
+        public IEnumerable<string> Keys => StaticFastObjectRW<T>.ExportKeys;
 
-        IEnumerable<Ps<char>> IDataWriter<Ps<char>>.Keys => ((IDataRW<Ps<char>>)this).Keys;
+        IEnumerable<Ps<char>> IHasKeysDataRW<Ps<char>>.Keys => StaticFastObjectRW<T>.ExportUTF16Keys;
 
-        IEnumerable<Ps<Utf8Byte>> IDataRW<Ps<Utf8Byte>>.Keys => Enumerable.Range(0, Count).Select(i => StaticFastObjectRW<T>.UTF8Keys[i]);
+        IEnumerable<Ps<char>> IHasKeysDataReader<Ps<char>>.Keys => StaticFastObjectRW<T>.ExportUTF16Keys;
 
-        IEnumerable<Ps<Utf8Byte>> IDataReader<Ps<Utf8Byte>>.Keys => ((IDataRW<Ps<Utf8Byte>>)this).Keys;
+        IEnumerable<Ps<char>> IHasKeysDataWriter<Ps<char>>.Keys => StaticFastObjectRW<T>.ExportUTF16Keys;
 
-        IEnumerable<Ps<Utf8Byte>> IDataWriter<Ps<Utf8Byte>>.Keys => ((IDataRW<Ps<Utf8Byte>>)this).Keys;
+        IEnumerable<Ps<Utf8Byte>> IHasKeysDataRW<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.ExportUTF8Keys;
 
-        IEnumerable<int> IDataRW<int>.Keys => Enumerable.Range(0, Count);
+        IEnumerable<Ps<Utf8Byte>> IHasKeysDataReader<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.ExportUTF8Keys;
 
-        IEnumerable<int> IDataReader<int>.Keys => ((IDataRW<int>)this).Keys;
-
-        IEnumerable<int> IDataWriter<int>.Keys => ((IDataRW<int>)this).Keys;
+        IEnumerable<Ps<Utf8Byte>> IHasKeysDataWriter<Ps<Utf8Byte>>.Keys => StaticFastObjectRW<T>.ExportUTF8Keys;
 
         IValueWriter IDataWriter<int>.this[int key] => this[key];
 
@@ -470,5 +483,55 @@ namespace Swifter.RW
         IValueReader IDataReader<Ps<Utf8Byte>>.this[Ps<Utf8Byte> key] => this[key];
 
         IValueWriter IDataWriter<Ps<Utf8Byte>>.this[Ps<Utf8Byte> key] => this[key];
+
+        /// <summary>
+        /// 值的读写器。此类型仅为内部使用。
+        /// </summary>
+        /// <typeparam name="TValue">值的类型</typeparam>
+        internal protected sealed class ValueRW<TValue> : BaseGenericRW<TValue>, IValueRW<TValue>
+        {
+            readonly FastObjectRW<T> baseRW;
+            readonly int ordinal;
+
+            /// <summary>
+            /// 创建值的读写器。
+            /// </summary>
+            /// <param name="baseRW">基数据读写器</param>
+            /// <param name="ordinal">值的序号</param>
+            public ValueRW(FastObjectRW<T> baseRW, int ordinal)
+            {
+                this.baseRW = baseRW;
+                this.ordinal = ordinal;
+            }
+
+            /// <summary>
+            /// 读取值。
+            /// </summary>=
+            [SkipLocalsInit]
+            public override TValue? ReadValue()
+            {
+#if NET5_0_OR_GREATER
+                Unsafe.SkipInit(out TValue? value);
+
+                baseRW.LoadValue(ordinal, ref Unsafe.As<TValue?, object>(ref value));
+
+                return value;
+#else
+                TValue? value = default;
+
+                baseRW.LoadValue(ordinal, ref Unsafe.As<TValue?, object>(ref value));
+
+                return value;
+#endif
+            }
+
+            /// <summary>
+            /// 写入值。
+            /// </summary>
+            public override void WriteValue(TValue? value)
+            {
+                baseRW.StoreValue(ordinal, ref Unsafe.As<TValue?, object>(ref value));
+            }
+        }
     }
 }

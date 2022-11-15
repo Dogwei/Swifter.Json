@@ -118,7 +118,7 @@ namespace Swifter.Tools
         /// <summary>
         /// 获取此数字允许的最大进制数。
         /// </summary>
-        public byte MaxRadix => MaxRadix;
+        public byte MaxRadix => max_radix;
 
         /// <summary>
         /// 获取是否可以为十进制。
@@ -155,7 +155,7 @@ namespace Swifter.Tools
                     *destination = NegativeSign; ++destination;
                 }
 
-                Underlying.CopyBlock(
+                Unsafe.CopyBlock(
                     destination,
                     chars + integerBegin,
                     (uint)(IntegerLength * sizeof(char))
@@ -167,7 +167,7 @@ namespace Swifter.Tools
                 {
                     *destination = DotSign; ++destination;
 
-                    Underlying.CopyBlock(
+                    Unsafe.CopyBlock(
                         destination,
                         chars + fractionalBegin,
                         (uint)(FractionalLength * sizeof(char))
@@ -182,7 +182,7 @@ namespace Swifter.Tools
 
                     *destination = exponentIsNegative ? NegativeSign : PositiveSign; ++destination;
 
-                    Underlying.CopyBlock(
+                    Unsafe.CopyBlock(
                         destination,
                         chars + exponentBegin,
                         (uint)(ExponentLength * sizeof(char))
@@ -195,7 +195,7 @@ namespace Swifter.Tools
             {
                 fixed (char* pNaNSign = NaNSign)
                 {
-                    Underlying.CopyBlock(
+                    Unsafe.CopyBlock(
                         destination,
                         pNaNSign,
                         (uint)(NaNSign.Length * sizeof(char))

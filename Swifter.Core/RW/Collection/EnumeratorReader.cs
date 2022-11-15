@@ -1,34 +1,33 @@
 ﻿using System;
 using System.Collections;
-using System.Collections.Generic;
 
 namespace Swifter.RW
 {
-    internal sealed class EnumeratorReader<T> : IDataReader<int> where T : IEnumerator
+    internal sealed class EnumeratorReader<T> : IArrayReader where T : IEnumerator
     {
-        internal T content;
+        T? content;
 
         public IValueReader this[int key] => throw new NotSupportedException();
-
-        public IEnumerable<int> Keys => throw new NotSupportedException();
 
         public int Count => -1;
 
         public Type ContentType => typeof(T);
 
-        public object Content
+        public Type ValueType => typeof(object);
+
+        public T? Content
         {
             get => content;
-            set => Initialize((T)value);
+            set => content = value;
         }
 
-        public void Initialize(T obj)
+        public void OnReadAll(IDataWriter<int> dataWriter, RWStopToken stopToken = default)
         {
-            content = obj;
-        }
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(Content));
+            }
 
-        public void OnReadAll(IDataWriter<int> dataWriter)
-        {
             int index = 0;
 
             while (content.MoveNext())
@@ -43,5 +42,7 @@ namespace Swifter.RW
         {
             throw new NotSupportedException();
         }
+
+        object? IDataReader.Content { get => Content; set => Content = (T?)value; }
     }
 }

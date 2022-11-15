@@ -2,336 +2,540 @@
 using Swifter.RW;
 using Swifter.Tools;
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
-using static Swifter.Json.JsonFormatter;
 using static Swifter.Json.JsonCode;
+using static Swifter.Json.JsonFormatter;
+#if !NO_OPTIONS
 using static Swifter.Json.JsonFormatterOptions;
-using static Swifter.Json.JsonSerializeModes;
+#endif
 
 namespace Swifter.Json
 {
-    sealed unsafe class JsonSerializer<TMode> :
-        IJsonWriter,
-        IValueWriter<Guid>,
-        IValueWriter<DateTimeOffset>,
+    /// <summary>
+    /// Json 序列化 (写入) 器。
+    /// </summary>
+    public sealed unsafe class JsonSerializer :
+        IFormatterWriter,
         IDataWriter<string>,
         IDataWriter<int>,
+#if !NO_OPTIONS
         IValueFilter<string>,
         IValueFilter<int>,
-        IValueWriter<bool[]>, IValueWriter<List<bool>>,
-        IValueWriter<byte[]>, IValueWriter<List<byte>>,
-        IValueWriter<sbyte[]>, IValueWriter<List<sbyte>>,
-        IValueWriter<short[]>, IValueWriter<List<short>>,
-        IValueWriter<ushort[]>, IValueWriter<List<ushort>>,
-        IValueWriter<char[]>, IValueWriter<List<char>>,
-        IValueWriter<int[]>, IValueWriter<List<int>>,
-        IValueWriter<uint[]>, IValueWriter<List<uint>>,
-        IValueWriter<long[]>, IValueWriter<List<long>>,
-        IValueWriter<ulong[]>, IValueWriter<List<ulong>>,
-        IValueWriter<float[]>, IValueWriter<List<float>>,
-        IValueWriter<double[]>, IValueWriter<List<double>>,
-        IValueWriter<DateTime[]>, IValueWriter<List<DateTime>>,
-        IValueWriter<DateTimeOffset[]>, IValueWriter<List<DateTimeOffset>>,
-        IValueWriter<decimal[]>, IValueWriter<List<decimal>>,
-        IValueWriter<Guid[]>, IValueWriter<List<Guid>>,
-        IValueWriter<string[]>, IValueWriter<List<string>>,
-        IFormatterWriter
-        where TMode : struct
+#endif
+        IRWPathNodeVisitor,
+        IFastArrayValueWriter
     {
+        /// <summary>
+        /// Json 格式化器。
+        /// </summary>
+        public readonly JsonFormatter? JsonFormatter;
 
-        public TMode mode;
+        /// <summary>
+        /// 分段写入器 或 全局内存缓存。
+        /// </summary>
+        internal readonly object segmenterOrHGCache;
 
-        public readonly JsonFormatter jsonFormatter;
-        public readonly HGlobalCache<char> hGCache;
-        public readonly TextWriter textWriter;
-        public readonly int maxDepth;
+        /// <summary>
+        /// 最大深度限制。
+        /// </summary>
+        public readonly int MaxDepth;
 
-        public readonly JsonFormatterOptions options;
+#if !NO_OPTIONS
 
-        public int depth;
+        readonly object? mode;
 
-        public char* current;
+        /// <summary>
+        /// 当前配置项。
+        /// </summary>
+        public readonly JsonFormatterOptions Options;
+#endif
 
+        char* begin;
+        char* end;
+
+        char* current;
+
+        int depth;
+
+        /// <summary>
+        /// 获取已写入的字符数。
+        /// </summary>
         public int Offset
+            => (int)(current - begin);
+
+        /// <summary>
+        /// 获取缓存剩余字符数。
+        /// </summary>
+        int Rest
+            => (int)(end - current);
+
+        /// <summary>
+        /// 全局内存缓存。
+        /// </summary>
+        public HGlobalCache<char> HGCache =>
+            segmenterOrHGCache is JsonSegmentedContent segmenter ?
+            segmenter.hGCache :
+            Unsafe.As<HGlobalCache<char>>(segmenterOrHGCache);
+
+#if !NO_OPTIONS
+
+        ComplexMode ComplexModeInstance
+            => Unsafe.As<ComplexMode>(mode!);
+
+        ReferenceMode ReferenceModeInstance
+            => Unsafe.As<ReferenceMode>(mode!);
+
+        bool IsSimpleMode
         {
             [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => (int)(current - hGCache.First);
+            get => (Options & (ComplexOptions | ReferenceOptions)) is 0;
         }
 
-        public int Rest
+        bool IsFilterMode
         {
             [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => (int)(hGCache.Last - current);
+            get => Options >= OnFilter;
         }
 
-        public ref string LineBreakChars => ref Underlying.As<TMode, ComplexMode>(ref mode).LineBreakChars;
+#endif
 
-        public ref string IndentedChars => ref Underlying.As<TMode, ComplexMode>(ref mode).IndentedChars;
+        #region -- 构造函数 --
 
-        public ref string MiddleChars => ref Underlying.As<TMode, ComplexMode>(ref mode).MiddleChars;
+        /// <summary>
+        /// 初始化默认配置的 Json 序列号 (写入) 器。
+        /// </summary>
+        /// <param name="hGCache">全局内存缓存</param>
+        public JsonSerializer(HGlobalCache<char> hGCache)
+        {
+            segmenterOrHGCache = hGCache;
+            MaxDepth = DefaultMaxDepth;
 
-        public ref bool IsInArray => ref Underlying.As<TMode, ComplexMode>(ref mode).IsInArray;
+#if !NO_OPTIONS
+            Options = JsonFormatterOptions.Default;
+#endif
 
-        public ref JsonReferenceWriter References => ref Underlying.As<TMode, ReferenceMode>(ref mode).References;
+            begin = hGCache.First;
+            end = hGCache.Last;
 
-        public ref RWPathInfo Reference => ref Underlying.As<TMode, ReferenceMode>(ref mode).References.Reference;
+            current = begin;
+        }
 
+        /// <summary>
+        /// 初始化指定格式化器的 Json 序列号 (写入) 器。
+        /// </summary>
+        /// <param name="jsonFormatter">指定格式化器</param>
+        /// <param name="hGCache">全局内存缓存</param>
+        public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache)
+            : this(hGCache
+#if !NO_OPTIONS
+                  , jsonFormatter.Options
+#endif
+                  )
+        {
+            JsonFormatter = jsonFormatter;
+            MaxDepth = jsonFormatter.MaxDepth;
+        }
+
+#if !NO_OPTIONS
+
+        /// <summary>
+        /// 初始化指定配置的 Json 序列号 (写入) 器。
+        /// </summary>
+        /// <param name="hGCache">全局内存缓存</param>
+        /// <param name="options">指定配置</param>
+        public JsonSerializer(HGlobalCache<char> hGCache, JsonFormatterOptions options)
+            : this(hGCache)
+        {
+            Options = options;
+
+            if (On(ReferenceOptions))
+            {
+                mode = new ReferenceMode(this);
+            }
+            else if (On(ComplexOptions))
+            {
+                mode = new ComplexMode(this);
+            }
+        }
+
+        /// <summary>
+        /// 初始化指定配置的 Json 序列号 (写入) 器。
+        /// </summary>
+        /// <param name="segmenter">分段读取器</param>
+        /// <param name="options">指定配置</param>
+        public JsonSerializer(JsonSegmentedContent segmenter, JsonFormatterOptions options) : this(segmenter.hGCache, options)
+        {
+            segmenterOrHGCache = segmenter;
+        }
+#endif
+
+
+        /// <summary>
+        /// 初始化默认配置的 Json 序列号 (写入) 器。
+        /// </summary>
+        /// <param name="segmenter">分段读取器</param>
+        public JsonSerializer(JsonSegmentedContent segmenter) : this(segmenter.hGCache)
+        {
+            segmenterOrHGCache = segmenter;
+        }
+
+        /// <summary>
+        /// 初始化指定格式化器的 Json 序列号 (写入) 器。
+        /// </summary>
+        /// <param name="jsonFormatter">指定格式化器</param>
+        /// <param name="segmenter">分段读取器</param>
+        public JsonSerializer(JsonFormatter jsonFormatter, JsonSegmentedContent segmenter)
+            : this(jsonFormatter, segmenter.hGCache)
+        {
+            segmenterOrHGCache = segmenter;
+        }
+
+        #endregion
+
+        #region -- 辅助函数 --
+
+        /// <summary>
+        /// 将已写入的 JSON 内容长度设置到 HGCache 的内容数量中。
+        /// </summary>
         public void Flush()
         {
-            // 1: ,
-            hGCache.Count = Offset - 1;
+            if (Offset is 0)
+            {
+                return;
+            }
+
+            var isValueEnding = current[-1] is ValueEnding;
+
+            if (segmenterOrHGCache is JsonSegmentedContent segmenter)
+            {
+                segmenter.hGCache.Count = Offset;
+
+                if (isValueEnding)
+                {
+                    --segmenter.hGCache.Count;
+                }
+
+                segmenter.WriteSegment();
+
+                segmenter.hGCache.Count = 0;
+
+                InternalClear();
+
+                if (isValueEnding)
+                {
+                    Append(ValueEnding);
+
+                    ++segmenter.hGCache.Count;
+                }
+            }
+            else
+            {
+                var hGCache = Unsafe.As<HGlobalCache<char>>(segmenterOrHGCache);
+
+                hGCache.Count = (int)(current - hGCache.First);
+
+                if (isValueEnding)
+                {
+                    --hGCache.Count;
+                }
+            }
         }
 
+        /// <summary>
+        /// 重置 JSON 写入位置。
+        /// </summary>
         public void Clear()
         {
-            current = hGCache.First;
+            ThrowIfSegmented();
+
+            InternalClear();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth)
+        internal void InternalClear()
         {
-            this.hGCache = hGCache;
-            this.maxDepth = maxDepth;
-            options = Default;
+            begin = HGCache.First;
+            end = HGCache.Last;
 
-            current = hGCache.First;
+            current = begin;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, JsonFormatterOptions options)
-        {
-            this.hGCache = hGCache;
-            this.maxDepth = maxDepth;
-            this.options = options;
-
-            current = hGCache.First;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter)
-            : this(hGCache, maxDepth)
-        {
-            this.textWriter = textWriter;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonSerializer(HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter, JsonFormatterOptions options)
-            : this(hGCache, maxDepth, options)
-        {
-            this.textWriter = textWriter;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache, int maxDepth, JsonFormatterOptions options)
-            : this(hGCache, maxDepth, options)
-        {
-            this.jsonFormatter = jsonFormatter;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache, int maxDepth, TextWriter textWriter, JsonFormatterOptions options)
-            : this(jsonFormatter, hGCache, maxDepth, options)
-        {
-            this.textWriter = textWriter;
-        }
-
-        public IValueWriter this[string key]
-        {
-            get
-            {
-                if (key is null)
-                {
-                    // TODO: Json 对象的键不允许为 Null。
-                    throw new ArgumentNullException(nameof(key));
-                }
-
-                if (IsReferenceMode)
-                {
-                    RWPathInfo.SetPath(Reference, key);
-                }
-
-                WritePropertyName(key);
-
-                return this;
-            }
-        }
-
-        public IValueWriter this[int key]
-        {
-            get
-            {
-                if (IsReferenceMode)
-                {
-                    RWPathInfo.SetPath(Reference, key);
-                }
-
-                return this;
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void Append(char c)
+        internal void Append(char c)
         {
             *current = c; ++current;
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void Append(string value)
-        {
-            var length = value.Length;
-
-            Expand(length + 2);
-
-            Underlying.CopyBlock(
-                ref Underlying.As<char, byte>(ref *current), 
-                ref Underlying.As<char, byte>(ref StringHelper.GetRawStringData(value)), 
-                (uint)(length * 2));
-
-            current += length;
-        }
-
+#if !NO_OPTIONS
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool On(JsonFormatterOptions options)
-            => (this.options & options) != 0;
+        bool On(JsonFormatterOptions options)
+             => (Options & options) != 0;
+#endif
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public bool Are(JsonFormatterOptions options)
-            => (this.options & options) == options;
-
-        public static bool IsReferenceMode
+        /// <summary>
+        /// 移动偏移量。
+        /// </summary>
+        /// <param name="moveSize">向后移动的距离，可以是负数。</param>
+        /// <exception cref="IndexOutOfRangeException">移动后超出了缓存区区域</exception>
+        public void MoveOffset(int moveSize)
         {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => typeof(TMode) == typeof(ReferenceMode);
-        }
+            var newCurrent = current + moveSize;
 
-        public static bool IsSimpleMode
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => typeof(TMode) == typeof(SimpleMode);
-        }
-
-        public static bool IsComplexMode
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => typeof(TMode) == typeof(ComplexMode);
-        }
-
-        public bool IsFilterMode
-        {
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            get => options >= OnFilter;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void Expand(int expandMinSize)
-        {
-            if (current + expandMinSize > hGCache.Last)
+            if (newCurrent < begin || newCurrent > end)
             {
-                InternalExpand(expandMinSize);
+                throw new IndexOutOfRangeException();
+            }
+
+            current = newCurrent;
+        }
+
+        /// <summary>
+        /// 扩容。
+        /// </summary>
+        /// <param name="growMinSize">表示缓存区至少需要的内存空间</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void Grow(int growMinSize)
+        {
+            if (growMinSize > end - current)
+            {
+                InternalGrow(growMinSize);
             }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private void InternalExpand(int expandMinSize)
+        void InternalGrow(int growMinSize)
         {
-            if (hGCache.Context.Length >= HGlobalCache<char>.MaxSize && textWriter != null && current != hGCache.First)
+            HGlobalCache<char> hGCache;
+
+            if (segmenterOrHGCache is JsonSegmentedContent segmenter)
             {
-                hGCache.Count = Offset;
+                hGCache = segmenter.hGCache;
 
-                hGCache.WriteTo(textWriter);
+                if (current != hGCache.First)
+                {
+                    hGCache.Count = (int)(current - hGCache.First);
 
-                current = hGCache.First;
+                    segmenter.WriteSegment();
 
-                Expand(expandMinSize);
+                    hGCache.Count = 0;
+
+                    begin = hGCache.First;
+                    end = hGCache.Last;
+
+                    current = begin;
+                }
             }
             else
             {
-                var offset = Offset;
+                hGCache = Unsafe.As<HGlobalCache<char>>(segmenterOrHGCache);
+            }
 
-                hGCache.Expand(expandMinSize);
+            if (current + growMinSize > hGCache.Last)
+            {
+                var offset = (int)(current - hGCache.First);
 
-                current = hGCache.First + offset;
+                hGCache.Grow(growMinSize);
+
+                begin = hGCache.First;
+                end = hGCache.Last;
+
+                current = begin + offset;
             }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void ThrowOutOfDepthException()
+        void ThrowOutOfDepthException()
         {
+#if !NO_OPTIONS
             if (On(OutOfDepthException))
+#endif
             {
                 throw new JsonOutOfDepthException();
             }
         }
 
-        public bool Filter(ValueFilterInfo<string> valueInfo)
+        void ThrowIfSegmented()
         {
-            if (IsReferenceMode)
+            if (segmenterOrHGCache is JsonSegmentedContent)
             {
-                RWPathInfo.SetPath(Reference, valueInfo.Key);
+                throw new NotSupportedException("The method is not supported for serializers that already support segmented writing.");
             }
-
-            var result = Filter(valueInfo.ValueCopyer);
-
-            if (jsonFormatter != null && On(OnFilter))
-            {
-                return jsonFormatter.OnObjectFilter(this, valueInfo, result);
-            }
-
-            return result;
         }
 
-        public bool Filter(ValueFilterInfo<int> valueInfo)
+        /// <summary>
+        /// 在写入值之前写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteValueBefore()
         {
-            if (IsReferenceMode)
+#if !NO_OPTIONS
+            if (On(Indented))
             {
-                RWPathInfo.SetPath(Reference, valueInfo.Key);
+                NoInliningWriteValueBefore();
             }
 
-            var result = Filter(valueInfo.ValueCopyer);
-
-            if (jsonFormatter != null)
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            void NoInliningWriteValueBefore()
             {
-                return jsonFormatter.OnArrayFilter(this, valueInfo, result);
-            }
+                if (current > begin)
+                {
+                    switch (current[-1])
+                    {
+                        case FixArray:
+                        case ValueEnding:
 
-            return result;
+                            WriteRaw(ComplexModeInstance.LineBreakChars);
+
+                            for (int i = depth; i > 0; --i)
+                            {
+                                WriteRaw(ComplexModeInstance.IndentedChars);
+                            }
+
+                            break;
+                    }
+                }
+            }
+#endif
         }
 
-        public bool Filter(ValueCopyer valueCopyer)
+        /// <summary>
+        /// 在写入值之后写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteValueAfter()
+        {
+            Append(ValueEnding);
+        }
+
+        /// <summary>
+        /// 在写入键之前写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteKeyBefore()
+        {
+#if !NO_OPTIONS
+            if (On(Indented))
+            {
+                NoInliningAppendKeyBefore();
+            }
+
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            void NoInliningAppendKeyBefore()
+            {
+                WriteRaw(ComplexModeInstance.LineBreakChars);
+
+                for (int i = depth; i > 0; --i)
+                {
+                    WriteRaw(ComplexModeInstance.IndentedChars);
+                }
+            }
+#endif
+        }
+
+        /// <summary>
+        /// 在写入键之后写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteKeyAfter()
+        {
+            Append(KeyEnding);
+
+            WriteMiddleChars();
+        }
+
+        /// <summary>
+        /// 在写入对象或数组前写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteStructBefore()
+        {
+        }
+
+        /// <summary>
+        /// 在写入对象或数组后写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteStructAfter()
+        {
+#if !NO_OPTIONS
+            if (On(Indented))
+            {
+                NoInliningAppendStructAfter();
+            }
+
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            void NoInliningAppendStructAfter()
+            {
+                WriteRaw(ComplexModeInstance.LineBreakChars);
+
+                for (int i = depth; i > 0; --i)
+                {
+                    WriteRaw(ComplexModeInstance.IndentedChars);
+                }
+            }
+#endif
+        }
+
+        /// <summary>
+        /// 在写入键后且写入值之前写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteMiddleChars()
+        {
+#if !NO_OPTIONS
+            if (On(Indented))
+            {
+                WriteRaw(ComplexModeInstance.MiddleChars);
+            }
+#endif
+        }
+
+#if !NO_OPTIONS
+        bool Filter(ValueCopyer valueCopyer)
         {
             var basicType = valueCopyer.TypeCode;
 
-            if (IsReferenceMode)
+            if (On(ReferenceOptions))
             {
-                if (
-                    (
-                        On(MultiReferencingNull | LoopReferencingNull) &&
-                        basicType == TypeCode.Object &&
-                        valueCopyer.InternalObject is IDataReader dataReader &&
-                        dataReader.ContentType?.IsValueType == false &&
-                        GetReference(dataReader.Content) is RWPathInfo reference &&
-                        (On(MultiReferencingNull) || IsLoopReferencing(reference))
-                    )
-                    ||
-                    (
-                        Are(MultiReferencingNull | MultiReferencingAlsoString) &&
-                        basicType == TypeCode.String &&
-                        valueCopyer.InternalObject is string str &&
-                        GetReference(str) != null
-                    )
-                   )
+                if (basicType is RWTypeCode.Object or RWTypeCode.Array
+                    && On(MultiReferencingNull | LoopReferencingNull)
+                    && valueCopyer.InternalValue is IDataReader dataReader
+                    && dataReader.ContentType?.IsValueType == false
+                    && dataReader.Content is object content
+                    && ReferenceModeInstance.GetReference(content) is RWPath reference
+                    && (On(MultiReferencingNull) || ReferenceModeInstance.ReferenceCompare(reference) is 1))
                 {
-                    valueCopyer.DirectWrite(null);
-
-                    basicType = TypeCode.Empty;
+                    goto AsNull;
                 }
+
+                if (basicType is RWTypeCode.String
+                    && On(MultiReferencingNull)
+                    && On(MultiReferencingAlsoString)
+                    && valueCopyer.InternalValue is string str
+                    && ReferenceModeInstance.GetReference(str) is not null)
+                {
+                    goto AsNull;
+                }
+
+                goto Break;
+
+            AsNull:
+
+                valueCopyer.DirectWrite(null);
+
+                basicType = RWTypeCode.Null;
+
+            Break:;
+
             }
 
-            if (basicType == TypeCode.Empty && On(IgnoreNull))
+            if (basicType is RWTypeCode.Null && On(IgnoreNull))
             {
                 return false;
             }
@@ -340,33 +544,33 @@ namespace Swifter.Json
             {
                 switch (basicType)
                 {
-                    case TypeCode.SByte:
+                    case RWTypeCode.SByte:
                         return valueCopyer.ReadSByte() != 0;
-                    case TypeCode.Int16:
+                    case RWTypeCode.Int16:
                         return valueCopyer.ReadInt16() != 0;
-                    case TypeCode.Int32:
+                    case RWTypeCode.Int32:
                         return valueCopyer.ReadInt32() != 0;
-                    case TypeCode.Int64:
+                    case RWTypeCode.Int64:
                         return valueCopyer.ReadInt64() != 0;
-                    case TypeCode.Byte:
+                    case RWTypeCode.Byte:
                         return valueCopyer.ReadByte() != 0;
-                    case TypeCode.UInt16:
+                    case RWTypeCode.UInt16:
                         return valueCopyer.ReadUInt16() != 0;
-                    case TypeCode.UInt32:
+                    case RWTypeCode.UInt32:
                         return valueCopyer.ReadUInt32() != 0;
-                    case TypeCode.UInt64:
+                    case RWTypeCode.UInt64:
                         return valueCopyer.ReadUInt64() != 0;
-                    case TypeCode.Single:
+                    case RWTypeCode.Single:
                         return valueCopyer.ReadSingle() != 0;
-                    case TypeCode.Double:
+                    case RWTypeCode.Double:
                         return valueCopyer.ReadDouble() != 0;
-                    case TypeCode.Decimal:
+                    case RWTypeCode.Decimal:
                         return valueCopyer.ReadDecimal() != 0;
                 }
             }
 
             if (On(IgnoreEmptyString) &&
-                basicType == TypeCode.String &&
+                basicType is RWTypeCode.String &&
                 valueCopyer.ReadString() == string.Empty)
             {
                 return false;
@@ -375,12 +579,104 @@ namespace Swifter.Json
             return true;
         }
 
+#endif
+
+        /// <summary>
+        /// 将当前内容转换为字符串。
+        /// </summary>
+        /// <exception cref="NotSupportedException">指定了写入段落回调</exception>
+        public override string ToString()
+        {
+            ThrowIfSegmented();
+
+            Flush();
+
+            return HGCache.ToStringEx();
+        }
+
+        #endregion
+
+        #region -- 公共值 --
+
+        /// <summary>
+        /// 写入元内容。
+        /// </summary>
+        /// <param name="rawContentLength">元内容长度</param>
+        /// <returns>返回用于写入元内容的内存</returns>
+        public Ps<char> WriteRaw(int rawContentLength)
+        {
+            Grow(rawContentLength);
+
+            var rawSpan = new Ps<char>(current, rawContentLength);
+
+            current += rawContentLength;
+
+            return rawSpan;
+        }
+
+        /// <summary>
+        /// 写入元内容。
+        /// </summary>
+        /// <param name="value">元内容</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteRaw(string value)
+        {
+            var length = value.Length;
+
+            Grow(length + 2);
+
+            Unsafe.CopyBlock(
+                ref Unsafe.As<char, byte>(ref *current),
+                ref Unsafe.As<char, byte>(ref StringHelper.GetRawStringData(value)),
+                (uint)(length * sizeof(char)));
+
+            current += length;
+        }
+
+        /// <summary>
+        /// 写入元内容。
+        /// </summary>
+        /// <param name="value">元内容</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWriteRaw(Ps<char> value)
+        {
+            Grow(value.Length + 2);
+
+            Unsafe.CopyBlock(
+                current,
+                value.Pointer,
+                (uint)(value.Length * sizeof(char)));
+
+            current += value.Length;
+        }
+
+        /// <summary>
+        /// 写入元内容。
+        /// </summary>
+        /// <param name="firstChar">元内容首个字符引用</param>
+        /// <param name="length">元内容长度</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWriteRaw(ref char firstChar, int length)
+        {
+            Grow(length + 2);
+
+            Unsafe.CopyBlock(
+                ref Unsafe.As<char, byte>(ref *current),
+                ref Unsafe.As<char, byte>(ref firstChar),
+                (uint)(length * sizeof(char)));
+
+            current += length;
+        }
+
+        /// <summary>
+        /// 写入一个 <see langword="null"/> 值。
+        /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void WriteNull()
         {
             WriteValueBefore();
 
-            Expand(6);
+            Grow(6);
 
             //Append(nullString);
 
@@ -391,24 +687,30 @@ namespace Swifter.Json
 
             current += 4;
 
-            AppendValueAfter();
+            WriteValueAfter();
         }
 
-        public void DirectWrite(object value)
+        /// <summary>
+        /// 直接写入一个基础类型的值。
+        /// </summary>
+        /// <remarks>
+        /// 注意: 此方法不支持写入复杂类型 (如: 对象类型或数组类型) 的值。
+        /// </remarks>
+        public void DirectWrite(object? value)
         {
-            if (IsReferenceMode && On(MultiReferencingAlsoString) && On(MultiReferencingReference | MultiReferencingNull) && CheckObjectReference(value))
-            {
-                return;
-            }
-
-            Loop:
-
             if (value is null)
             {
                 WriteNull();
 
                 return;
             }
+
+#if !NO_OPTIONS
+            if (On(MultiReferencingAlsoString) && On(MultiReferencingReference | MultiReferencingNull) && CheckObjectReference(value))
+            {
+                return;
+            }
+#endif
 
             switch (Type.GetTypeCode(value.GetType()))
             {
@@ -416,587 +718,128 @@ namespace Swifter.Json
                     WriteNull();
                     return;
                 case TypeCode.Boolean:
-                    WriteBoolean((bool)value);
+                    WriteBoolean(TypeHelper.Unbox<bool>(value));
                     return;
                 case TypeCode.Char:
-                    WriteChar((char)value);
+                    WriteChar(TypeHelper.Unbox<char>(value));
                     return;
                 case TypeCode.SByte:
-                    WriteSByte((sbyte)value);
+                    WriteSByte(TypeHelper.Unbox<sbyte>(value));
                     return;
                 case TypeCode.Byte:
-                    WriteByte((byte)value);
+                    WriteByte(TypeHelper.Unbox<byte>(value));
                     return;
                 case TypeCode.Int16:
-                    WriteInt16((short)value);
+                    WriteInt16(TypeHelper.Unbox<short>(value));
                     return;
                 case TypeCode.UInt16:
-                    WriteUInt16((ushort)value);
+                    WriteUInt16(TypeHelper.Unbox<ushort>(value));
                     return;
                 case TypeCode.Int32:
-                    WriteInt32((int)value);
+                    WriteInt32(TypeHelper.Unbox<int>(value));
                     return;
                 case TypeCode.UInt32:
-                    WriteUInt32((uint)value);
+                    WriteUInt32(TypeHelper.Unbox<uint>(value));
                     return;
                 case TypeCode.Int64:
-                    WriteInt64((long)value);
+                    WriteInt64(TypeHelper.Unbox<long>(value));
                     return;
                 case TypeCode.UInt64:
-                    WriteUInt64((ulong)value);
+                    WriteUInt64(TypeHelper.Unbox<ulong>(value));
                     return;
                 case TypeCode.Single:
-                    WriteSingle((float)value);
+                    WriteSingle(TypeHelper.Unbox<float>(value));
                     return;
                 case TypeCode.Double:
-                    WriteDouble((double)value);
+                    WriteDouble(TypeHelper.Unbox<double>(value));
                     return;
                 case TypeCode.Decimal:
-                    WriteDecimal((decimal)value);
+                    WriteDecimal(TypeHelper.Unbox<decimal>(value));
                     return;
                 case TypeCode.DateTime:
-                    WriteDateTime((DateTime)value);
+                    WriteDateTime(TypeHelper.Unbox<DateTime>(value));
                     return;
                 case TypeCode.String:
-                    WriteValueBefore();
+                    goto String;
+            }
 
-                    InternalWriteString((string)value);
-
-                    AppendValueAfter();
+            switch (value)
+            {
+                case Guid:
+                    WriteGuid(TypeHelper.Unbox<Guid>(value));
                     return;
-            }
-
-            if (value is Guid g)
-            {
-                WriteGuid(g);
-
-                return;
-            }
-
-            if (value is DateTimeOffset dto)
-            {
-                WriteDateTimeOffset(dto);
-
-                return;
+                case DateTimeOffset:
+                    WriteDateTimeOffset(TypeHelper.Unbox<DateTimeOffset>(value));
+                    return;
             }
 
             value = value.ToString();
 
-            goto Loop;
-        }
-
-        public void WriteArray(IDataReader<int> dataReader)
-        {
-            if (IsReferenceMode && dataReader.ContentType?.IsValueType == false && CheckObjectReference(dataReader.Content))
-            {
-                return;
-            }
-
-            WriteValueBefore();
-
-            Expand(2);
-
-            Append(FixArray);
-
-            AppendStructBefore();
-
-            var isInArray = false;
-
-            if (!IsSimpleMode)
-            {
-                isInArray = IsInArray;
-
-                IsInArray = true;
-            }
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-            }
-            else
-            {
-                var tCurrent = current;
-
-                ++depth;
-
-                if (IsSimpleMode)
-                {
-                    dataReader.OnReadAll(this);
-                }
-                else
-                {
-                    if (IsReferenceMode)
-                    {
-                        Reference = RWPathInfo.Create(default(int), Reference);
-
-                        if (On(MultiReferencingOptimizeLayout))
-                        {
-                            if (dataReader.Count > 0)
-                            {
-                                dataReader.OnReadAll(References);
-                            }
-                        }
-                    }
-
-                    if (IsFilterMode && On(ArrayOnFilter))
-                    {
-                        dataReader.OnReadAll(new DataFilterWriter<int>(this, this));
-                    }
-                    else
-                    {
-                        dataReader.OnReadAll(this);
-                    }
-
-                    if (IsReferenceMode)
-                    {
-                        Reference = Reference.Parent;
-                    }
-                }
-
-                --depth;
-
-                Expand(2);
-
-                if (tCurrent != current)
-                {
-                    --current;
-                }
-            }
-
-            AppendStructAfter();
-
-            Append(ArrayEnding);
-
-            if (!IsSimpleMode)
-            {
-                IsInArray = isInArray;
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteArray<T>(T[] array)
-        {
-            if (IsReferenceMode && CheckObjectReference(array))
-            {
-                return;
-            }
-
-            InternalWriteArray(array, array.Length);
-        }
-
-        public void WriteList<T>(List<T> list)
-        {
-            if (IsReferenceMode && CheckObjectReference(list))
-            {
-                return;
-            }
-
-            InternalWriteArray(ArrayHelper.GetRawData(list), list.Count);
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void InternalWriteArray<T>(T[] array, int length)
-        {
-            WriteValueBefore();
-
-            Expand(2);
-
-            Append(FixArray);
-
-            AppendStructBefore();
-
-            var isInArray = false;
-
-            if (!IsSimpleMode)
-            {
-                isInArray = IsInArray;
-
-                IsInArray = true;
-            }
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-            }
-            else
-            {
-                var tCurrent = current;
-
-                ++depth;
-
-                if (!IsSimpleMode && IsFilterMode && On(ArrayOnFilter))
-                {
-                    var filterInfo = new ValueFilterInfo<int>();
-
-                    for (int i = 0; i < length; i++)
-                    {
-                        filterInfo.Key = i;
-                        filterInfo.Type = typeof(T);
-
-                        ValueInterface.WriteValue(filterInfo.ValueCopyer, array[i]);
-
-                        if (Filter(filterInfo))
-                        {
-                            filterInfo.ValueCopyer.WriteTo(this);
-                        }
-                    }
-                }
-                else if (ValueInterface<T>.IsNotModified)
-                {
-                    for (int i = 0; i < length; i++)
-                    {
-                        WriteValue(array[i]);
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < length; i++)
-                    {
-                        ValueInterface.WriteValue(this, array[i]);
-                    }
-                }
-
-                --depth;
-
-                Expand(2);
-
-                if (tCurrent != current)
-                {
-                    --current;
-                }
-            }
-
-            AppendStructAfter();
-
-            Append(ArrayEnding);
-
-            if (!IsSimpleMode)
-            {
-                IsInArray = isInArray;
-            }
-
-            AppendValueAfter();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteValue<T>(T value)
-        {
-            if (typeof(T) == typeof(int)) WriteInt32(Underlying.As<T, int>(ref value));
-            else if (typeof(T) == typeof(string)) WriteString(Underlying.As<T, string>(ref value));
-            else if (typeof(T) == typeof(double)) WriteDouble(Underlying.As<T, double>(ref value));
-            else if (typeof(T) == typeof(bool)) WriteBoolean(Underlying.As<T, bool>(ref value));
-            else if (typeof(T) == typeof(byte)) WriteByte(Underlying.As<T, byte>(ref value));
-            else if (typeof(T) == typeof(sbyte)) WriteSByte(Underlying.As<T, sbyte>(ref value));
-            else if (typeof(T) == typeof(short)) WriteInt16(Underlying.As<T, short>(ref value));
-            else if (typeof(T) == typeof(ushort)) WriteUInt16(Underlying.As<T, ushort>(ref value));
-            else if (typeof(T) == typeof(uint)) WriteUInt32(Underlying.As<T, uint>(ref value));
-            else if (typeof(T) == typeof(long)) WriteInt64(Underlying.As<T, long>(ref value));
-            else if (typeof(T) == typeof(ulong)) WriteUInt64(Underlying.As<T, ulong>(ref value));
-            else if (typeof(T) == typeof(float)) WriteSingle(Underlying.As<T, float>(ref value));
-            else if (typeof(T) == typeof(char)) WriteChar(Underlying.As<T, char>(ref value));
-            else if (typeof(T) == typeof(decimal)) WriteDecimal(Underlying.As<T, decimal>(ref value));
-            else if (typeof(T) == typeof(DateTime)) WriteDateTime(Underlying.As<T, DateTime>(ref value));
-            else if (typeof(T) == typeof(Guid)) WriteGuid(Underlying.As<T, Guid>(ref value));
-            else if (typeof(T) == typeof(DateTimeOffset)) WriteDateTimeOffset(Underlying.As<T, DateTimeOffset>(ref value));
-            else ValueInterface.WriteValue(this, value);
-        }
-
-        public void WriteBoolean(bool value)
-        {
-            WriteValueBefore();
-
-            Expand(6);
-
-            if (value)
-            {
-                Append('t');
-                Append('r');
-                Append('u');
-                Append('e');
-            }
-            else
-            {
-                Append('f');
-                Append('a');
-                Append('l');
-                Append('s');
-                Append('e');
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteByte(byte value) => WriteUInt64(value);
-
-        public void WriteChar(char value)
-        {
-            WriteValueBefore();
-
-            InternalWriteString(ref value, 1);
-
-            AppendValueAfter();
-        }
-
-        public void WriteDateTime(DateTime value)
-        {
-            WriteValueBefore();
-
-            Expand(DateTimeHelper.ISOStringMaxLength + 4);
-
-            Append(FixString);
-
-            current += DateTimeHelper.ToISOString(value, current);
-
-            Append(FixString);
-
-            AppendValueAfter();
-        }
-
-        public void WriteDecimal(decimal value)
-        {
-            WriteValueBefore();
-
-            Expand(NumberHelper.DecimalStringMaxLength);
-
-            current += NumberHelper.ToString(value, current);
-
-            AppendValueAfter();
-        }
-
-        public void WriteDouble(double value)
-        {
-            WriteValueBefore();
-
-            if (NumberHelper.IsSpecialValue(value))
-            {
-                InternalWriteDoubleString(value);
-            }
-            else
-            {
-                Expand(NumberHelper.DecimalMaxDoubleStringLength);
-
-                if (On(UseSystemFloatingPointsMethods))
-                {
-#if Span
-                    value.TryFormat(new Span<char>(current, Rest), out var charsWritter); // 在空间足够，此处一定成功。
-
-                    current += charsWritter;
-#else
-                    Append(value.ToString());
-#endif
-                }
-                else
-                {
-                    current += NumberHelper.Decimal.ToString(value, current);
-                }
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteInt16(short value) => WriteInt64(value);
-
-        public void WriteInt32(int value) => WriteInt64(value);
-
-        public void WriteInt64(long value)
-        {
-            WriteValueBefore();
-
-            InternalWriteInt64(value);
-
-            AppendValueAfter();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void InternalWriteInt64(long value)
-        {
-            Expand(NumberHelper.DecimalMaxInt64NumbersLength);
-
-            current += NumberHelper.ToDecimalString(value, current);
-        }
-
-        public void WriteObject(IDataReader<string> dataReader)
-        {
-            if (IsReferenceMode && dataReader.ContentType?.IsValueType == false && CheckObjectReference(dataReader.Content))
-            {
-                return;
-            }
-
-            WriteValueBefore();
-
-            Expand(2);
-
-            Append(FixObject);
-
-            AppendStructBefore();
-
-            var isInArray = false;
-
-            if (!IsSimpleMode)
-            {
-                isInArray = IsInArray;
-
-                IsInArray = false;
-            }
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-            }
-            else
-            {
-                var tCurrent = current;
-
-                ++depth;
-
-                if (IsSimpleMode)
-                {
-                    dataReader.OnReadAll(this);
-                }
-                else
-                {
-                    if (IsReferenceMode)
-                    {
-                        Reference = RWPathInfo.Create(default(string), Reference);
-
-                        if (On(MultiReferencingOptimizeLayout))
-                        {
-                            if (dataReader.Count > 0)
-                            {
-                                dataReader.OnReadAll(References);
-                            }
-                        }
-                    }
-
-                    if (IsFilterMode)
-                    {
-                        dataReader.OnReadAll(new DataFilterWriter<string>(this, this));
-                    }
-                    else
-                    {
-                        dataReader.OnReadAll(this);
-                    }
-
-                    if (IsReferenceMode)
-                    {
-                        Reference = Reference.Parent;
-                    }
-                }
-
-                --depth;
-
-                Expand(2);
-
-                if (tCurrent != current)
-                {
-                    --current;
-                }
-            }
-
-            AppendStructAfter();
-
-            Append(ObjectEnding);
-
-            if (!IsSimpleMode)
-            {
-                IsInArray = isInArray;
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteSByte(sbyte value) => WriteInt64(value);
-
-        public void WriteSingle(float value)
-        {
-            WriteValueBefore();
-
-            if (NumberHelper.IsSpecialValue(value))
-            {
-                InternalWriteDoubleString(value);
-            }
-            else
-            {
-                Expand(NumberHelper.DecimalMaxSingleStringLength);
-
-                if (On(UseSystemFloatingPointsMethods))
-                {
-#if Span
-                    value.TryFormat(new Span<char>(current, Rest), out var charsWritter); // 在空间足够，此处一定成功。
-
-                    current += charsWritter;
-#else
-                    Append(value.ToString());
-#endif
-                }
-                else
-                {
-                    current += NumberHelper.Decimal.ToString(value, current);
-                }
-            }
-
-            AppendValueAfter();
-        }
-
-        public void WriteString(string value)
-        {
             if (value is null)
             {
                 WriteNull();
+
+                return;
             }
-            else
-            {
-                if (IsReferenceMode &&
-                    On(MultiReferencingAlsoString) &&
-                    On(MultiReferencingReference | MultiReferencingNull) &&
-                    CheckObjectReference(value))
-                {
-                    return;
-                }
 
-                WriteValueBefore();
+        String:
 
-                InternalWriteString(value);
-
-                AppendValueAfter();
-            }
-        }
-
-        public void WriteUInt16(ushort value) => WriteUInt64(value);
-
-        public void WriteUInt32(uint value) => WriteUInt64(value);
-
-        public void WriteUInt64(ulong value)
-        {
             WriteValueBefore();
 
-            InternalWriteUInt64(value);
+            InternalWriteString(Unsafe.As<string>(value));
 
-            AppendValueAfter();
+            WriteValueAfter();
+
+            return;
         }
 
+        /// <summary>
+        /// 写入一个已知类型的值。
+        /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void InternalWriteUInt64(ulong value)
+        public void WriteValue<T>(T? value)
         {
-            Expand(NumberHelper.DecimalMaxUInt64NumbersLength);
+            if (typeof(T) == typeof(int)) WriteInt32(As<int>(value));
+            else if (typeof(T) == typeof(string)) WriteString(As<string>(value));
+            else if (typeof(T) == typeof(double)) WriteDouble(As<double>(value));
+            else if (typeof(T) == typeof(bool)) WriteBoolean(As<bool>(value));
+            else if (typeof(T) == typeof(byte)) WriteByte(As<byte>(value));
+            else if (typeof(T) == typeof(sbyte)) WriteSByte(As<sbyte>(value));
+            else if (typeof(T) == typeof(short)) WriteInt16(As<short>(value));
+            else if (typeof(T) == typeof(ushort)) WriteUInt16(As<ushort>(value));
+            else if (typeof(T) == typeof(uint)) WriteUInt32(As<uint>(value));
+            else if (typeof(T) == typeof(long)) WriteInt64(As<long>(value));
+            else if (typeof(T) == typeof(ulong)) WriteUInt64(As<ulong>(value));
+            else if (typeof(T) == typeof(float)) WriteSingle(As<float>(value));
+            else if (typeof(T) == typeof(char)) WriteChar(As<char>(value));
+            else if (typeof(T) == typeof(decimal)) WriteDecimal(As<decimal>(value));
+            else if (typeof(T) == typeof(DateTime)) WriteDateTime(As<DateTime>(value));
+            else if (typeof(T) == typeof(Guid)) WriteGuid(As<Guid>(value));
+            else if (typeof(T) == typeof(DateTimeOffset)) WriteDateTimeOffset(As<DateTimeOffset>(value));
+            else if (typeof(T) == typeof(TimeSpan)) WriteTimeSpan(As<TimeSpan>(value));
+            else ValueInterface.WriteValue(this, value);
 
-            current += NumberHelper.ToDecimalString(value, current);
+            [MethodImpl(VersionDifferences.AggressiveInlining)]
+            static TOutput As<TOutput>(T? value)
+                => Unsafe.As<T?, TOutput>(ref value);
         }
 
+        /// <summary>
+        /// 写入一个枚举值。
+        /// </summary>
         public void WriteEnum<T>(T value) where T : struct, Enum
         {
-            Expand(128);
+            Grow(128);
 
             WriteValueBefore();
 
             if (EnumHelper.IsFlagsEnum<T>() && EnumHelper.AsUInt64(value) != 0)
             {
                 // TODO: 枚举值不应该出现 '"' '\n' '\r' 等违法字符；如果存在违法字符串，这里序列化的 Json 将格式错误。
-                // TODO: 通常情况下，hGCache 剩余的空间完全足够任何枚举的 Flags 字符串，这里如果超出了，将使用整数格式。
+                // TODO: 通常情况下，hGCache 剩余的空间完全足够枚举的 Flags 字符串，这里如果超出了，将使用整数格式。
 
                 if (EnumHelper.AsUInt64(
-                    EnumHelper.FormatEnumFlags(value, current + 1, (hGCache.Available - Offset - 18), out var written)
+                    EnumHelper.FormatEnumFlags(value, current + 1, Rest, out var written)
                     ) == 0)
                 {
                     Append(FixString);
@@ -1018,51 +861,122 @@ namespace Swifter.Json
             switch (EnumHelper.GetEnumTypeCode<T>())
             {
                 case TypeCode.SByte:
-                    InternalWriteInt64(Underlying.As<T, sbyte>(ref value));
+                    InternalWriteInt64(Unsafe.As<T, sbyte>(ref value));
                     break;
                 case TypeCode.Int16:
-                    InternalWriteInt64(Underlying.As<T, short>(ref value));
+                    InternalWriteInt64(Unsafe.As<T, short>(ref value));
                     break;
                 case TypeCode.Int32:
-                    InternalWriteInt64(Underlying.As<T, int>(ref value));
+                    InternalWriteInt64(Unsafe.As<T, int>(ref value));
                     break;
                 case TypeCode.Int64:
-                    InternalWriteInt64(Underlying.As<T, long>(ref value));
+                    InternalWriteInt64(Unsafe.As<T, long>(ref value));
                     break;
                 default:
                     InternalWriteUInt64(EnumHelper.AsUInt64(value));
                     break;
             }
 
-            After:
+        After:
 
-            AppendValueAfter();
+            WriteValueAfter();
         }
 
-        void IValueWriter<Guid>.WriteValue(Guid value) => WriteGuid(value);
-
-        void IValueWriter<DateTimeOffset>.WriteValue(DateTimeOffset value) => WriteDateTimeOffset(value);
-
-        public void WriteGuid(Guid value)
+        /// <summary>
+        /// 写入一个路径。
+        /// </summary>
+        public void WritePath(RWPath path)
         {
             WriteValueBefore();
 
-            Expand(NumberHelper.GuidStringWithSeparatorsLength + 4);
+            Grow(2);
 
             Append(FixString);
 
-            current += NumberHelper.ToString(value, current, true);
+            InternalWritePath(path);
+
+            Grow(3);
 
             Append(FixString);
 
-            AppendValueAfter();
+            WriteValueAfter();
         }
 
-        public void WriteDateTimeOffset(DateTimeOffset value)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void InternalWritePath(RWPath reference)
+        {
+            Grow(2);
+
+            WriteRaw(ReferenceRootPathName);
+
+            for (var node = reference.Nodes.FirstNode; node != null; node = node.Next)
+            {
+                Grow(2);
+
+                Append(ReferenceSeparator);
+
+                node.Value.Accept(this);
+            }
+        }
+
+        #endregion
+
+        #region -- 数值 --
+
+        /// <summary>
+        /// 写入一个 <see cref="Boolean"/> 值。
+        /// </summary>
+        public void WriteBoolean(bool value)
         {
             WriteValueBefore();
 
-            Expand(DateTimeHelper.ISOStringMaxLength + 4);
+            Grow(6);
+
+            if (value)
+            {
+                Append('t');
+                Append('r');
+                Append('u');
+                Append('e');
+            }
+            else
+            {
+                Append('f');
+                Append('a');
+                Append('l');
+                Append('s');
+                Append('e');
+            }
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个 <see cref="Byte"/> 值。
+        /// </summary>
+        public void WriteByte(byte value)
+            => WriteUInt64(value);
+
+        /// <summary>
+        /// 写入一个 <see cref="Char"/> 值。
+        /// </summary>
+        public void WriteChar(char value)
+        {
+            WriteValueBefore();
+
+            InternalWriteStringCore(ref value, 1);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个 <see cref="DateTime"/> 值。
+        /// </summary>
+        public void WriteDateTime(DateTime value)
+        {
+            WriteValueBefore();
+
+            Grow(DateTimeHelper.ISOStringMaxLength + 4);
 
             Append(FixString);
 
@@ -1070,107 +984,823 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            AppendValueAfter();
+            WriteValueAfter();
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private void WriteValueBefore()
+        /// <summary>
+        /// 写入一个 <see cref="Decimal"/> 值。
+        /// </summary>
+        public void WriteDecimal(decimal value)
         {
-            if (!IsSimpleMode)
-            {
-                if (On(Indented))
-                {
-                    if (IsInArray)
-                    {
-                        Append(LineBreakChars);
+            WriteValueBefore();
 
-                        for (int i = depth; i > 0; --i)
-                        {
-                            Append(IndentedChars);
-                        }
-                    }
+            Grow(NumberHelper.DecimalStringMaxLength);
+
+            current += NumberHelper.ToString(value, current);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个 <see cref="Double"/> 值。
+        /// </summary>
+        public void WriteDouble(double value)
+        {
+            WriteValueBefore();
+
+            if (NumberHelper.IsSpecialValue(value))
+            {
+                InternalWriteDoubleString(value);
+            }
+            else
+            {
+                Grow(NumberHelper.DecimalMaxDoubleStringLength);
+
+#if !NO_OPTIONS
+                if (On(UseSystemFloatingPointsMethods))
+                {
+#if NativeSpan
+                    value.TryFormat(new Span<char>(current, Rest), out var charsWritter); // 在空间足够，此处一定成功。
+
+                    current += charsWritter;
+#else
+                    WriteRaw(value.ToString());
+#endif
+                }
+                else
+#endif
+                {
+                    current += NumberHelper.Decimal.ToString(value, current);
                 }
             }
+
+            WriteValueAfter();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void InternalWriteDoubleString(double value)
+        {
+            // NaN, PositiveInfinity, NegativeInfinity, Or Other...
+
+            // TODO: Fast
+            InternalWriteString(value.ToString());
+        }
+
+        /// <summary>
+        /// 写入一个 <see cref="Int16"/> 值。
+        /// </summary>
+        public void WriteInt16(short value)
+            => WriteInt64(value);
+
+        /// <summary>
+        /// 写入一个 <see cref="Int32"/> 值。
+        /// </summary>
+        public void WriteInt32(int value)
+            => WriteInt64(value);
+
+        /// <summary>
+        /// 写入一个 <see cref="Int64"/> 值。
+        /// </summary>
+        public void WriteInt64(long value)
+        {
+            WriteValueBefore();
+
+            InternalWriteInt64(value);
+
+            WriteValueAfter();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendValueAfter()
+        void InternalWriteInt64(long value)
         {
-            Append(ValueEnding);
+            Grow(NumberHelper.DecimalMaxInt64NumbersLength);
+
+            current += NumberHelper.ToDecimalString(value, current);
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendKeyBefore()
+        /// <summary>
+        /// 写入一个 <see cref="SByte"/> 值。
+        /// </summary>
+        public void WriteSByte(sbyte value)
+            => WriteInt64(value);
+
+        /// <summary>
+        /// 写入一个 <see cref="Single"/> 值。
+        /// </summary>
+        public void WriteSingle(float value)
         {
-            if (!IsSimpleMode)
+            WriteValueBefore();
+
+            if (NumberHelper.IsSpecialValue(value))
             {
-                if (On(Indented))
-                {
-                    if (!IsInArray)
-                    {
-                        Append(LineBreakChars);
+                InternalWriteDoubleString(value);
+            }
+            else
+            {
+                Grow(NumberHelper.DecimalMaxSingleStringLength);
 
-                        for (int i = depth; i > 0; --i)
-                        {
-                            Append(IndentedChars);
-                        }
-                    }
+#if !NO_OPTIONS
+                if (On(UseSystemFloatingPointsMethods))
+                {
+#if NativeSpan
+                    value.TryFormat(new Span<char>(current, Rest), out var charsWritter); // 在空间足够，此处一定成功。
+
+                    current += charsWritter;
+#else
+                    WriteRaw(value.ToString());
+#endif
+                }
+                else
+#endif
+                {
+                    current += NumberHelper.Decimal.ToString(value, current);
                 }
             }
+
+            WriteValueAfter();
+        }
+        /// <summary>
+        /// 写入一个 <see cref="UInt16"/> 值。
+        /// </summary>
+        public void WriteUInt16(ushort value)
+            => WriteUInt64(value);
+
+        /// <summary>
+        /// 写入一个 <see cref="UInt32"/> 值。
+        /// </summary>
+        public void WriteUInt32(uint value)
+            => WriteUInt64(value);
+
+        /// <summary>
+        /// 写入一个 <see cref="UInt64"/> 值。
+        /// </summary>
+        public void WriteUInt64(ulong value)
+        {
+            WriteValueBefore();
+
+            InternalWriteUInt64(value);
+
+            WriteValueAfter();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendKeyAfter()
+        void InternalWriteUInt64(ulong value)
         {
-            Append(KeyEnding);
+            Grow(NumberHelper.DecimalMaxUInt64NumbersLength);
 
-            AppendMiddleChars();
+            current += NumberHelper.ToDecimalString(value, current);
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendMiddleChars()
+        /// <summary>
+        /// 写入一个 <see cref="Guid"/> 值。
+        /// </summary>
+        /// <param name="value">值</param>
+        /// <param name="withSeparators">是否包含分隔符</param>
+        public void WriteGuid(Guid value, bool withSeparators = true)
         {
-            if (!IsSimpleMode)
-            {
-                if (On(Indented))
-                {
-                    Append(MiddleChars);
-                }
-            }
-        }
+            WriteValueBefore();
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendStructBefore()
-        {
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendStructAfter()
-        {
-            if (!IsSimpleMode)
-            {
-                if (On(Indented))
-                {
-                    Append(LineBreakChars);
-
-                    for (int i = depth; i > 0; --i)
-                    {
-                        Append(IndentedChars);
-                    }
-                }
-            }
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void InternalWriteString(ref char firstChar, int length)
-        {
-            var expand = length + 5;
-
-            Expand(expand);
+            Grow(GuidHelper.GuidStringWithSeparatorsLength + 4);
 
             Append(FixString);
 
+            current += GuidHelper.ToString(value, current, withSeparators);
+
+            Append(FixString);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个 <see cref="Guid"/> 值。
+        /// </summary>
+        public void WriteGuid(Guid value)
+        {
+            WriteGuid(value, true);
+        }
+
+        /// <summary>
+        /// 写入一个 <see cref="DateTimeOffset"/> 值。
+        /// </summary>
+        public void WriteDateTimeOffset(DateTimeOffset value)
+        {
+            WriteValueBefore();
+
+            Grow(DateTimeHelper.ISOStringMaxLength + 4);
+
+            Append(FixString);
+
+            current += DateTimeHelper.ToISOString(value, current);
+
+            Append(FixString);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个 <see cref="TimeSpan"/> 值。
+        /// </summary>
+        public void WriteTimeSpan(TimeSpan value)
+        {
+            WriteValueBefore();
+
+            Grow(DateTimeHelper.ISOStringMaxLength + 4);
+
+            Append(FixString);
+
+            current += DateTimeHelper.ToISOString(value, current);
+
+            Append(FixString);
+
+            WriteValueAfter();
+        }
+
+        #endregion
+
+        #region -- 结构 --
+
+        /// <summary>
+        /// 写入一个数组。
+        /// </summary>
+        public void WriteArray(IDataReader<int> dataReader)
+        {
+#if !NO_OPTIONS
+            if (On(ReferenceOptions) && dataReader.ContentType?.IsValueType == false && dataReader.Content is object content && CheckObjectReference(content))
+            {
+                return;
+            }
+#endif
+            if (dataReader is IFastArrayRW fastArrayRW && dataReader.ValueType is not null /* 如果是未知的值的类型则不支持快速写入 */)
+            {
+                fastArrayRW.WriteTo(this);
+
+                return;
+            }
+
+            WriteValueBefore();
+
+            Grow(2);
+
+            Append(FixArray);
+
+            WriteStructBefore();
+
+            if (depth >= MaxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+            else
+            {
+                var tCurrent = current;
+
+                ++depth;
+
+#if !NO_OPTIONS
+                if (!IsSimpleMode)
+                {
+                    if (On(ReferenceOptions))
+                    {
+                        ReferenceModeInstance.EnterReferenceScope();
+
+                        if (On(MultiReferencingOptimizeLayout))
+                        {
+                            if (dataReader.Count > 0)
+                            {
+                                dataReader.OnReadAll(ReferenceModeInstance.ArrayReferenceWriter);
+                            }
+                        }
+                    }
+
+                    if (IsFilterMode && On(ArrayOnFilter))
+                    {
+                        dataReader.OnReadAll(new DataFilterWriter<int>(this, this, dataReader));
+                    }
+                    else
+                    {
+                        dataReader.OnReadAll(this);
+                    }
+
+                    if (On(ReferenceOptions))
+                    {
+                        ReferenceModeInstance.LeaveReferenceScope();
+                    }
+                }
+                else
+#endif
+                {
+                    dataReader.OnReadAll(this);
+                }
+
+                --depth;
+
+                Grow(2);
+
+                if (tCurrent != current)
+                {
+                    --current;
+                }
+            }
+
+            WriteStructAfter();
+
+            Append(ArrayEnding);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个数组。
+        /// </summary>
+        public void WriteArray<T>(T?[]? array)
+        {
+            if (array is null)
+            {
+                WriteNull();
+
+                return;
+            }
+
+#if !NO_OPTIONS
+            if (On(ReferenceOptions) && CheckObjectReference(array))
+            {
+                return;
+            }
+#endif
+
+            if (array.Length > 0)
+            {
+                WriteArray(ref array[0], array.Length);
+            }
+            else
+            {
+                WriteArray(ref Unsafe.AsRef<T?>(null), 0);
+            }
+        }
+
+        /// <summary>
+        /// 写入一个列表。
+        /// </summary>
+        public void WriteList<T>(List<T?>? list)
+        {
+            if (list is null)
+            {
+                WriteNull();
+
+                return;
+            }
+#if !NO_OPTIONS
+            if (On(ReferenceOptions) && CheckObjectReference(list))
+            {
+                return;
+            }
+#endif
+
+            var rawData = ArrayHelper.GetRawData(list);
+            var count = list.Count;
+
+            if (rawData != null && rawData.Length > 0 && count > 0)
+            {
+                WriteArray(ref rawData[0], count);
+            }
+            else
+            {
+                WriteArray(ref Unsafe.AsRef<T?>(null), 0);
+            }
+        }
+
+        /// <summary>
+        /// 写入一个数组。
+        /// </summary>
+        /// <param name="firstElement">第一个元素引用</param>
+        /// <param name="length">长度</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteArray<T>(ref T? firstElement, int length)
+        {
+            WriteValueBefore();
+
+            Grow(2);
+
+            Append(FixArray);
+
+            WriteStructBefore();
+
+            if (depth >= MaxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+            else
+            {
+                var tCurrent = current;
+
+                ++depth;
+
+#if !NO_OPTIONS
+                if (!IsSimpleMode && IsFilterMode && On(ArrayOnFilter))
+                {
+                    var filterInfo = new ValueFilterInfo<int>();
+
+                    for (int i = 0; i < length; i++)
+                    {
+                        filterInfo.Key = i;
+
+                        ValueInterface.WriteValue(filterInfo.ValueCopyer, Unsafe.Add(ref firstElement, i));
+
+                        if (((IValueFilter<int>)this).Filter(filterInfo))
+                        {
+                            filterInfo.ValueCopyer.WriteTo(this);
+                        }
+                    }
+                }
+                else
+#endif
+                if (ValueInterface<T>.IsFastObjectInterface)
+                {
+                    var fastObjectRW = FastObjectRW<T>.Create();
+
+                    for (int i = 0; i < length; i++)
+                    {
+                        fastObjectRW.content = Unsafe.Add(ref firstElement, i);
+
+                        WriteObject(fastObjectRW);
+                    }
+                }
+                else if (ValueInterface<T>.IsNotModified)
+                {
+                    for (int i = 0; i < length; i++)
+                    {
+                        WriteValue(Unsafe.Add(ref firstElement, i));
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < length; i++)
+                    {
+                        ValueInterface.WriteValue(this, Unsafe.Add(ref firstElement, i));
+                    }
+                }
+
+                --depth;
+
+                Grow(2);
+
+                if (tCurrent != current)
+                {
+                    --current;
+                }
+            }
+
+            WriteStructAfter();
+
+            Append(ArrayEnding);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个对象。
+        /// </summary>
+        public void WriteObject(IDataReader<string> dataReader)
+        {
+#if !NO_OPTIONS
+            if (On(ReferenceOptions) && dataReader.ContentType?.IsValueType == false && dataReader.Content is object content && CheckObjectReference(content))
+            {
+                return;
+            }
+#endif
+
+            WriteValueBefore();
+
+            Grow(2);
+
+            Append(FixObject);
+
+            WriteStructBefore();
+
+            if (depth >= MaxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+            else
+            {
+                var tCurrent = current;
+
+                ++depth;
+
+#if !NO_OPTIONS
+                if (!IsSimpleMode)
+                {
+                    if (On(ReferenceOptions))
+                    {
+                        ReferenceModeInstance.EnterReferenceScope();
+
+                        if (On(MultiReferencingOptimizeLayout))
+                        {
+                            if (dataReader.Count > 0)
+                            {
+                                dataReader.OnReadAll(ReferenceModeInstance.ObjectReferenceWriter);
+                            }
+                        }
+                    }
+
+                    if (IsFilterMode)
+                    {
+                        dataReader.OnReadAll(new DataFilterWriter<string>(this, this, dataReader));
+                    }
+                    else
+                    {
+                        dataReader.OnReadAll(this);
+                    }
+
+                    if (On(ReferenceOptions))
+                    {
+                        ReferenceModeInstance.LeaveReferenceScope();
+                    }
+                }
+                else
+#endif
+                {
+                    dataReader.OnReadAll(this);
+                }
+
+                --depth;
+
+                Grow(2);
+
+                if (tCurrent != current)
+                {
+                    --current;
+                }
+            }
+
+            WriteStructAfter();
+
+            Append(ObjectEnding);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入对象开头。
+        /// </summary>
+        public void WriteBeginObject()
+        {
+            WriteValueBefore();
+
+            Grow(2);
+
+            Append(FixObject);
+
+            WriteStructBefore();
+
+            if (depth >= MaxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+
+            ++depth;
+        }
+
+        /// <summary>
+        /// 写入对象结尾。
+        /// </summary>
+        public void WriteEndObject()
+        {
+            --depth;
+
+            Grow(2);
+
+            if (current > begin && *(--current) != ValueEnding)
+            {
+                ++current;
+            }
+
+            WriteStructAfter();
+
+            Append(ObjectEnding);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入数组开头。
+        /// </summary>
+        public void WriteBeginArray()
+        {
+            WriteValueBefore();
+
+            Grow(2);
+
+            Append(FixArray);
+
+            WriteStructBefore();
+
+            if (depth >= MaxDepth)
+            {
+                ThrowOutOfDepthException();
+            }
+
+            ++depth;
+        }
+
+        /// <summary>
+        /// 写入数组结尾。
+        /// </summary>
+        public void WriteEndArray()
+        {
+            --depth;
+
+            Grow(2);
+
+            if (current != begin && *(--current) != ValueEnding)
+            {
+                ++current;
+            }
+
+            WriteStructAfter();
+
+            Append(ArrayEnding);
+
+            WriteValueAfter();
+        }
+
+        /// <summary>
+        /// 写入一个属性名。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WritePropertyName(string name)
+        {
+            WriteKeyBefore();
+
+            InternalWriteString(name
+#if !NO_OPTIONS
+                , On(CamelCaseWhenSerialize)
+#endif
+                );
+
+            WriteKeyAfter();
+        }
+
+        /// <summary>
+        /// 写入一个属性名。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWritePropertyName(Ps<char> name)
+        {
+            WriteKeyBefore();
+
+            InternalWriteStringCore(ref *name.Pointer, name.Length
+#if !NO_OPTIONS
+                , On(CamelCaseWhenSerialize)
+#endif
+                );
+
+            WriteKeyAfter();
+        }
+
+        /// <summary>
+        /// 写入一个属性名。
+        /// </summary>
+        /// <param name="firstChar">属性名首个引用</param>
+        /// <param name="length">属性名长度</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void InternalWritePropertyName(ref char firstChar, int length)
+        {
+            WriteKeyBefore();
+
+            InternalWriteStringCore(ref firstChar, length
+#if !NO_OPTIONS
+                , On(CamelCaseWhenSerialize)
+#endif
+                );
+
+            WriteKeyAfter();
+        }
+
+        #endregion
+
+        #region -- 字符串 --
+
+        /// <summary>
+        /// 写入一个字符串。
+        /// </summary>
+        public void WriteString(string? value)
+        {
+            if (value is null)
+            {
+                WriteNull();
+            }
+            else
+            {
+
+#if !NO_OPTIONS
+                if (On(MultiReferencingAlsoString)
+                    && On(MultiReferencingReference | MultiReferencingNull)
+                    && CheckObjectReference(value))
+                {
+                    return;
+                }
+#endif
+
+                WriteValueBefore();
+
+                InternalWriteString(value);
+
+                WriteValueAfter();
+            }
+        }
+
+#if !NO_OPTIONS
+        /// <summary>
+        /// 写入一个字符串。
+        /// </summary>
+        /// <param name="value">字符串</param>
+        /// <param name="withCamelCase">是否以驼峰命名法写入</param>
+#else
+        /// <summary>
+        /// 写入一个字符串。
+        /// </summary>
+        /// <param name="value">字符串</param>
+#endif
+        public void InternalWriteString(Ps<char> value
+#if !NO_OPTIONS
+            , bool withCamelCase = false
+#endif
+            )
+        {
+            WriteValueBefore();
+
+            InternalWriteStringCore(ref *value.Pointer, value.Length
+#if !NO_OPTIONS
+                , withCamelCase
+#endif
+                );
+
+            WriteValueAfter();
+        }
+
+#if !NO_OPTIONS
+        /// <summary>
+        /// 写入一个字符串。
+        /// </summary>
+        /// <param name="firstChar">字符串首个字符引用</param>
+        /// <param name="length">字符串长度</param>
+        /// <param name="withCamelCase">是否以驼峰命名法写入</param>
+#else
+        /// <summary>
+        /// 写入一个字符串。
+        /// </summary>
+        /// <param name="firstChar">字符串首个字符引用</param>
+        /// <param name="length">字符串长度</param>
+#endif
+        public void InternalWriteString(ref char firstChar, int length
+#if !NO_OPTIONS
+            , bool withCamelCase = false
+#endif
+            )
+        {
+            WriteValueBefore();
+
+            InternalWriteStringCore(ref firstChar, length
+#if !NO_OPTIONS
+                , withCamelCase
+#endif
+                );
+
+            WriteValueAfter();
+        }
+
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        void InternalWriteStringCore(ref char firstChar, int length
+#if !NO_OPTIONS
+            , bool withCamelCase = false
+#endif
+            )
+        {
+            const int ExpandLength = 5;
+
+            Grow(length + ExpandLength);
+
             var current = this.current;
+
+            var remain = (int)((end - current) - (length + ExpandLength));
+
+            *current = FixString; ++current;
+
+#if !NO_OPTIONS
+            if (withCamelCase && length > 0)
+            {
+                var chr = StringHelper.ToLower(firstChar);
+
+                if (IsGeneralChar(chr))
+                {
+                    *current = chr; ++current;
+
+                    firstChar = ref Unsafe.Add(ref firstChar, 1);
+
+                    --length;
+                }
+            }
+#endif
 
             for (; length > 0; --length)
             {
@@ -1213,7 +1843,7 @@ namespace Swifter.Json
                             *current = EscapedWhiteChar6; ++current;
                             break;
                         default:
-                            expand += 4;
+                            remain -= 4;
 
                             *current = FixEscape; ++current;
                             *current = FixunicodeEscape; ++current;
@@ -1224,105 +1854,83 @@ namespace Swifter.Json
                             break;
                     }
 
-                    ++expand;
+                    --remain;
 
-                    if (this.current + expand > hGCache.Last)
+                    if (remain < 0)
                     {
-                        var offset = current - this.current;
+                        this.current = current;
 
-                        InternalExpand(expand);
+                        InternalGrow(length + ExpandLength);
 
-                        current = this.current + offset;
+                        current = this.current;
+
+                        remain = (int)((end - current) - (length + ExpandLength));
                     }
                 }
 
-                firstChar = ref Underlying.Add(ref firstChar, 1);
+                firstChar = ref Unsafe.Add(ref firstChar, 1);
             }
 
-            this.current = current;
+            *current = FixString; ++current;
 
-            Append(FixString);
+            this.current = current;
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void InternalWriteString(string value)
+        void InternalWriteString(string value
+#if !NO_OPTIONS
+            , bool withCamelCase = false
+#endif
+            )
         {
-            InternalWriteString(ref StringHelper.GetRawStringData(value), value.Length);
+            InternalWriteStringCore(ref StringHelper.GetRawStringData(value), value.Length
+#if !NO_OPTIONS
+                , withCamelCase
+#endif
+                );
         }
 
-        public void InternalWriteStringWithCamelCase(string value)
-        {
-            // TODO: Fast
-            var offset = Offset;
+        #endregion
 
-            InternalWriteString(value);
+        #region -- 引用 --
 
-            ref var firstChar = ref current[(offset - Offset) + 1];
-
-            firstChar = char.ToLower(firstChar);
-        }
-
+#if !NO_OPTIONS
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void InternalWriteDoubleString(double value)
+        bool CheckObjectReference(object content)
         {
-            // NaN, PositiveInfinity, NegativeInfinity, Or Other...
-
-            // TODO: Fast
-            InternalWriteString(value.ToString());
-        }
-
-        public RWPathInfo GetReference(object content)
-        {
-            if (References.TryGetValue(content, out var reference))
+            if (ReferenceModeInstance.Nodes.Count is 0)
             {
-                if (Reference.Equals(reference))
+                if (ReferenceModeInstance.ReferenceMap.Count is not 0)
                 {
-                    return null;
+                    ReferenceModeInstance.ReferenceMap.Clear();
                 }
 
-                return reference;
-            }
-
-            References.Add(content, Reference.Clone());
-
-            return null;
-        }
-
-        public bool IsLoopReferencing(RWPathInfo reference)
-        {
-            var curr = Reference;
-
-            while ((curr = curr.Parent) != null)
-            {
-                if (curr.Equals(reference))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public bool CheckObjectReference(object content)
-        {
-            if (Reference.IsRoot)
-            {
-                if (References.Count > 0)
-                {
-                    References.Clear();
-                }
-
-                References.Add(content, Reference);
+                ReferenceModeInstance.ReferenceMap.Add(content, new RWPath()/* Root */);
 
                 return false;
             }
 
-            var reference = GetReference(content);
+            var referenceIndex = ReferenceModeInstance.ReferenceMap.FindIndex(content);
 
-            if (reference is null)
+            if (referenceIndex is -1)
+            {
+                ReferenceModeInstance.ReferenceMap.Add(content, ReferenceModeInstance.ToRWPath());
+
+                return false;
+            }
+
+            var reference = ReferenceModeInstance.ReferenceMap[referenceIndex].Value;
+
+            var comparison = ReferenceModeInstance.ReferenceCompare(reference);
+
+            if (comparison is 0)
             {
                 return false;
+            }
+
+            if (On(LoopReferencingException | LoopReferencingNull) && comparison is not 1)
+            {
+                ReferenceModeInstance.ReferenceMap[referenceIndex].Value = ReferenceModeInstance.ToRWPath();
             }
 
             if (On(MultiReferencingReference))
@@ -1339,11 +1947,11 @@ namespace Swifter.Json
                 return true;
             }
 
-            if (IsLoopReferencing(reference))
+            if (comparison is 1)
             {
                 if (On(LoopReferencingException))
                 {
-                    throw new JsonLoopReferencingException(reference, Reference, content);
+                    throw new JsonLoopReferencingException(reference, ReferenceModeInstance.ToRWPath(), content);
                 }
                 else
                 {
@@ -1356,299 +1964,513 @@ namespace Swifter.Json
             return false;
         }
 
+#endif
+        /// <summary>
+        /// 写入一个引用值。
+        /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public void WriteReference(RWPathInfo reference)
+        public void WriteReference(RWPath reference)
         {
             WriteValueBefore();
 
-            Expand(2);
+            Grow(2);
 
             Append(FixObject);
 
-            AppendMiddleChars();
+            WriteMiddleChars();
 
-            Expand(8);
+            Grow(8);
 
             // "$ref"
-            Append(RefKeyString);
+            WriteRaw(RefKeyString);
 
-            AppendKeyAfter();
+            WriteKeyAfter();
 
-            Expand(2);
-
-            Append(FixString);
-
-            WriteReferenceItem(reference);
-
-            Expand(3);
+            Grow(2);
 
             Append(FixString);
 
-            AppendMiddleChars();
+            InternalWritePath(reference);
+
+            Grow(3);
+
+            Append(FixString);
+
+            WriteMiddleChars();
 
             Append(ObjectEnding);
 
-            AppendValueAfter();
+            WriteValueAfter();
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void WriteReferenceItem(RWPathInfo reference)
-        {
-            if (reference.Parent != null)
-            {
-                WriteReferenceItem(reference.Parent);
-            }
+        #endregion
 
-            if (reference.IsRoot)
-            {
-                Expand(2);
+        #region -- 接口实现 --
 
-                // Root
-                Append(ReferenceRootPathName);
+        int IDataWriter.Count => -1;
 
-                return;
-            }
 
-            Expand(2);
+        TargetableValueInterfaceMap ITargetableValueRW.ValueInterfaceMap => TargetableValueInterfaceMap.FromSource(JsonFormatter);
 
-            Append(ReferenceSeparator);
+        Type? IDataWriter.ContentType => null;
 
-            var key = reference.GetKey();
+        Type? IDataWriter.ValueType => null;
 
-            if (key is int intKey)
-            {
-                InternalWriteInt64(intKey);
-            }
-            else
-            {
-                var strKey = Convert.ToString(key);
+        Type? IValueWriter.ValueType => null;
 
-                Expand(strKey.Length * 3);
-
-                foreach (var item in strKey)
-                {
-                    if (IsRefGeneralChar(item))
-                    {
-                        Append(item);
-                    }
-                    else
-                    {
-                        Append(RefEscape);
-
-                        NumberHelper.Hex.AppendD2(current, item); current += 2;
-                    }
-                }
-            }
-        }
-
-        public void WriteBeginObject()
-        {
-            WriteValueBefore();
-
-            Expand(2);
-
-            Append(FixObject);
-
-            AppendStructBefore();
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-            }
-
-            ++depth;
-        }
-
-        public void WriteEndObject()
-        {
-            --depth;
-
-            Expand(2);
-
-            if (current != hGCache.First && *(--current) != ValueEnding)
-            {
-                ++current;
-            }
-
-            AppendStructAfter();
-
-            Append(ObjectEnding);
-
-            AppendValueAfter();
-        }
-
-        public void WriteBeginArray()
-        {
-            WriteValueBefore();
-
-            Expand(2);
-
-            Append(FixArray);
-
-            AppendStructBefore();
-
-            if (depth >= maxDepth)
-            {
-                ThrowOutOfDepthException();
-            }
-
-            ++depth;
-        }
-
-        public void WriteEndArray()
-        {
-            --depth;
-
-            Expand(2);
-
-            if (current != hGCache.First && *(--current) != ValueEnding)
-            {
-                ++current;
-            }
-
-            AppendStructAfter();
-
-            Append(ArrayEnding);
-
-            AppendValueAfter();
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WritePropertyName(string name)
-        {
-            AppendKeyBefore();
-
-            if (On(CamelCaseWhenSerialize) && name.Length > 0 && char.IsUpper(name[0]))
-            {
-                InternalWriteStringWithCamelCase(name);
-            }
-            else
-            {
-                InternalWriteString(name);
-            }
-
-            AppendKeyAfter();
-        }
-
-        public override string ToString()
-        {
-            Flush();
-
-            return hGCache.ToStringEx();
-        }
-
-        public int Count => -1;
-
-        long ITargetedBind.TargetedId => jsonFormatter?.targeted_id ?? GlobalTargetedId;
-
-        IEnumerable<string> IDataWriter<string>.Keys => null;
-
-        IEnumerable<int> IDataWriter<int>.Keys => null;
-
-        Type IDataWriter.ContentType => null;
-
-        object IDataWriter.Content
+        object? IDataWriter.Content
         {
             get => throw new NotSupportedException();
             set => throw new NotSupportedException();
         }
 
-        public void MakeTargetedId()
+        IValueWriter IDataWriter<string>.this[string key]
+        {
+            get
+            {
+                if (key is null)
+                {
+                    // TODO: Json 对象的键不允许为 Null。
+                    throw new ArgumentNullException(nameof(key));
+                }
+
+#if !NO_OPTIONS
+                if (On(ReferenceOptions))
+                {
+                    ReferenceModeInstance.SetReferenceLastNode(key);
+                }
+#endif
+
+                WritePropertyName(key);
+
+                return this;
+            }
+        }
+
+        IValueWriter IDataWriter<int>.this[int key]
+        {
+            get
+            {
+#if !NO_OPTIONS
+                if (On(ReferenceOptions))
+                {
+                    ReferenceModeInstance.SetReferenceLastNode(key);
+                }
+#endif
+
+                return this;
+            }
+        }
+
+        void IDataWriter.Initialize()
         {
         }
 
-        public void Initialize()
+        void IDataWriter.Initialize(int capacity)
         {
         }
 
-        public void Initialize(int capacity)
+        void IDataWriter<string>.OnWriteAll(IDataReader<string> dataReader, RWStopToken stopToken)
         {
         }
 
-        public void OnWriteAll(IDataReader<string> dataReader)
+        void IDataWriter<int>.OnWriteAll(IDataReader<int> dataReader, RWStopToken stopToken)
         {
         }
 
-        public void OnWriteAll(IDataReader<int> dataReader)
+        void IDataWriter<string>.OnWriteValue(string key, IValueReader valueReader)
+            => ValueInterface.WriteValue(((IDataWriter<string>)this)[key], valueReader.DirectRead());
+
+        void IDataWriter<int>.OnWriteValue(int key, IValueReader valueReader)
+            => ValueInterface.WriteValue(((IDataWriter<int>)this)[key], valueReader.DirectRead());
+
+        void IRWPathNodeVisitor.VisitConstant<TKey>(RWPathConstantNode<TKey> node)
         {
+            switch (Type.GetTypeCode(typeof(TKey)))
+            {
+                case TypeCode.SByte:
+                    InternalWriteInt64(TypeHelper.As<TKey, sbyte>(node.Key));
+                    return;
+                case TypeCode.Byte:
+                    InternalWriteUInt64(TypeHelper.As<TKey, byte>(node.Key));
+                    return;
+                case TypeCode.Int16:
+                    InternalWriteInt64(TypeHelper.As<TKey, short>(node.Key));
+                    return;
+                case TypeCode.UInt16:
+                    InternalWriteUInt64(TypeHelper.As<TKey, ushort>(node.Key));
+                    return;
+                case TypeCode.Int32:
+                    InternalWriteInt64(TypeHelper.As<TKey, int>(node.Key));
+                    return;
+                case TypeCode.UInt32:
+                    InternalWriteUInt64(TypeHelper.As<TKey, uint>(node.Key));
+                    return;
+                case TypeCode.Int64:
+                    InternalWriteInt64(TypeHelper.As<TKey, long>(node.Key));
+                    return;
+                case TypeCode.UInt64:
+                    InternalWriteUInt64(TypeHelper.As<TKey, ulong>(node.Key));
+                    return;
+            }
+
+            var str
+                = typeof(TKey) == typeof(string)
+                ? Unsafe.As<RWPathConstantNode<string>>(node).Key
+                : XConvert.Convert<TKey, string>(node.Key);
+
+            if (str is null)
+            {
+                str = string.Empty;
+            }
+
+            Grow(str.Length * 3);
+
+            foreach (var item in str)
+            {
+                if (IsRefGeneralChar(item))
+                {
+                    Append(item);
+                }
+                else
+                {
+                    Append(RefEscape);
+
+                    NumberHelper.Hex.AppendD2(current, item); current += 2;
+                }
+            }
         }
 
-        public void OnWriteValue(string key, IValueReader valueReader)
+#if !NO_OPTIONS
+        bool IValueFilter<string>.Filter(ValueFilterInfo<string> valueInfo)
         {
-            ValueInterface.WriteValue(this[key], valueReader.DirectRead());
+            if (On(ReferenceOptions))
+            {
+                ReferenceModeInstance.SetReferenceLastNode(valueInfo.Key);
+            }
+
+            var result = Filter(valueInfo.ValueCopyer);
+
+            if (JsonFormatter != null && On(OnFilter))
+            {
+                return JsonFormatter.OnObjectFilter(this, valueInfo, result);
+            }
+
+            return result;
         }
 
-        public void OnWriteValue(int key, IValueReader valueReader)
+        bool IValueFilter<int>.Filter(ValueFilterInfo<int> valueInfo)
         {
-            ValueInterface.WriteValue(this[key], valueReader.DirectRead());
+            if (On(ReferenceOptions))
+            {
+                ReferenceModeInstance.SetReferenceLastNode(valueInfo.Key);
+            }
+
+            var result = Filter(valueInfo.ValueCopyer);
+
+            if (JsonFormatter != null)
+            {
+                return JsonFormatter.OnArrayFilter(this, valueInfo, result);
+            }
+
+            return result;
+        }
+#endif
+
+        #endregion
+
+        #region -- 辅助类 --
+
+#if !NO_OPTIONS
+        class ComplexMode
+        {
+            public readonly string IndentedChars;
+            public readonly string LineBreakChars;
+            public readonly string MiddleChars;
+
+            public ComplexMode(JsonSerializer jsonSerializer)
+            {
+                if (jsonSerializer.JsonFormatter is not null)
+                {
+                    IndentedChars = jsonSerializer.JsonFormatter.IndentedChars;
+                    LineBreakChars = jsonSerializer.JsonFormatter.LineBreakChars;
+                    MiddleChars = jsonSerializer.JsonFormatter.MiddleChars;
+                }
+                else
+                {
+                    IndentedChars = DefaultIndentedChars;
+                    LineBreakChars = DefaultLineBreakChars;
+                    MiddleChars = DefaultMiddleChars;
+                }
+            }
         }
 
-        void IValueWriter<bool[]>.WriteValue(bool[] value) => WriteArray(value);
+        class ReferenceMode : ComplexMode, IDataWriter<string>, IDataWriter<int>, IValueWriter
+        {
+            public readonly LinkedList<RWPathNode> Nodes = new();
+            public readonly OpenDictionary<object, RWPath> ReferenceMap = new(ReferenceEqualityComparer.Instance);
 
-        void IValueWriter<byte[]>.WriteValue(byte[] value) => WriteArray(value);
+            public IDataWriter<int> ArrayReferenceWriter => this;
 
-        void IValueWriter<sbyte[]>.WriteValue(sbyte[] value) => WriteArray(value);
+            public IDataWriter<string> ObjectReferenceWriter => this;
 
-        void IValueWriter<short[]>.WriteValue(short[] value) => WriteArray(value);
+            public ReferenceMode(JsonSerializer jsonSerializer) : base(jsonSerializer)
+            {
+            }
 
-        void IValueWriter<ushort[]>.WriteValue(ushort[] value) => WriteArray(value);
+            public bool TrySaveReference(IDataReader dataReader)
+            {
+                if (dataReader.ContentType?.IsValueType == false && dataReader.Content is object content)
+                {
+                    var index = ReferenceMap.FindIndex(content);
 
-        void IValueWriter<char[]>.WriteValue(char[] value) => WriteArray(value);
+                    if (index >= 0)
+                    {
+                        return false;
+                    }
 
-        void IValueWriter<int[]>.WriteValue(int[] value) => WriteArray(value);
+                    ReferenceMap.Add(content, ToRWPath());
 
-        void IValueWriter<uint[]>.WriteValue(uint[] value) => WriteArray(value);
+                    return true;
+                }
 
-        void IValueWriter<long[]>.WriteValue(long[] value) => WriteArray(value);
+                return false;
+            }
 
-        void IValueWriter<ulong[]>.WriteValue(ulong[] value) => WriteArray(value);
+            public RWPath? GetReference(object content)
+            {
+                var referenceIndex = ReferenceMap.FindIndex(content);
 
-        void IValueWriter<float[]>.WriteValue(float[] value) => WriteArray(value);
+                if (referenceIndex is -1)
+                {
+                    return null;
+                }
 
-        void IValueWriter<double[]>.WriteValue(double[] value) => WriteArray(value);
+                return ReferenceMap[referenceIndex].Value;
+            }
 
-        void IValueWriter<DateTime[]>.WriteValue(DateTime[] value) => WriteArray(value);
+            public RWPath ToRWPath()
+            {
+                var result = new RWPath();
 
-        void IValueWriter<DateTimeOffset[]>.WriteValue(DateTimeOffset[] value) => WriteArray(value);
+                foreach (var item in Nodes)
+                {
+                    result.Nodes.AddLast(item);
+                }
 
-        void IValueWriter<decimal[]>.WriteValue(decimal[] value) => WriteArray(value);
+                return result;
+            }
 
-        void IValueWriter<Guid[]>.WriteValue(Guid[] value) => WriteArray(value);
+            public float ReferenceCompare(RWPath reference)
+            {
+                var x = Nodes.First;
+                var y = reference.Nodes.FirstNode;
 
-        void IValueWriter<string[]>.WriteValue(string[] value) => WriteArray(value);
+            Loop:
 
-        void IValueWriter<List<bool>>.WriteValue(List<bool> value) => WriteList(value);
+                if (y is null)
+                {
+                    if (x is null)
+                    {
+                        return 0;
+                    }
 
-        void IValueWriter<List<byte>>.WriteValue(List<byte> value) => WriteList(value);
+                    return 1;
+                }
 
-        void IValueWriter<List<sbyte>>.WriteValue(List<sbyte> value) => WriteList(value);
+                if (x is null)
+                {
+                    return -1;
+                }
 
-        void IValueWriter<List<short>>.WriteValue(List<short> value) => WriteList(value);
+                if (!Equals(x.Value, y.Value))
+                {
+                    return float.NaN;
+                }
 
-        void IValueWriter<List<ushort>>.WriteValue(List<ushort> value) => WriteList(value);
+                x = x.Next;
+                y = y.Next;
 
-        void IValueWriter<List<char>>.WriteValue(List<char> value) => WriteList(value);
+                goto Loop;
+            }
 
-        void IValueWriter<List<int>>.WriteValue(List<int> value) => WriteList(value);
+            public void SetReferenceLastNode<TKey>(TKey key) where TKey : notnull
+            {
+                var lastNode = Nodes.Last;
 
-        void IValueWriter<List<uint>>.WriteValue(List<uint> value) => WriteList(value);
+                if (lastNode is null)
+                {
+                    throw new InvalidOperationException();
+                }
 
-        void IValueWriter<List<long>>.WriteValue(List<long> value) => WriteList(value);
+                lastNode.Value = new RWPathConstantNode<TKey>(key);
+            }
 
-        void IValueWriter<List<ulong>>.WriteValue(List<ulong> value) => WriteList(value);
+            public void EnterReferenceScope()
+            {
+                Nodes.AddLast(default(RWPathNode)!);
+            }
 
-        void IValueWriter<List<float>>.WriteValue(List<float> value) => WriteList(value);
+            public void LeaveReferenceScope()
+            {
+                Nodes.RemoveLast();
+            }
 
-        void IValueWriter<List<double>>.WriteValue(List<double> value) => WriteList(value);
+            int IDataWriter.Count => -1;
 
-        void IValueWriter<List<DateTime>>.WriteValue(List<DateTime> value) => WriteList(value);
+            Type? IDataWriter.ContentType => null;
 
-        void IValueWriter<List<DateTimeOffset>>.WriteValue(List<DateTimeOffset> value) => WriteList(value);
+            Type? IDataWriter.ValueType => null;
 
-        void IValueWriter<List<decimal>>.WriteValue(List<decimal> value) => WriteList(value);
+            Type? IValueWriter.ValueType => null;
 
-        void IValueWriter<List<Guid>>.WriteValue(List<Guid> value) => WriteList(value);
+            object? IDataWriter.Content
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
 
-        void IValueWriter<List<string>>.WriteValue(List<string> value) => WriteList(value);
+            IValueWriter IDataWriter<int>.this[int key]
+            {
+                get
+                {
+                    SetReferenceLastNode(key);
+
+                    return this;
+                }
+            }
+
+            IValueWriter IDataWriter<string>.this[string key]
+            {
+                get
+                {
+                    SetReferenceLastNode(key);
+
+                    return this;
+                }
+            }
+
+            void IDataWriter.Initialize()
+            {
+            }
+
+            void IDataWriter.Initialize(int capacity)
+            {
+            }
+
+            void IDataWriter<string>.OnWriteValue(string key, IValueReader valueReader)
+            {
+                ValueInterface.WriteValue(ObjectReferenceWriter[key], valueReader.DirectRead());
+            }
+
+            void IDataWriter<string>.OnWriteAll(IDataReader<string> dataReader, RWStopToken stopToken)
+            {
+            }
+
+            void IDataWriter<int>.OnWriteValue(int key, IValueReader valueReader)
+            {
+                ValueInterface.WriteValue(ArrayReferenceWriter[key], valueReader.DirectRead());
+            }
+
+            void IDataWriter<int>.OnWriteAll(IDataReader<int> dataReader, RWStopToken stopToken)
+            {
+            }
+
+            void IValueWriter.WriteBoolean(bool value)
+            {
+            }
+
+            void IValueWriter.WriteByte(byte value)
+            {
+            }
+
+            void IValueWriter.WriteSByte(sbyte value)
+            {
+            }
+
+            void IValueWriter.WriteInt16(short value)
+            {
+            }
+
+            void IValueWriter.WriteChar(char value)
+            {
+            }
+
+            void IValueWriter.WriteUInt16(ushort value)
+            {
+            }
+
+            void IValueWriter.WriteInt32(int value)
+            {
+            }
+
+            void IValueWriter.WriteSingle(float value)
+            {
+            }
+
+            void IValueWriter.WriteUInt32(uint value)
+            {
+            }
+
+            void IValueWriter.WriteInt64(long value)
+            {
+            }
+
+            void IValueWriter.WriteDouble(double value)
+            {
+            }
+
+            void IValueWriter.WriteUInt64(ulong value)
+            {
+            }
+
+            void IValueWriter.WriteString(string? value)
+            {
+            }
+
+            void IValueWriter.WriteDateTime(DateTime value)
+            {
+            }
+
+            void IValueWriter.WriteDateTimeOffset(DateTimeOffset value)
+            {
+                throw new NotImplementedException();
+            }
+
+            void IValueWriter.WriteTimeSpan(TimeSpan value)
+            {
+                throw new NotImplementedException();
+            }
+
+            void IValueWriter.WriteGuid(Guid value)
+            {
+                throw new NotImplementedException();
+            }
+
+            void IValueWriter.WriteDecimal(decimal value)
+            {
+            }
+
+            void IValueWriter.WriteObject(IDataReader<string> dataReader)
+            {
+                TrySaveReference(dataReader);
+            }
+
+            void IValueWriter.WriteArray(IDataReader<int> dataReader)
+            {
+                TrySaveReference(dataReader);
+            }
+
+            void IValueWriter.WriteEnum<T>(T value)
+            {
+            }
+
+            void IValueWriter.DirectWrite(object? value)
+            {
+            }
+        }
+
+#endif
+        #endregion
     }
 }

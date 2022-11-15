@@ -1,17 +1,17 @@
-﻿using Swifter.Tools;
+﻿using InlineIL;
+using Swifter.RW;
+using Swifter.Tools;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-
-using static Swifter.Reflection.ThrowHelpers;
 
 namespace Swifter.Reflection
 {
     /// <summary>
-    /// XPropertyInfo 属性信息。
-    /// 此属性信息提供的读写方法比 .Net 自带的 PropertyInfo 属性信息快很多。
+    /// 属性信息。
     /// </summary>
-    public abstract class XPropertyInfo
+    public class XPropertyInfo : IXFieldRW
     {
         /// <summary>
         /// 创建 XPropertyInfo 属性信息。
@@ -21,101 +21,87 @@ namespace Swifter.Reflection
         /// <returns>返回 XPropertyInfo 属性信息。</returns>
         public static XPropertyInfo Create(PropertyInfo propertyInfo, XBindingFlags flags)
         {
-            if (propertyInfo is null)
-            {
-                throw new ArgumentNullException(nameof(propertyInfo));
-            }
-
-            var declaringType = propertyInfo.DeclaringType;
-
             var propertyType
                 = propertyInfo.PropertyType.IsPointer ? typeof(IntPtr)
-                : propertyInfo.PropertyType.IsByRef ? propertyInfo.PropertyType.GetElementType()
+                : propertyInfo.PropertyType.IsByRef ? propertyInfo.PropertyType.GetElementType()!
                 : propertyInfo.PropertyType;
 
-            XPropertyInfo result;
+            VersionDifferences.Assert(propertyType.CanBeGenericParameter());
 
-            try
+            if (!propertyInfo.IsStatic() && !propertyType.IsByRefLike() && propertyInfo.DeclaringType is not null)
             {
-                var targetType
-                    = propertyType.IsByRefLike() ? typeof(XDefaultPropertyInfo)
-                     : propertyInfo.IsStatic() ? typeof(XStaticPropertyInfo<>).MakeGenericType(propertyType)
-                     : declaringType.IsValueType ? typeof(XStructPropertyInfo<,>).MakeGenericType(declaringType, propertyType)
-                    : typeof(XClassPropertyInfo<,>).MakeGenericType(declaringType, propertyType);
-
-                result = (XPropertyInfo)Activator.CreateInstance(targetType, true);
-
-                result.Initialize(propertyInfo, flags);
-
-            }
-            catch
-
-#if DEBUG
-            (Exception e)
-#endif
-            {
-#if DEBUG
-                if (e is TargetInvocationException tie)
+                try
                 {
-                    e = tie.InnerException;
+                    return (XPropertyInfo)typeof(XInstancePropertyInfo<>).MakeGenericType(propertyType)
+                        .GetConstructors()
+                        .First()
+                        .Invoke(new object?[] { propertyInfo, flags });
                 }
-
-                Console.WriteLine($"{nameof(XPropertyInfo)} : Exception : {e.GetType()} -- {e.Message}");
-#endif
-
-                result = new XDefaultPropertyInfo();
-
-                result.Initialize(propertyInfo, flags);
+                catch
+                {
+                }
             }
 
-            return result;
+            return new XPropertyInfo(propertyInfo, propertyType, flags);
         }
 
-        internal string name;
-        internal XBindingFlags flags;
-        internal PropertyInfo propertyInfo;
+        private protected readonly PropertyInfo propertyInfo;
+        private protected readonly Type propertyType;
+        private protected readonly XBindingFlags flags;
+        private protected readonly string name;
+        private protected readonly ValueInterface valueInterface;
+        private protected readonly RWFieldAttribute? attribute;
+        private protected readonly bool skipDefaultValue;
 
-        internal void Initialize(PropertyInfo propertyInfo, XBindingFlags flags)
+        private protected bool canRead;
+        private protected bool canWrite;
+
+        private protected XPropertyInfo(PropertyInfo propertyInfo, Type propertyType, XBindingFlags flags)
         {
-            if (propertyInfo.PropertyType.IsByRef)
+            this.propertyInfo = propertyInfo;
+            this.propertyType = propertyType;
+            this.flags = flags;
+
+            name = propertyInfo.Name;
+
+            valueInterface = ValueInterface.GetInterface(propertyType);
+
+            skipDefaultValue = flags.On(XBindingFlags.RWSkipDefaultValue);
+
+            canRead = propertyInfo.GetGetMethod(flags.On(XBindingFlags.NonPublic)) is not null;
+            canWrite = propertyInfo.GetSetMethod(flags.On(XBindingFlags.NonPublic)) is not null;
+        }
+
+        private protected XPropertyInfo(XPropertyInfo baseInfo, RWFieldAttribute attribute)
+        {
+            propertyInfo = baseInfo.propertyInfo;
+            propertyType = baseInfo.propertyType;
+            flags = baseInfo.flags;
+
+            name = attribute.Name ?? baseInfo.name;
+
+            attribute.GetBestMatchInterfaceMethod(propertyType, out var firstArgument, out var readValueMethod, out var writeValueMethod);
+
+            if (readValueMethod is null && writeValueMethod is null)
             {
-                InitializeByRef(propertyInfo, flags);
+                valueInterface = baseInfo.valueInterface;
             }
             else
             {
-                InitializeByValue(propertyInfo, flags);
-            }
-        }
-
-        private protected virtual void InitializeByValue(PropertyInfo propertyInfo, XBindingFlags flags)
-        {
-            this.propertyInfo = propertyInfo;
-
-            name = propertyInfo.Name;
-            this.flags = flags;
-        }
-
-        private protected virtual void InitializeByRef(PropertyInfo propertyInfo, XBindingFlags flags)
-        {
-            this.propertyInfo = propertyInfo;
-
-            name = propertyInfo.Name;
-            this.flags = flags;
-        }
-
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        internal void Assert(bool err, string name)
-        {
-            if (!err)
-            {
-                Throw();
+                valueInterface = XHelper.MakeValueInterface(
+                    XHelper.GetValueInterface(propertyType, firstArgument, readValueMethod, writeValueMethod)
+                    );
             }
 
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            void Throw()
-            {
-                throw new MissingMethodException($"Property '{PropertyInfo.DeclaringType.Name}.{PropertyInfo.Name}' No define '{name}' method or cannot access.");
-            }
+            this.attribute = attribute;
+
+            skipDefaultValue
+                = attribute.SkipDefaultValue is not RWBoolean.None
+                ? attribute.SkipDefaultValue is RWBoolean.Yes
+                : baseInfo.skipDefaultValue;
+
+            canRead = propertyInfo.GetGetMethod(true) is not null && attribute.Access.On(RWFieldAccess.ReadOnly);
+            canWrite = propertyInfo.GetSetMethod(true) is not null && attribute.Access.On(RWFieldAccess.WriteOnly);
         }
 
         /// <summary>
@@ -129,45 +115,187 @@ namespace Swifter.Reflection
         public string Name => name;
 
         /// <summary>
-        /// 获取该实例属性的值。
+        /// 表示该属性能否读取。
         /// </summary>
-        /// <param name="obj">类型的实例</param>
-        /// <returns>返回该属性的值</returns>
-        public virtual object GetValue(object obj)
-        {
-            ThrowInvalidOperationException("property", "instance");
+        public bool CanRead => canRead;
 
-            return default;
+        /// <summary>
+        /// 表示该属性能否写入。
+        /// </summary>
+        public bool CanWrite => canWrite;
+
+        /// <summary>
+        /// 获取该属性的值。
+        /// </summary>
+        /// <param name="obj">实例。如果为静态属性，此参数则忽略</param>
+        /// <returns>返回该字段的值</returns>
+        /// <exception cref="TargetException">此属性非静态，并且 <paramref name="obj"/> 为 <see langword="null"/>。</exception>
+        /// <exception cref="ArgumentException">该属性即不由 <paramref name="obj"/> 的类声明也不由其继承。</exception>
+        /// <exception cref="MemberAccessException">此属性没有 <see langword="get"/> 方法或不能访问</exception>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public object? GetValue(object? obj)
+        {
+            return InternalGetValue(obj);
         }
 
         /// <summary>
-        /// 设置该实例属性的值。
+        /// 设置该属性的值。
         /// </summary>
-        /// <param name="obj">类型的实例</param>
+        /// <param name="obj">实例。如果为静态属性，此参数则忽略</param>
         /// <param name="value">值</param>
-        public virtual void SetValue(object obj, object value)
+        /// <exception cref="TargetException">此属性非静态，并且 <paramref name="obj"/> 为 <see langword="null"/>。</exception>
+        /// <exception cref="ArgumentException">该属性即不由 <paramref name="obj"/> 的类声明也不由其继承。</exception>
+        /// <exception cref="MemberAccessException">此属性没有 <see langword="set"/> 方法或不能访问。</exception>
+        /// <exception cref="InvalidCastException"><paramref name="value"/> 不能存储在该属性中。</exception>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void SetValue(object? obj, object? value)
         {
-            ThrowInvalidOperationException("property", "instance");
+            InternalSetValue(obj, value);
         }
 
-        /// <summary>
-        /// 获取该静态属性的值。
-        /// </summary>
-        /// <returns>返回该属性的值</returns>
-        public virtual object GetValue()
+        private protected virtual object? InternalGetValue(object? obj)
         {
-            ThrowInvalidOperationException("property", "instance");
-
-            return default;
+            return propertyInfo.GetValue(obj, null);
         }
 
-        /// <summary>
-        /// 设置该静态属性的值。
-        /// </summary>
-        /// <param name="value">值</param>
-        public virtual void SetValue(object value)
+        private protected virtual void InternalSetValue(object? obj, object? value)
         {
-            ThrowInvalidOperationException("property", "static");
+            propertyInfo.SetValue(obj, value, null);
+        }
+
+        internal virtual XPropertyInfo WithAttribute(RWFieldAttribute attribute)
+        {
+            return new XPropertyInfo(this, attribute);
+        }
+
+        Type IObjectField.FieldType => propertyType;
+
+        bool IObjectField.IsPublic => propertyInfo.IsPublic();
+
+        bool IObjectField.IsStatic => propertyInfo.IsStatic();
+
+        int IObjectField.Order => attribute is not null ? attribute.Order : RWFieldAttribute.DefaultOrder;
+
+        MemberInfo IObjectField.MemberInfo => propertyInfo;
+
+        bool IObjectField.SkipDefaultValue
+            => skipDefaultValue;
+
+        bool IObjectField.CannotGetException
+            => attribute is not null && attribute.CannotGetException is not RWBoolean.None
+            ? attribute.CannotGetException is RWBoolean.Yes
+            : flags.On(XBindingFlags.RWCannotGetException);
+
+        bool IObjectField.CannotSetException
+            => attribute is not null && attribute.CannotSetException is not RWBoolean.None
+            ? attribute.CannotSetException is RWBoolean.Yes
+            : flags.On(XBindingFlags.RWCannotSetException);
+
+        void IXFieldRW.OnReadValue(object obj, IValueWriter valueWriter)
+        {
+            if (canRead)
+            {
+                valueInterface.Write(valueWriter, propertyInfo.GetValue(obj, null));
+            }
+            else
+            {
+                XHelper.OnCannotReadValue(this, valueWriter);
+            }
+        }
+
+        void IXFieldRW.OnWriteValue(object obj, IValueReader valueReader)
+        {
+            if (canWrite)
+            {
+                propertyInfo.SetValue(obj, valueInterface.Read(valueReader), null);
+            }
+            else
+            {
+                XHelper.OnCannotWriteValue(this, valueReader);
+            }
+        }
+
+        void IXFieldRW.OnReadAll(object obj, IDataWriter<string> dataWriter)
+        {
+            if (!canRead)
+            {
+                return;
+            }
+
+            if (flags.On(XBindingFlags.RWMembersOptIn) && attribute is null)
+            {
+                return;
+            }
+
+            var value = propertyInfo.GetValue(obj, null);
+
+            if (skipDefaultValue && TypeHelper.IsEmptyValue(value))
+            {
+                return;
+            }
+
+            valueInterface.Write(dataWriter[name], value);
+        }
+
+        void IXFieldRW.OnWriteAll(object obj, IDataReader<string> dataReader)
+        {
+            if (!canWrite)
+            {
+                return;
+            }
+
+            propertyInfo.SetValue(obj, valueInterface.Read(dataReader[name]), null);
+        }
+
+        IValueRW IXFieldRW.CreateValueRW(XObjectRW baseRW)
+        {
+            return new ValueRW(this, baseRW);
+        }
+
+        sealed class ValueRW : BaseDirectRW
+        {
+            readonly XPropertyInfo propertyInfo;
+            readonly XObjectRW baseRW;
+
+            public ValueRW(XPropertyInfo propertyInfo, XObjectRW baseRW)
+            {
+                this.propertyInfo = propertyInfo;
+                this.baseRW = baseRW;
+            }
+
+            public override Type ValueType => propertyInfo.propertyType;
+
+            public override object? DirectRead()
+            {
+                if (baseRW.content is null)
+                {
+                    throw new NullReferenceException(nameof(baseRW.Content));
+                }
+
+                if (propertyInfo.canRead)
+                {
+                    return XHelper.CannotReadValue(propertyInfo);
+                }
+
+                return propertyInfo.propertyInfo.GetValue(baseRW.content, null);
+            }
+
+            public override void DirectWrite(object? value)
+            {
+                if (baseRW.content is null)
+                {
+                    throw new NullReferenceException(nameof(baseRW.Content));
+                }
+
+                if (propertyInfo.canWrite)
+                {
+                    XHelper.CannotWriteValue(propertyInfo);
+                }
+                else
+                {
+                    propertyInfo.propertyInfo.SetValue(baseRW.content, value, null);
+                }
+            }
         }
     }
 }

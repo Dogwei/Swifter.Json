@@ -3,6 +3,7 @@ using System.ComponentModel;
 
 namespace Swifter.Json
 {
+#if !NO_OPTIONS
     /// <summary>
     /// JSON 格式化器配置项。
     /// </summary>
@@ -13,14 +14,14 @@ namespace Swifter.Json
         /// 默认配置项。
         /// </summary>
         Default = OutOfDepthException,
-        
+
         /// <summary>
-        /// 在序列化时出现循环引用的对象时将发生异常。该选项不能和其他引用配置复用。
+        /// 在序列化时出现循环引用的对象将引发异常。该选项不能和其他引用配置复用。
         /// </summary>
         LoopReferencingException = 0x1,
 
         /// <summary>
-        /// 在序列化时出现循环引用的对象时将用 Null 表示。该选项不能和其他引用配置复用。
+        /// 在序列化时出现循环引用的对象将用 Null 表示。该选项不能和其他引用配置复用。
         /// </summary>
         LoopReferencingNull = 0x2,
 
@@ -48,17 +49,6 @@ namespace Swifter.Json
         MultiReferencingAlsoString = 0x20,
 
         /// <summary>
-        /// 在反序列化对象时，将执行假定字段顺序对应的解析。<br/>
-        /// 如果启用此配置；那么当 Json 对象与目标对象的字段顺序相同时效率更快，反之则变慢。<br/>
-        /// 原理时在反序列化时，将循环一次目标对象的所有字段；<br/>
-        /// 当目标对象的字段名与当前正在解析的 Json 字段名一致时（忽略大小写），则读取 Json 字段对应的值到目标对象的字段对应的值中；<br/>
-        /// 如果字段名称不匹配，则跳过读取，并继续循环目标对象的字段。<br/>
-        /// 当满足顺序要求时，如果目标对象的字段数多于或等于 Json 对象中的字段数，这个假定有序的解析会成功。<br/>
-        /// 但如果目标对象的字段数少于 Json 对象中的字段数那么假定有序的解析不成功，会降低性能。<br/>
-        /// </summary>
-        AsOrderedObjectDeserialize = 0x40,
-
-        /// <summary>
         /// 执行紧凑（无多余空格）且标准的 JSON 反序列化，此配置有效提高反序列化性能。
         /// </summary>
         DeflateDeserialize = 0x80,
@@ -74,32 +64,18 @@ namespace Swifter.Json
         VerifiedDeserialize = 0x0,
 
         /// <summary>
-        /// 反序列化的配置项，当反序列化除字符串和通用类型外的可空类型时，如果 Json 值是 0 长度的字符串，则解析为 Null。
+        /// 反序列化的配置项，当反序列化除字符串和通用类型外的可空类型时，如果 Json 值是 0 长度的字符串，则解析为 <see langword="null"/>。
         /// </summary>
         EmptyStringAsNull = 0x400,
 
         /// <summary>
-        /// 反序列化的配置项，当反序列化非字符串和通用类型时，如果 Json 值是 0 长度的字符串，则解析为 Default。
+        /// 反序列化的配置项，当反序列化除字符串和通用类型外的其他类型时，如果 Json 值是 0 长度的字符串，则解析为 <see langword="default"/>。
         /// </summary>
         EmptyStringAsDefault = 0x800,
 
-#if WhiteSpaceStringAsNull
-
-        /// <summary>
-        /// 反序列化的配置项，当反序列化除字符串和通用类型外的可空类型时，如果 Json 值是空白字符串（包括空格换行符等），则解析为 Null。
-        /// </summary>
-        WhiteSpaceStringAsNull = EmptyStringAsNull | 0x1000,
-
-        /// <summary>
-        /// 反序列化的配置项，当反序列化非字符串和通用类型时，如果 Json 值是空白字符串（包括空格换行符等），则解析为 Default。
-        /// </summary>
-        WhiteSpaceStringAsDefault = EmptyStringAsDefault | 0x1000,
-
-#endif
-
         /// <summary>
         /// 反序列化的内部配置项，传入反序列化器的原始内容可以被作为缓存区而修改。<br/>
-        /// 此配置会提高解析字符串的性能，但是原始内容会被修改而不能再使用。<br/>
+        /// 此配置会提高解析字符串的性能，但是原始内容会被破坏。<br/>
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         ModifiableOriginal = 0x2000,
@@ -120,7 +96,7 @@ namespace Swifter.Json
         /// 此配置能让浮点数的格式化和解析的结果始终和 ToString 和 Parse 的结果保持一致；<br/>
         /// 缺点是性能变低，尤其是在早期 .NET 版本为 40 倍性能差，在 Core3.0 下缩减为 4 倍。<br/>
         /// 默认情况下，Swifter 的浮点数算法在浮点数特别大或特别小时，得出的结果可能和 System 里的算法得出的结果不一致；<br/>
-        /// 这是浮点数的特点之一，在不同的系统，平台，CPU或算法下都会产生这个问题，这是正常的。<br/>
+        /// 这是浮点数的特点之一，在不同的系统，平台，CPU 或算法下都会产生这个问题，这是正常的。<br/>
         /// 由于早期 .NET 版本的浮点数算法缺陷，导致开启此配置后在浮点数特别大或特别小时，反序列化可能会引发 <see cref="OverflowException"/> 异常。<br/>
         /// </summary>
         UseSystemFloatingPointsMethods = 0x10000,
@@ -157,4 +133,5 @@ namespace Swifter.Json
         /// </summary>
         ArrayOnFilter = 0x400000,
     }
+#endif
 }

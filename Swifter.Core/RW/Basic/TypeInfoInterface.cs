@@ -1,13 +1,11 @@
 ﻿using Swifter.Tools;
 using System;
-using System.Linq;
-using System.Reflection;
 
 namespace Swifter.RW
 {
     internal sealed class TypeInfoInterface<T> : IValueInterface<T> where T : Type
     {
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<T> tReader)
             {
@@ -16,7 +14,7 @@ namespace Swifter.RW
 
             if (valueReader is IValueReader<Type> typeReader)
             {
-                return (T)typeReader.ReadValue();
+                return (T?)typeReader.ReadValue();
             }
 
             var value = valueReader.DirectRead();
@@ -26,10 +24,10 @@ namespace Swifter.RW
                 return result;
             }
 
-            return XConvert<T>.FromObject(value);
+            return XConvert.Convert<T>(value);
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
             if (value is null)
             {
@@ -43,16 +41,13 @@ namespace Swifter.RW
             {
                 typeWriter.WriteValue(value);
             }
+            else if (value.Assembly == typeof(object).Assembly)
+            {
+                valueWriter.WriteString(value.FullName);
+            }
             else
             {
-                if (value.Assembly == typeof(object).Assembly)
-                {
-                    valueWriter.WriteString(value.FullName);
-                }
-                else
-                {
-                    valueWriter.WriteString(value.AssemblyQualifiedName);
-                }
+                valueWriter.WriteString(value.AssemblyQualifiedName);
             }
         }
     }

@@ -25,12 +25,12 @@ namespace Swifter.Tools
         /// <summary>
         /// 十进制优先并自动匹配进制数。
         /// </summary>
-        public const byte DecimalFirstRadix = unchecked((byte)-10);
+        public const sbyte NIRadix_DecimalFirst = -10;
 
         /// <summary>
         /// 最大进制优先，自动匹配进制数。
         /// </summary>
-        public const byte MaxFirstRadix = unchecked((byte)-MaxRadix);
+        public const sbyte NIRadix_MaxFirst = -MaxRadix;
 
         internal const byte HexRadix = 16;
         internal const byte BinaryRadix = 2;
@@ -375,40 +375,6 @@ namespace Swifter.Tools
 
 
 
-
-        /// <summary>
-        /// 拼接一位数字。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="value">数字，不可大于三位数</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendD1(ref char chars, ulong value)
-        {
-            chars = ((char*)(threeDigitals + value))[2];
-        }
-
-        /// <summary>
-        /// 拼接两位数字。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="value">数字，不可大于三位数</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendD2(ref char chars, ulong value)
-        {
-            Underlying.As<char, int>(ref chars) = *(int*)(((char*)(threeDigitals + value)) + 1); ;
-        }
-
-        /// <summary>
-        /// 拼接三位数字。
-        /// </summary>
-        /// <param name="chars">字符串</param>
-        /// <param name="value">数字，不可大于三位数</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void AppendD3(ref char chars, ulong value)
-        {
-            Underlying.As<char, long>(ref chars) = *(long*)(threeDigitals + value);
-        }
-
         /// <summary>
         /// 拼接一位数字。
         /// </summary>
@@ -417,7 +383,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void AppendD1(char* chars, ulong value)
         {
-            *chars = ((char*)(threeDigitals + value))[2];
+            *chars = threeDigitals[value].char3;
         }
 
         /// <summary>
@@ -725,7 +691,7 @@ namespace Swifter.Tools
 
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private byte ToRadix(char c)
+        internal byte ToRadix(char c)
         {
             if (c <= DigitalsMaxValue)
             {

@@ -6,7 +6,7 @@
     public enum JsonToken
     {
         /// <summary>
-        /// 表示一个键值对值。
+        /// 表示一个对象值。
         /// </summary>
         Object,
         /// <summary>
@@ -29,6 +29,14 @@
         /// 表示一个字符串值，包括双引号和单引号。
         /// </summary>
         String,
+        /// <summary>
+        /// 表示一个注释，包括单行注释和多行注释。
+        /// </summary>
+        Comment,
+        /// <summary>
+        /// 表示一个引用。
+        /// </summary>
+        Reference,
         /// <summary>
         /// 这不表示一个值，而是表示一个 JSON 的结尾。
         /// </summary>

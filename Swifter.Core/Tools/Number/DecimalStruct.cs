@@ -9,8 +9,6 @@ namespace Swifter.Tools
         private const int ScaleMask = 0x00FF0000;
         private const int ScaleShift = 16;
 
-#pragma warning disable IDE0044
-
         private int flags;
         private int hi;
         private int lo;

@@ -8,7 +8,7 @@ namespace Swifter.RW
     /// 数据筛选的辅助数据写入器。
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
-    public sealed class DataFilterWriter<TKey> : IDataWriter<TKey>, IValueWriter
+    public sealed class DataFilterWriter<TKey> : IDataWriter<TKey>, IValueWriter where TKey : notnull
     {
         /// <summary>
         /// 内部筛选器信息。
@@ -28,12 +28,13 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="dataWriter">原始数据写入器</param>
         /// <param name="valueFilter">数据筛选器</param>
-        public DataFilterWriter(IDataWriter<TKey> dataWriter, IValueFilter<TKey> valueFilter)
+        /// <param name="dataReader">源数据读取器</param>
+        public DataFilterWriter(IDataWriter<TKey> dataWriter, IValueFilter<TKey> valueFilter, IDataReader<TKey>? dataReader = null)
         {
             DataWriter = dataWriter;
             ValueFilter = valueFilter;
 
-            ValueInfo = new ValueFilterInfo<TKey>();
+            ValueInfo = new ValueFilterInfo<TKey>(dataReader);
         }
 
         /// <summary>
@@ -52,11 +53,6 @@ namespace Swifter.RW
         }
 
         /// <summary>
-        /// 获取原始数据写入器的键集合。
-        /// </summary>
-        public IEnumerable<TKey> Keys => DataWriter.Keys;
-
-        /// <summary>
         /// 获取原始数据写入器的键的数量。
         /// </summary>
         public int Count => DataWriter.Count;
@@ -64,12 +60,17 @@ namespace Swifter.RW
         /// <summary>
         /// 获取数据源的类型。
         /// </summary>
-        public Type ContentType => DataWriter.ContentType;
+        public Type? ContentType => DataWriter.ContentType;
+
+        /// <summary>
+        /// 获取数据源的值的类型。
+        /// </summary>
+        public Type? ValueType => DataWriter.ValueType;
 
         /// <summary>
         /// 获取或设置数据源。
         /// </summary>
-        public object Content
+        public object? Content
         {
             get => DataWriter.Content;
             set => DataWriter.Content = value;
@@ -113,7 +114,7 @@ namespace Swifter.RW
             }
         }
 
-        void IValueWriter.DirectWrite(object value)
+        void IValueWriter.DirectWrite(object? value)
         {
             ValueInfo.ValueCopyer.DirectWrite(value);
 
@@ -211,7 +212,7 @@ namespace Swifter.RW
             OnFilter();
         }
 
-        void IValueWriter.WriteString(string value)
+        void IValueWriter.WriteString(string? value)
         {
             ValueInfo.ValueCopyer.WriteString(value);
 
@@ -239,6 +240,27 @@ namespace Swifter.RW
             OnFilter();
         }
 
+        void IValueWriter.WriteDateTimeOffset(DateTimeOffset value)
+        {
+            ValueInfo.ValueCopyer.WriteDateTimeOffset(value);
+
+            OnFilter();
+        }
+
+        void IValueWriter.WriteTimeSpan(TimeSpan value)
+        {
+            ValueInfo.ValueCopyer.WriteTimeSpan(value);
+
+            OnFilter();
+        }
+
+        void IValueWriter.WriteGuid(Guid value)
+        {
+            ValueInfo.ValueCopyer.WriteGuid(value);
+
+            OnFilter();
+        }
+
         void IValueWriter.WriteEnum<T>(T value)
         {
             ValueInfo.ValueCopyer.WriteEnum(value);
@@ -250,9 +272,10 @@ namespace Swifter.RW
         /// 从数据读取器中读取所有数据源字段到数据源的值
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        public void OnWriteAll(IDataReader<TKey> dataReader)
+        /// <param name="stopToken">停止令牌</param>
+        public void OnWriteAll(IDataReader<TKey> dataReader, RWStopToken stopToken = default)
         {
-            DataWriter.OnWriteAll(dataReader);
+            DataWriter.OnWriteAll(dataReader, stopToken);
         }
     }
 }

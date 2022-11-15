@@ -18,9 +18,18 @@ namespace Swifter.Tools
         /// <returns>返回缓冲的长度</returns>
         public static void ReadFrom(this HGlobalCache<char> hGCache, ReadOnlySpan<byte> source, Encoding encoding)
         {
-            hGCache.Grow(encoding.GetMaxCharCount(source.Length));
+            Grow(hGCache, encoding.GetMaxCharCount(source.Length));
+
+#if NativeSpan
 
             hGCache.Count += encoding.GetChars(source, new Span<char>(hGCache.Current, hGCache.Rest));
+
+#else
+            fixed(byte* bytes = source)
+            {
+                hGCache.Count += encoding.GetChars(bytes, source.Length, hGCache.Current, hGCache.Rest);
+            }
+#endif
         }
 
         /// <summary>
@@ -30,7 +39,7 @@ namespace Swifter.Tools
         /// <returns>返回一个字符串</returns>
         public static string ToHexString(this ReadOnlySpan<byte> bytes)
         {
-            return ToHexString(ref Underlying.AsRef(bytes[0]), bytes.Length);
+            return ToHexString(ref Unsafe.AsRef(bytes[0]), bytes.Length);
         }
     }
 }

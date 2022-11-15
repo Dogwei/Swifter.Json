@@ -10,7 +10,7 @@ namespace Swifter.RW
     /// <summary>
     /// 表示对象读取器的一个字段的特性。
     /// </summary>
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true, Inherited = true)]
     public class RWFieldAttribute : Attribute
     {
         /// <summary>
@@ -25,7 +25,7 @@ namespace Swifter.RW
         /// <param name="fieldType">指定类型</param>
         /// <param name="readValueMethod">值读取接口</param>
         /// <param name="writeValueMethod">值写入接口</param>
-        protected static void GetBestMatchInterfaceMethod(Type interfaceType, Type fieldType, out MethodInfo readValueMethod, out MethodInfo writeValueMethod)
+        protected static void GetBestMatchInterfaceMethod(Type interfaceType, Type fieldType, out MethodInfo? readValueMethod, out MethodInfo? writeValueMethod)
         {
             readValueMethod = null;
             writeValueMethod = null;
@@ -40,7 +40,7 @@ namespace Swifter.RW
                 }
             }
 
-            Type targetType = null;
+            Type? targetType = null;
 
             foreach (var item in interfaces)
             {
@@ -129,7 +129,7 @@ namespace Swifter.RW
         /// <param name="fieldType">指定类型</param>
         /// <param name="readValueMethod">值读取接口</param>
         /// <param name="writeValueMethod">值写入接口</param>
-        protected static void GetBestMatchRWMethod(Type interfaceType, Type fieldType, out MethodInfo readValueMethod, out MethodInfo writeValueMethod)
+        protected static void GetBestMatchRWMethod(Type interfaceType, Type fieldType, out MethodInfo? readValueMethod, out MethodInfo? writeValueMethod)
         {
             readValueMethod = null;
             writeValueMethod = null;
@@ -248,14 +248,13 @@ namespace Swifter.RW
         /// <param name="firstArgument">值读写接口实例</param>
         /// <param name="readValueMethod">值读取接口</param>
         /// <param name="writeValueMethod">值写入接口</param>
-        public virtual void GetBestMatchInterfaceMethod(Type fieldType, out object firstArgument, out MethodInfo readValueMethod, out MethodInfo writeValueMethod)
+        public virtual void GetBestMatchInterfaceMethod(Type fieldType, out object? firstArgument, out MethodInfo? readValueMethod, out MethodInfo? writeValueMethod)
         {
             var interfaceType = GetInterfaceType(fieldType);
 
             firstArgument = interfaceType == GetType() ? this : Activator.CreateInstance(interfaceType);
 
             GetBestMatchInterfaceMethod(interfaceType, fieldType, out readValueMethod, out writeValueMethod);
-
         }
 
         /// <summary>
@@ -310,7 +309,7 @@ namespace Swifter.RW
         /// <summary>
         /// 此字段的名称。
         /// </summary>
-        public virtual string Name { get; set; }
+        public virtual string? Name { get; set; }
 
         /// <summary>
         /// 此字段的排序值。约小越靠前，默认值为最靠后。

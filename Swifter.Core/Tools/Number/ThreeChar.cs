@@ -1,7 +1,4 @@
-﻿
-#pragma warning disable 0649
-
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace Swifter.Tools
 {

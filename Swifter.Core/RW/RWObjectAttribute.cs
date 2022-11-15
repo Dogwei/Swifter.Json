@@ -8,7 +8,7 @@ namespace Swifter.RW
     /// <summary>
     /// 对象读写器的特性形式配置项。
     /// </summary>
-    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true, Inherited = true)]
     public class RWObjectAttribute : Attribute
     {
         /// <summary>
@@ -16,7 +16,7 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="type">对象类型</param>
         /// <param name="fields">对象字段集合</param>
-        public virtual void OnCreate(Type type, ref List<IObjectField> fields)
+        public virtual void OnCreate(Type type, List<IObjectField> fields)
         {
         }
 
@@ -26,7 +26,7 @@ namespace Swifter.RW
         /// <param name="type">对象类型</param>
         /// <param name="memberInfo">成员信息</param>
         /// <param name="attributes">成员的特性</param>
-        public virtual void OnLoadMember(Type type, MemberInfo memberInfo, ref List<RWFieldAttribute> attributes)
+        public virtual void OnLoadMember(Type type, MemberInfo memberInfo, List<RWFieldAttribute> attributes)
         {
 
         }

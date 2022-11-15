@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Swifter.Tools
 {
@@ -12,13 +13,13 @@ namespace Swifter.Tools
         /// 
         /// </summary>
         /// <param name="value"></param>
-        public static unsafe implicit operator Utf8Byte(byte value) => Underlying.As<byte, Utf8Byte>(ref value);
+        public static unsafe implicit operator Utf8Byte(byte value) => Unsafe.As<byte, Utf8Byte>(ref value);
 
         /// <summary>
         /// 
         /// </summary>
         /// <param name="value"></param>
 
-        public static unsafe implicit operator byte(Utf8Byte value) => Underlying.As<Utf8Byte, byte>(ref value);
+        public static unsafe implicit operator byte(Utf8Byte value) => Unsafe.As<Utf8Byte, byte>(ref value);
     }
 }

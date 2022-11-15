@@ -6,7 +6,7 @@ namespace Swifter.RW
     /// 数据读取器的值筛选接口。
     /// </summary>
     /// <typeparam name="TKey">键类型。</typeparam>
-    public interface IValueFilter<TKey>
+    public interface IValueFilter<TKey> where TKey : notnull
     {
         /// <summary>
         /// 值筛选方法。

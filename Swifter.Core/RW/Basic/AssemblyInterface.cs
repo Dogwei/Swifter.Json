@@ -5,7 +5,7 @@ namespace Swifter.RW
 {
     internal sealed class AssemblyInterface<T> : IValueInterface<T> where T : Assembly
     {
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<T> tReader)
             {
@@ -14,7 +14,7 @@ namespace Swifter.RW
 
             if (valueReader is IValueReader<Assembly> assemblyReader)
             {
-                return (T)assemblyReader.ReadValue();
+                return (T?)assemblyReader.ReadValue();
             }
 
             var value = valueReader.DirectRead();
@@ -24,10 +24,10 @@ namespace Swifter.RW
                 return result;
             }
 
-            return XConvert<T>.FromObject(value);
+            return XConvert.Convert<T>(value);
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
             if (value is null)
             {

@@ -1,49 +1,43 @@
-﻿
-using Swifter.Reflection;
+﻿using InlineIL;
 using Swifter.Tools;
-
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Reflection;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
-    /// <summary>
-    /// System.Data.DataTable Reader impl.
-    /// </summary>
-    internal sealed class DataTableRW<T> : IDataRW<int> where T : DataTable
+    sealed class DataTableRW<T> : IArrayRW where T : DataTable
     {
         const int DefaultCapacity = 3;
 
         readonly DataTableRWOptions options;
 
-        public T datatable;
+        public T? content;
 
         public DataTableRW(DataTableRWOptions options)
         {
             this.options = options;
         }
 
-        public IValueRW this[int key] => new ValueCopyer<int>(this, key);
+        public IValueRW this[int key] => new ValueRW(this, key);
 
         IValueReader IDataReader<int>.this[int key] => this[key];
 
         IValueWriter IDataWriter<int>.this[int key] => this[key];
 
-        public IEnumerable<int> Keys => Enumerable.Range(0, Count);
+        public int Count => content?.Rows.Count ?? -1;
 
-        public int Count => datatable?.Rows.Count ?? -1;
-
-        public object Content
+        public object? Content
         {
-            get => datatable;
-            set => datatable = (T)value;
+            get => content;
+            set => content = (T?)value;
         }
 
         public Type ContentType => typeof(T);
+
+        public Type ValueType => typeof(DataRow);
 
         public void Initialize()
         {
@@ -54,48 +48,73 @@ namespace Swifter.RW
         {
             if (typeof(T) == typeof(DataTable))
             {
-                datatable = Underlying.As<T>(new DataTable());
+                content = Unsafe.As<T>(new DataTable());
             }
             else
             {
-                datatable = Activator.CreateInstance<T>();
+                content = Activator.CreateInstance<T>();
             }
+
+            content.MinimumCapacity = capacity;
         }
 
-        public void OnReadAll(IDataWriter<int> dataWriter)
+        public void OnReadAll(IDataWriter<int> dataWriter, RWStopToken stopToken = default)
         {
-            var rows = datatable.Rows;
-
-            var length = rows.Count;
-
-            var rw = new DataRowRW<DataRow>();
-
-            for (int i = 0; i < length; i++)
+            if (content is null)
             {
-                rw.datarow = rows[i];
+                throw new NullReferenceException(nameof(content));
+            }
 
-                if (i != 0 && (options & DataTableRWOptions.WriteToArrayFromBeginningSecondRows) != 0)
+            var rows = content.Rows;
+
+            int length = rows.Count;
+            int i = 0;
+
+            var canBeStopped = stopToken.CanBeStopped;
+
+            if (canBeStopped && stopToken.PopState() is int index)
+            {
+                i = index;
+            }
+
+            for (; i < length; i++)
+            {
+                if (canBeStopped && stopToken.IsStopRequested)
                 {
-                    dataWriter[i].WriteArray(rw);
+                    stopToken.SetState(i);
+
+                    return;
+                }
+
+                var dataRowRW = new DataRowRW<DataRow>(content, rows[i]);
+
+                dataRowRW.Initialize();
+
+                if (i != 0 && options.On(DataTableRWOptions.WriteToArrayFromBeginningSecondRows))
+                {
+                    dataWriter[i].WriteArray(dataRowRW);
                 }
                 else
                 {
-                    dataWriter[i].WriteObject(rw);
+                    dataWriter[i].WriteObject(dataRowRW);
                 }
             }
         }
 
-
         public void OnReadValue(int key, IValueWriter valueWriter)
         {
-            var rows = datatable.Rows;
-
-            var rw = new DataRowRW<DataRow>
+            if (content is null)
             {
-                datarow = rows[key]
-            };
+                throw new NullReferenceException(nameof(content));
+            }
 
-            if (key != 0 && (options & DataTableRWOptions.WriteToArrayFromBeginningSecondRows) != 0)
+            var rows = content.Rows;
+
+            var rw = new DataRowRW<DataRow>(content, rows[key]);
+
+            rw.Initialize();
+
+            if (key != 0 && options.On(DataTableRWOptions.WriteToArrayFromBeginningSecondRows))
             {
                 valueWriter.WriteArray(rw);
             }
@@ -105,19 +124,39 @@ namespace Swifter.RW
             }
         }
 
-        public void OnWriteAll(IDataReader<int> dataReader)
+        public void OnWriteAll(IDataReader<int> dataReader, RWStopToken stopToken)
         {
-            var rows = datatable.Rows;
-
-            var length = rows.Count;
-
-            var rw = new DataRowRW<DataRow>();
-
-            for (int i = 0; i < length; i++)
+            if (content is null)
             {
-                rw.datarow = rows[i];
+                throw new NullReferenceException(nameof(content));
+            }
 
-                if (i != 0 && (options & DataTableRWOptions.WriteToArrayFromBeginningSecondRows) != 0)
+            var rows = content.Rows;
+
+            int length = rows.Count;
+            int i = 0;
+
+            var canBeStopped = stopToken.CanBeStopped;
+
+            if (canBeStopped && stopToken.PopState() is int index)
+            {
+                i = index;
+            }
+
+            for (; i < length; i++)
+            {
+                if (canBeStopped && stopToken.IsStopRequested)
+                {
+                    stopToken.SetState(i);
+
+                    return;
+                }
+
+                var rw = new DataRowRW<DataRow>(content, rows[i]);
+
+                rw.Initialize();
+
+                if (i != 0 && options.On(DataTableRWOptions.WriteToArrayFromBeginningSecondRows))
                 {
                     dataReader[i].ReadArray(rw);
                 }
@@ -130,48 +169,66 @@ namespace Swifter.RW
 
         public void OnWriteValue(int key, IValueReader valueReader)
         {
-            var rows = datatable.Rows;
-            var columns = datatable.Columns;
+            if (content is null)
+            {
+                throw new NullReferenceException(nameof(content));
+            }
+
+            var rows = content.Rows;
+            var columns = content.Columns;
 
             var length = rows.Count;
 
-            if (key == length && key == 0)
+            var isAddNew = key == length;
+
+            if (key == 0 && isAddNew)
             {
                 var dictionary = valueReader.ReadDictionary<string, object>();
 
-                if ((options & DataTableRWOptions.SetFirstRowsTypeToColumnTypes) != 0)
+                if (dictionary is null)
                 {
-                    foreach (var item in dictionary)
-                    {
-                        columns.Add(item.Key, item.Value?.GetType() ?? typeof(object));
-                    }
-                }
-                else
-                {
-                    foreach (var item in dictionary)
-                    {
-                        columns.Add(item.Key, typeof(object));
-                    }
+                    throw new InvalidOperationException("First row can't be null!");
                 }
 
-                var datarow = datatable.NewRow();
+                var columnQueue = new Queue<int>(dictionary.Count);
 
                 foreach (var item in dictionary)
                 {
-                    // TODO: 使用序号优化性能。
-                    datarow[item.Key] = item.Value;
+                    var column = columns[item.Key];
+
+                    if (column is null)
+                    {
+                        var columnDataType = typeof(object);
+
+                        if (options.On(DataTableRWOptions.SetFirstRowsTypeToColumnTypes) && item.Value is not null)
+                        {
+                            columnDataType = item.Value.GetType();
+                        }
+
+                        column = columns.Add(item.Key, columnDataType);
+                    }
+
+                    columnQueue.Enqueue(column.Ordinal);
                 }
 
-                rows.Add(datarow);
+                var firstRow = content.NewRow();
+
+                foreach (var item in dictionary)
+                {
+                    var ordinal = columnQueue.Dequeue();
+
+                    firstRow[ordinal] = item.Value;
+                }
+
+                rows.Add(firstRow);
             }
             else
             {
-                var rw = new DataRowRW<DataRow>
-                {
-                    datarow = key == length ? datatable.NewRow() : rows[key]
-                };
+                var rw = new DataRowRW<DataRow>(content, isAddNew ? content.AddNewRow() : rows[key]);
 
-                if ((options & DataTableRWOptions.WriteToArrayFromBeginningSecondRows) != 0)
+                rw.Initialize();
+
+                if (key > 0 && options.On(DataTableRWOptions.WriteToArrayFromBeginningSecondRows))
                 {
                     valueReader.ReadArray(rw);
                 }
@@ -179,11 +236,126 @@ namespace Swifter.RW
                 {
                     valueReader.ReadObject(rw);
                 }
+            }
+        }
 
-                if (key == length)
+        sealed class ValueRW : BaseGenericRW<DataRow>
+        {
+            public readonly DataTableRW<T> BaseRW;
+            public readonly int Index;
+
+            public ValueRW(DataTableRW<T> baseRW, int index)
+            {
+                BaseRW = baseRW;
+                Index = index;
+            }
+
+            public override DataRow? ReadValue()
+            {
+                var dataTable = BaseRW.content;
+
+                if (dataTable is null)
                 {
-                    rows.Add(rw.datarow);
+                    throw new NullReferenceException();
                 }
+
+                return dataTable.Rows[Index];
+            }
+
+            public override void WriteValue(DataRow? value)
+            {
+                if (value is null)
+                {
+                    throw new ArgumentNullException(nameof(value));
+                }
+
+                var dataTable = BaseRW.content;
+
+                if (dataTable is null)
+                {
+                    throw new NullReferenceException();
+                }
+
+                var isAddNew = Index == dataTable.Rows.Count;
+
+                if (isAddNew && value.Table == dataTable)
+                {
+                    dataTable.Rows.Add(value);
+
+                    return;
+                }
+
+                var rw = new DataRowRW<DataRow>(value.Table, value);
+
+                rw.Initialize();
+
+                WriteObject(rw);
+            }
+
+            public override void ReadArray(IDataWriter<int> valueWriter)
+            {
+                var dataTable = BaseRW.content;
+
+                if (dataTable is null)
+                {
+                    throw new NullReferenceException();
+                }
+
+                var rw = new DataRowRW<DataRow>(dataTable, dataTable.Rows[Index]);
+
+                rw.Initialize();
+
+                rw.OnReadAll(valueWriter);
+            }
+
+            public override void WriteArray(IDataReader<int> dataReader)
+            {
+                var dataTable = BaseRW.content;
+
+                if (dataTable is null)
+                {
+                    throw new NullReferenceException();
+                }
+
+                var isAddNew = Index == dataTable.Rows.Count;
+
+                var rw = new DataRowRW<DataRow>(dataTable, isAddNew ? dataTable.NewRow() : dataTable.Rows[Index]);
+
+                dataReader.OnReadAll(rw);
+            }
+
+            public override void ReadObject(IDataWriter<string> valueWriter)
+            {
+                var dataTable = BaseRW.content;
+
+                if (dataTable is null)
+                {
+                    throw new NullReferenceException();
+                }
+
+                var rw = new DataRowRW<DataRow>(dataTable, dataTable.Rows[Index]);
+
+                rw.Initialize();
+
+                rw.OnReadAll(valueWriter);
+            }
+
+            public override void WriteObject(IDataReader<string> dataReader)
+            {
+                var dataTable = BaseRW.content;
+
+                if (dataTable is null)
+                {
+                    throw new NullReferenceException();
+                }
+
+                var isAddNew = Index == dataTable.Rows.Count;
+
+                var rw = new DataRowRW<DataRow>(dataTable, isAddNew ? dataTable.AddNewRow() : dataTable.Rows[Index]);
+
+                rw.Initialize();
+
+                dataReader.OnReadAll(rw);
             }
         }
     }
@@ -198,48 +370,30 @@ namespace Swifter.RW
         /// </summary>
         public static DataTableRWOptions DefaultOptions { get; set; } = DataTableRWOptions.None;
 
-        static readonly XFieldInfo DataColumnDataTypeFieldInfo = GetDataColumnDataTypeFieldInfo();
-
-        static XFieldInfo GetDataColumnDataTypeFieldInfo()
-        {
-            try
-            {
-                if (TypeHelper.IsAutoGetMethod(typeof(DataColumn).GetProperty(nameof(DataColumn.DataType)).GetGetMethod(true), out var fieldMetadataToken) 
-                    && TypeHelper.GetMemberByMetadataToken<FieldInfo>(typeof(DataColumn), fieldMetadataToken) is FieldInfo fieldInfo)
-                {
-                    return XFieldInfo.Create(fieldInfo, XBindingFlags.NonPublic);
-                }
-
-                var dataColumn = new DataColumn(nameof(GetDataColumnDataTypeFieldInfo), typeof(DataTableRWOptions));
-
-                foreach (var field in typeof(DataColumn).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                {
-                    if (field.FieldType == typeof(Type) && typeof(DataTableRWOptions).Equals(field.GetValue(dataColumn)))
-                    {
-                        field.SetValue(dataColumn, typeof(int));
-
-                        if (dataColumn.DataType == typeof(int))
-                        {
-                            return XFieldInfo.Create(field, XBindingFlags.NonPublic);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return null;
-        }
-
         /// <summary>
         /// 设置一个支持针对性接口的 DataTableRW 默认配置项。
         /// </summary>
-        /// <param name="targeted">支持针对性接口的对象</param>
+        /// <param name="targetable">支持针对性接口的对象</param>
         /// <param name="options">默认配置项</param>
-        public static void SetDataTableRWOptions(this ITargetedBind targeted, DataTableRWOptions options)
+        public static void SetDataTableRWOptions(this ITargetableValueRWSource targetable, DataTableRWOptions options)
         {
-            ValueInterface<SetDataTableRWOptionsAssistant>.SetTargetedInterface(targeted, new SetDataTableRWOptionsAssistant(options));
+            TargetableSetOptionsHelper<DataTableRWOptions>.SetOptions(targetable, options);
+        }
+
+        /// <summary>
+        /// 获取一个支持针对性接口的 DataTableRW 默认配置项。
+        /// </summary>
+        /// <param name="targetable">支持针对性接口的对象</param>
+        /// <returns>返回默认配置项</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static DataTableRWOptions GetDataTableRWOptions(this ITargetableValueRWSource targetable)
+        {
+            if (TargetableSetOptionsHelper<DataTableRWOptions>.TryGetOptions(targetable, out var options))
+            {
+                return options;
+            }
+
+            return DefaultOptions;
         }
 
         /// <summary>
@@ -248,13 +402,13 @@ namespace Swifter.RW
         /// <param name="valueReader">值读取器</param>
         /// <param name="options">配置项</param>
         /// <returns>返回一个数据表</returns>
-        public static DataTable ReadDataTable(this IValueReader valueReader, DataTableRWOptions options = DataTableRWOptions.None)
+        public static DataTable? ReadDataTable(this IValueReader valueReader, DataTableRWOptions options = DataTableRWOptions.None)
         {
             var rw = new DataTableRW<DataTable>(options);
 
             valueReader.ReadArray(rw);
 
-            return rw.datatable;
+            return rw.content;
         }
 
         /// <summary>
@@ -263,12 +417,17 @@ namespace Swifter.RW
         /// <param name="valueWriter">值写入器</param>
         /// <param name="dataTable">数据表</param>
         /// <param name="options">配置项</param>
-        public static void WriteDataTable(this IValueWriter valueWriter, DataTable dataTable, DataTableRWOptions options = DataTableRWOptions.None)
+        public static void WriteDataTable(this IValueWriter valueWriter, DataTable? dataTable, DataTableRWOptions options = DataTableRWOptions.None)
         {
-            valueWriter.WriteArray(new DataTableRW<DataTable>(options) { datatable = dataTable });
+            if (dataTable is null)
+            {
+                valueWriter.DirectWrite(null);
+            }
+            else
+            {
+                valueWriter.WriteArray(new DataTableRW<DataTable>(options) { content = dataTable });
+            }
         }
-
-
 
         /// <summary>
         /// 识别数据表的列类型。
@@ -276,25 +435,29 @@ namespace Swifter.RW
         /// <param name="dataTable">要识别的数据表</param>
         /// <param name="anyType">当识别为 <see cref="object"/> 类型时的类型，默认为 <see cref="object"/></param>
         /// <returns></returns>
-        public static DataTable IdentifyColumnTypes(this DataTable dataTable, Type anyType = null)
+        public static DataTable IdentifyColumnTypes(this DataTable dataTable, Type? anyType = null)
         {
             if (anyType is null)
             {
                 anyType = typeof(object);
             }
 
-            DataTable newDataTable = null;
+            DataTable? newDataTable = null;
 
-            foreach (DataColumn dataColumn in dataTable.Columns)
+            foreach (DataColumn? dataColumn in dataTable.Columns)
             {
-                Type dataType = null;
+                VersionDifferences.Assert(dataColumn != null);
 
-                foreach (DataRow dataRow in dataTable.Rows)
+                Type? dataType = null;
+
+                foreach (DataRow? dataRow in dataTable.Rows)
                 {
+                    VersionDifferences.Assert(dataRow != null);
+
                     ChooseType(ref dataType, dataRow[dataColumn]);
                 }
 
-                if (IsAnyType(dataType))
+                if (dataType is null || IsAnyType(dataType))
                 {
                     dataType = anyType;
                 }
@@ -305,13 +468,15 @@ namespace Swifter.RW
                 }
                 else if (dataType != dataColumn.DataType)
                 {
-                    if (DataColumnDataTypeFieldInfo != null)
+                    if (TypeHelper.IsAutoGetMethod(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.PropertyGet(typeof(DataColumn), nameof(DataColumn.DataType)))), out var fieldInfo))
                     {
-                        DataColumnDataTypeFieldInfo.SetValue(dataColumn, dataType);
+                        fieldInfo.SetValue(dataColumn, dataType);
 
-                        foreach (DataRow dataRow in dataTable.Rows)
+                        foreach (DataRow? dataRow in dataTable.Rows)
                         {
-                            dataRow[dataColumn] = XConvert.Cast(dataRow[dataColumn], dataType);
+                            VersionDifferences.Assert(dataRow != null);
+
+                            dataRow[dataColumn] = XConvert.Convert(dataRow[dataColumn], dataType);
                         }
                     }
                     else
@@ -325,13 +490,17 @@ namespace Swifter.RW
 
             if (newDataTable != null)
             {
-                foreach (DataRow dataRow in dataTable.Rows)
+                foreach (DataRow? dataRow in dataTable.Rows)
                 {
+                    VersionDifferences.Assert(dataRow != null);
+
                     var newDataRow = newDataTable.NewRow();
 
-                    foreach (DataColumn dataColumn in newDataTable.Columns)
+                    foreach (DataColumn? dataColumn in newDataTable.Columns)
                     {
-                        newDataRow[dataColumn] = XConvert.Cast(dataRow[/* dataColumn.ColumnName */dataColumn.Ordinal], dataColumn.DataType);
+                        VersionDifferences.Assert(dataColumn != null);
+
+                        newDataRow[dataColumn] = XConvert.Convert(dataRow[/* dataColumn.ColumnName */dataColumn.Ordinal], dataColumn.DataType);
                     }
 
                     newDataTable.Rows.Add(newDataRow);
@@ -342,7 +511,7 @@ namespace Swifter.RW
 
             return dataTable;
 
-            static void ChooseType(ref Type type, object value)
+            static void ChooseType(ref Type? type, object value)
             {
                 if (value != null)
                 {
@@ -356,7 +525,7 @@ namespace Swifter.RW
                     {
                         while (!XConvert.IsImplicitConvert(type, valueType))
                         {
-                            valueType = valueType.BaseType;
+                            valueType = valueType.BaseType!;
                         }
 
                         type = valueType;
@@ -370,26 +539,65 @@ namespace Swifter.RW
             }
         }
 
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        internal static DataTableRWOptions GetDataTableRWOptions(object valueRW)
+        /// <summary>
+        /// 为数据表添加一行新的行。
+        /// </summary>
+        /// <param name="dataTable">数据表</param>
+        /// <returns>返回已经添加到数据表的新行</returns>
+        public static DataRow AddNewRow(this DataTable dataTable)
         {
-            if (valueRW is ITargetedBind targeted && ValueInterface<SetDataTableRWOptionsAssistant>.GetTargetedInterface(targeted) is SetDataTableRWOptionsAssistant assistant)
-            {
-                return assistant.Options;
-            }
+            var row = dataTable.NewRow();
 
-            return DefaultOptions;
+            dataTable.Rows.Add(row);
+
+            return row;
         }
 
-        sealed class SetDataTableRWOptionsAssistant : IValueInterface<SetDataTableRWOptionsAssistant>
+        /// <summary>
+        /// 如果值为 <see cref="DBNull.Value"/>，则返回 <see langword="null"/>。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        internal static object? AsNullIfDBNull(this object? value)
         {
-            public readonly DataTableRWOptions Options;
+            if (value == DBNull.Value)
+            {
+                return null;
+            }
 
-            public SetDataTableRWOptionsAssistant(DataTableRWOptions options) => Options = options;
+            return value;
+        }
 
-            public SetDataTableRWOptionsAssistant ReadValue(IValueReader valueReader) => throw new NotSupportedException();
+        /// <summary>
+        /// 将源数据行复制到目标数据行。
+        /// </summary>
+        /// <param name="source">源数据行</param>
+        /// <param name="destination">目标数据行</param>
+        /// <param name="newColumnOnNotExists">当列在目标数据表中不存在时添加新的列</param>
+        public static void CopyTo(this DataRow source, DataRow destination, bool newColumnOnNotExists = false)
+        {
+            var items = new List<KeyValuePair<int, object>>(source.Table.Columns.Count);
 
-            public void WriteValue(IValueWriter valueWriter, SetDataTableRWOptionsAssistant value) => throw new NotSupportedException();
+            foreach (DataColumn? sourceColumn in source.Table.Columns)
+            {
+                VersionDifferences.Assert(sourceColumn != null);
+
+                var destinationColumn = destination.Table.Columns[sourceColumn.ColumnName];
+
+                if (destinationColumn is null && newColumnOnNotExists)
+                {
+                    destinationColumn = destination.Table.Columns.Add(sourceColumn.ColumnName, sourceColumn.DataType);
+                }
+
+                if (destinationColumn is not null)
+                {
+                    items.Add(new KeyValuePair<int, object>(destinationColumn.Ordinal, source[sourceColumn]));
+                }
+            }
+
+            foreach (var item in items)
+            {
+                destination[item.Key] = item.Value;
+            }
         }
     }
 }

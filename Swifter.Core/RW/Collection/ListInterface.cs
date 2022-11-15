@@ -1,12 +1,10 @@
-﻿
-
-using System.Collections;
+﻿using System.Collections;
 
 namespace Swifter.RW
 {
     internal sealed class ListInterface<T> : IValueInterface<T> where T : IList
     {
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<T> reader)
             {
@@ -17,10 +15,10 @@ namespace Swifter.RW
 
             valueReader.ReadArray(listRW);
 
-            return listRW.content;
+            return listRW.Content;
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
             if (value is null)
             {
@@ -32,7 +30,7 @@ namespace Swifter.RW
             }
             else
             {
-                valueWriter.WriteArray(new ListRW<T> { content = value });
+                valueWriter.WriteArray(new ListRW<T> { Content = value });
             }
         }
     }

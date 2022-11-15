@@ -1,6 +1,8 @@
 ﻿
 
 
+using System;
+
 namespace Swifter.RW
 {
     /// <summary>
@@ -8,6 +10,12 @@ namespace Swifter.RW
     /// </summary>
     public interface IValueRW : IValueReader, IValueWriter
     {
+
+        /// <summary>
+        /// 获取值的类型。
+        /// <see langword="null"/> 表示未知类型。
+        /// </summary>
+        new Type? ValueType { get; }
     }
 
     /// <summary>

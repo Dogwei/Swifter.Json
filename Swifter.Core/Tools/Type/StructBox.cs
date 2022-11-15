@@ -2,6 +2,6 @@
 {
     internal class StructBox<T>
     {
-        public T Value;
+        public T? Value;
     }
 }

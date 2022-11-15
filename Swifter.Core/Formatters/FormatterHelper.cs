@@ -1,8 +1,6 @@
-﻿using Swifter.Reflection;
-using Swifter.RW;
+﻿using Swifter.RW;
 using Swifter.Tools;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
 
@@ -23,7 +21,14 @@ namespace Swifter.Formatters
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void DeserializeTo<T>(this ITextFormatter textFormatter, string text, T obj)
         {
-            textFormatter.DeserializeTo(text, RWHelper.CreateWriter(obj));
+            var writer = RWHelper.CreateWriter(obj);
+
+            if (writer is null)
+            {
+                throw new NotSupportedException(typeof(T).FullName);
+            }
+
+            textFormatter.DeserializeTo(text, writer);
         }
 
         /// <summary>
@@ -36,7 +41,14 @@ namespace Swifter.Formatters
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void DeserializeTo<T>(this ITextFormatter textFormatter, TextReader textReader, T obj)
         {
-            textFormatter.DeserializeTo(textReader, RWHelper.CreateWriter(obj));
+            var writer = RWHelper.CreateWriter(obj);
+
+            if (writer is null)
+            {
+                throw new NotSupportedException(typeof(T).FullName);
+            }
+
+            textFormatter.DeserializeTo(textReader, writer);
         }
 
         /// <summary>
@@ -49,7 +61,14 @@ namespace Swifter.Formatters
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void DeserializeTo<T>(this ITextFormatter textFormatter, HGlobalCache<char> hGCache, T obj)
         {
-            textFormatter.DeserializeTo(hGCache, RWHelper.CreateWriter(obj));
+            var writer = RWHelper.CreateWriter(obj);
+
+            if (writer is null)
+            {
+                throw new NotSupportedException(typeof(T).FullName);
+            }
+
+            textFormatter.DeserializeTo(hGCache, writer);
         }
 
         /// <summary>
@@ -62,7 +81,14 @@ namespace Swifter.Formatters
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void DeserializeTo<T>(this IBinaryFormatter binaryFormatter, byte[] bytes, T obj)
         {
-            binaryFormatter.DeserializeTo(bytes, RWHelper.CreateWriter(obj));
+            var writer = RWHelper.CreateWriter(obj);
+
+            if (writer is null)
+            {
+                throw new NotSupportedException(typeof(T).FullName);
+            }
+
+            binaryFormatter.DeserializeTo(bytes, writer);
         }
 
         /// <summary>
@@ -75,7 +101,14 @@ namespace Swifter.Formatters
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void DeserializeTo<T>(this IBinaryFormatter binaryFormatter, Stream stream, T obj)
         {
-            binaryFormatter.DeserializeTo(stream, RWHelper.CreateWriter(obj));
+            var writer = RWHelper.CreateWriter(obj);
+
+            if (writer is null)
+            {
+                throw new NotSupportedException(typeof(T).FullName);
+            }
+
+            binaryFormatter.DeserializeTo(stream, writer);
         }
 
         /// <summary>
@@ -88,7 +121,14 @@ namespace Swifter.Formatters
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static void DeserializeTo<T>(this IBinaryFormatter binaryFormatter, HGlobalCache<byte> hGCache, T obj)
         {
-            binaryFormatter.DeserializeTo(hGCache, RWHelper.CreateWriter(obj));
+            var writer = RWHelper.CreateWriter(obj);
+
+            if (writer is null)
+            {
+                throw new NotSupportedException(typeof(T).FullName);
+            }
+
+            binaryFormatter.DeserializeTo(hGCache, writer);
         }
     }
 }

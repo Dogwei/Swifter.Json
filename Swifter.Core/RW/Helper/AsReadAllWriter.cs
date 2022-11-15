@@ -1,12 +1,10 @@
 ﻿
 using Swifter.Tools;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Swifter.RW
 {
-    sealed class AsReadAllWriter<TIn, TOut> : IDataWriter<TIn>
+    sealed class AsReadAllWriter<TIn, TOut> : IDataWriter<TIn> where TIn : notnull where TOut : notnull
     {
         public readonly IDataWriter<TOut> dataWriter;
 
@@ -15,9 +13,7 @@ namespace Swifter.RW
             this.dataWriter = dataWriter;
         }
 
-        public IValueWriter this[TIn key] => dataWriter[XConvert<TOut>.Convert(key)];
-
-        public IEnumerable<TIn> Keys => dataWriter.Keys.Select(key => XConvert.Convert<TOut, TIn>(key));
+        public IValueWriter this[TIn key] => dataWriter[XConvert.Convert<TIn, TOut>(key)!];
 
         public int Count => dataWriter.Count;
 
@@ -25,18 +21,20 @@ namespace Swifter.RW
 
         public void Initialize(int capacity) => dataWriter.Initialize(capacity);
 
-        public void OnWriteAll(IDataReader<TIn> dataReader) =>
-            dataWriter.OnWriteAll(new AsWriteAllReader<TOut, TIn>(dataReader));
+        public void OnWriteAll(IDataReader<TIn> dataReader, RWStopToken stopToken = default) =>
+            dataWriter.OnWriteAll(new AsWriteAllReader<TOut, TIn>(dataReader), stopToken);
 
         public void OnWriteValue(TIn key, IValueReader valueReader)=>
-            dataWriter.OnWriteValue(XConvert<TOut>.Convert(key), valueReader);
+            dataWriter.OnWriteValue(XConvert.Convert<TIn, TOut>(key)!, valueReader);
 
-        public object Content
+        public object? Content
         {
             get => dataWriter.Content;
             set => dataWriter.Content = value;
         }
 
-        public Type ContentType => dataWriter.ContentType;
+        public Type? ContentType => dataWriter.ContentType;
+
+        public Type? ValueType => dataWriter.ValueType;
     }
 }

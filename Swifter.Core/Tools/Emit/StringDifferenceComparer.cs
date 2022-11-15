@@ -1,20 +1,12 @@
-﻿using System;
-using System.Linq;
+﻿using InlineIL;
+using System;
 using System.Reflection;
 using System.Reflection.Emit;
 
-using static Swifter.Tools.MethodHelper;
-using static Swifter.Tools.StringHelper;
-
 namespace Swifter.Tools
 {
-    internal sealed class StringDifferenceComparer : IDifferenceComparer<string>
+    internal sealed class StringDifferenceComparer : IDifferenceComparer<string>, IHashComparer<string>
     {
-        public static readonly MethodInfo GetLengthMethod = typeof(string).GetProperty(nameof(string.Length)).GetGetMethod(true);
-        public static readonly MethodInfo CharAtMethod = typeof(string).GetProperties(BindingFlags.Public | BindingFlags.Instance).First(
-            item => item.PropertyType == typeof(char) && item.GetIndexParameters().Length == 1 && item.GetIndexParameters()[0].ParameterType == typeof(int))
-            .GetGetMethod(true);
-
         public readonly bool IgnoreCase;
 
         public StringDifferenceComparer(bool ignoreCase)
@@ -22,23 +14,13 @@ namespace Swifter.Tools
             IgnoreCase = ignoreCase;
         }
 
-        public int ElementAt(string str, int index)
-        {
-            if (IgnoreCase)
-            {
-                return ToLower(str[index]);
-            }
-
-            return str[index];
-        }
-
         public void EmitElementAt(ILGenerator ilGen)
         {
-            ilGen.Call(CharAtMethod);
+            ilGen.AutoCall(typeof(string).GetProperty(new Type[] { typeof(int) })!.GetGetMethod(true)!);
 
             if (IgnoreCase)
             {
-                ilGen.Call(MethodOf<char, char>(ToLower));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(StringHelper), nameof(StringHelper.ToLower), typeof(char)))));
             }
         }
 
@@ -46,54 +28,64 @@ namespace Swifter.Tools
         {
             if (IgnoreCase)
             {
-                ilGen.Call(MethodOf<string, string, bool>(EqualsWithIgnoreCase));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(StringHelper), nameof(StringHelper.EqualsWithIgnoreCase), typeof(string), typeof(string)))));
             }
             else
             {
-                ilGen.Call(MethodOf<string, string, bool>(StringHelper.Equals));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(StringHelper), nameof(StringHelper.Equals), typeof(string), typeof(string)))));
             }
+        }
+
+        public void EmitGetLength(ILGenerator ilGen)
+        {
+            ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.PropertyGet(typeof(string), nameof(string.Length)))));
         }
 
         public void EmitGetHashCode(ILGenerator ilGen)
         {
             if (IgnoreCase)
             {
-                ilGen.Call(MethodOf<string, int>(GetHashCodeWithIgnoreCase));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(StringHelper), nameof(StringHelper.GetHashCodeWithIgnoreCase), typeof(string)))));
             }
             else
             {
-                ilGen.Call(MethodOf<string, int>(StringHelper.GetHashCode));
+                ilGen.AutoCall(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.Method(typeof(StringHelper), nameof(StringHelper.GetHashCode), typeof(string)))));
             }
         }
 
-        public void EmitGetLength(ILGenerator ilGen)
+        public int ElementAt(string str, int index)
         {
-            ilGen.Call(GetLengthMethod);
+            if (IgnoreCase)
+            {
+                return StringHelper.ToLower(str[index]);
+            }
+
+            return str[index];
         }
 
         public bool Equals(string x, string y)
         {
             if (IgnoreCase)
             {
-                return EqualsWithIgnoreCase(x, y);
+                return StringHelper.EqualsWithIgnoreCase(x, y);
             }
 
             return StringHelper.Equals(x, y);
+        }
+
+        public int GetLength(string str)
+        {
+            return str.Length;
         }
 
         public int GetHashCode(string str)
         {
             if (IgnoreCase)
             {
-                return GetHashCodeWithIgnoreCase(str);
+                return StringHelper.GetHashCodeWithIgnoreCase(str);
             }
 
             return StringHelper.GetHashCode(str);
-        }
-
-        public int GetLength(string str)
-        {
-            return str.Length;
         }
     }
 }

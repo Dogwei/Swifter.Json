@@ -1,35 +1,85 @@
 ﻿using Swifter.Tools;
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
 {
-    internal sealed class EnumInterface<T> : IValueInterface<T> where T : struct, Enum
+    abstract class EnumInterface
     {
-        /// <summary>
-        /// 枚举的 TypeCode。
-        /// </summary>
-        public static readonly TypeCode TypeCode = Type.GetTypeCode(typeof(T));
+        static readonly Dictionary<IntPtr, EnumInterface> Instances = new();
 
-        /// <summary>
-        /// 表示此枚举是否是标识符。
-        /// </summary>
-        public static readonly bool IsFlags = typeof(T).IsDefined(typeof(FlagsAttribute), false);
-
-        /// <summary>
-        /// 枚举值和名称的集合。
-        /// </summary>
-        public static readonly (ulong Value, string Name)[] Items;
-
-        static EnumInterface()
+        public static EnumInterface GetInstance<TEnum>() where TEnum : struct, Enum
         {
-            var values = (T[])Enum.GetValues(typeof(T));
+            return EnumInterface<TEnum>.Instance;
+        }
 
-            Items = new (ulong, string)[values.Length];
-
-            for (int i = 0; i < values.Length; i++)
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static EnumInterface GetInstance(Type enumType)
+        {
+            if (Instances.TryGetValue(TypeHelper.GetTypeHandle(enumType), out var adapter))
             {
-                Items[i] = (EnumHelper.AsUInt64(values[i]), Enum.GetName(typeof(T), values[i]));
+                return adapter;
             }
+
+            return NoInliningGetInstance(enumType);
+
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            static EnumInterface NoInliningGetInstance(Type enumType)
+            {
+                lock (Instances)
+                {
+                    if (!Instances.TryGetValue(TypeHelper.GetTypeHandle(enumType), out var adapter))
+                    {
+                        var adapterType = typeof(EnumInterface<>).MakeGenericType(enumType);
+
+                        adapter = (EnumInterface)Activator.CreateInstance(adapterType);
+
+                        Instances.Add(TypeHelper.GetTypeHandle(enumType), adapter);
+                    }
+
+                    return adapter;
+                }
+            }
+        }
+
+
+
+        public abstract Type EnumType { get; }
+
+        public abstract Enum Box(ulong value);
+
+        public abstract ulong UnBox(Enum value);
+
+        public abstract ulong ReadEnum(IValueReader valueReader);
+
+        public abstract void WriteEnum(IValueWriter valueWriter, ulong value);
+    }
+
+    sealed class EnumInterface<T> : EnumInterface, IValueInterface<T> where T : struct, Enum
+    {
+        public static readonly EnumInterface<T> Instance = new EnumInterface<T>();
+
+        public override Type EnumType => typeof(T);
+
+        public override Enum Box(ulong value)
+        {
+            return EnumHelper.AsEnum<T>(value);
+        }
+
+        public override ulong UnBox(Enum value)
+        {
+            return EnumHelper.AsUInt64((T)value);
+        }
+
+        public override ulong ReadEnum(IValueReader valueReader)
+        {
+            return EnumHelper.AsUInt64(valueReader.ReadEnum<T>());
+        }
+
+        public override void WriteEnum(IValueWriter valueWriter, ulong value)
+        {
+            valueWriter.WriteEnum(EnumHelper.AsEnum<T>(value));
         }
 
         public T ReadValue(IValueReader valueReader)

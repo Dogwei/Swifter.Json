@@ -1,14 +1,14 @@
-﻿using Swifter.Reflection;
-using Swifter.RW;
+﻿using InlineIL;
+using Swifter.Reflection;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static Swifter.Underlying;
 
 namespace Swifter.Tools
 {
@@ -18,85 +18,22 @@ namespace Swifter.Tools
     public static unsafe class ArrayHelper
     {
         /// <summary>
-        /// 合并一个数组和一个元素。
+        /// 获取数组最后一个元素的引用。
         /// </summary>
         /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="array">数组</param>
-        /// <param name="tail">尾部元素</param>
-        /// <returns>返回一个新的数组</returns>
+        /// <param name="elements">数组</param>
+        /// <returns>返回最后一个元素的引用</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static T[] Merge<T>(T[] array, T tail)
-        {
-            var right = array != null ? array.Length : 0;
-
-            Array.Resize(ref array, right + 1);
-
-            array[right] = tail;
-
-            return array;
-        }
+        public static ref T Last<T>(this T[] elements) => ref elements[elements.Length - 1];
 
         /// <summary>
-        /// 合并一个头部元素和一个数组。
+        /// 获取数组第一个元素的引用。
         /// </summary>
         /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="array">数组</param>
-        /// <param name="head">头部元素</param>
-        /// <returns>返回一个新的数组</returns>
+        /// <param name="elements">数组</param>
+        /// <returns>返回第一个元素的引用</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static T[] Merge<T>(T head, T[] array)
-        {
-            if (array != null && array.Length != 0)
-            {
-                var ret = new T[array.Length + 1];
-
-                ret[0] = head;
-
-                CopyBlock(
-                    ref As<T, byte>(ref ret[1]),
-                    ref As<T, byte>(ref array[0]),
-                    checked((uint)array.Length * (uint)SizeOf<T>())
-                    );
-
-                return ret;
-            }
-            else
-            {
-                return new T[] { head };
-            }
-        }
-
-        /// <summary>
-        /// 合并一个头部元素和一个数组和一个尾部元素。
-        /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="array">数组</param>
-        /// <param name="head">头部元素</param>
-        /// <param name="tail">尾部元素</param>
-        /// <returns>返回一个新的数组</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static T[] Merge<T>(T head, T[] array, T tail)
-        {
-            if (array != null && array.Length != 0)
-            {
-                var ret = new T[array.Length + 2];
-
-                ret[0] = head;
-                ret[ret.Length - 1] = tail;
-
-                CopyBlock(
-                    ref As<T, byte>(ref ret[1]),
-                    ref As<T, byte>(ref array[0]),
-                    checked((uint)array.Length * (uint)SizeOf<T>())
-                    );
-
-                return ret;
-            }
-            else
-            {
-                return new T[] { head, tail };
-            }
-        }
+        public static ref T First<T>(this T[] elements) => ref elements[0];
 
         /// <summary>
         /// 获取数组的指定索引处的元素引用。可以是多维数组。
@@ -106,10 +43,10 @@ namespace Swifter.Tools
         /// <param name="index">指定索引</param>
         /// <returns>返回元素引用</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref TElement AddrOfArrayElement<TElement>(Array array, int index)
+        public static ref TElement? AddrOfArrayElement<TElement>(Array array, int index)
         {
             fixed (void* ptr = &TypeHelper.Unbox<byte>(array))
-                return ref AsRef<TElement>((void*)Marshal.UnsafeAddrOfPinnedArrayElement(array, index));
+                return ref Unsafe.AsRef<TElement?>((void*)Marshal.UnsafeAddrOfPinnedArrayElement(array, index));
         }
 
         /// <summary>
@@ -121,7 +58,7 @@ namespace Swifter.Tools
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static unsafe void Copy<TElement>(Array source, Array destination)
         {
-            if (TypeHelper.GetMethodTablePointer(source) != TypeHelper.GetMethodTablePointer(destination))
+            if (source.Rank != destination.Rank)
             {
                 throw new InvalidOperationException();
             }
@@ -145,14 +82,14 @@ namespace Swifter.Tools
 
                     for (--length; length >= 0; --length)
                     {
-                        Add(ref fDestination, length) = Add(ref fSource, length);
+                        Unsafe.Add(ref fDestination, length) = Unsafe.Add(ref fSource, length);
                     }
                 }
                 else
                 {
                     for (index = length - 1; index >= 0; --index)
                     {
-                        InteranlCopy(source, destination,indices, dimension);
+                        InteranlCopy(source, destination, indices, dimension);
                     }
                 }
             }
@@ -217,10 +154,10 @@ namespace Swifter.Tools
             ref var first = ref AddrOfArrayElement<int>(array, 0);
             ref var last = ref AddrOfArrayElement<int>(array, length);
 
-            if (TrySetLowerBound(array, ref Add(ref first, -1))) return array;
-            if (TrySetLowerBound(array, ref Add(ref last, 1))) return array;
-            if (TrySetLowerBound(array, ref Add(ref first, -2))) return array;
-            if (TrySetLowerBound(array, ref Add(ref last, 0))) return array;
+            if (TrySetLowerBound(array, ref Unsafe.Add(ref first, -1))) return array;
+            if (TrySetLowerBound(array, ref Unsafe.Add(ref last, 1))) return array;
+            if (TrySetLowerBound(array, ref Unsafe.Add(ref first, -2))) return array;
+            if (TrySetLowerBound(array, ref Unsafe.Add(ref last, 0))) return array;
 
 
             throw new PlatformNotSupportedException();
@@ -247,21 +184,18 @@ namespace Swifter.Tools
         /// <summary>
         /// 创建多维数组。
         /// </summary>
-        /// <typeparam name="TElement">元素类型</typeparam>
+        /// <param name="elementType">元素类型</param>
         /// <param name="lengths">多维数组每个维度的长度</param>
         /// <returns>返回一个多维数组</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static Array CreateInstance<TElement>(int[] lengths)
+        public static Array CreateInstance(Type elementType, int[] lengths)
         {
-            return lengths.Length switch
+            if (lengths.Length is 1)
             {
-                01 => CreateMultiDimArrayOfOneDim(typeof(TElement), lengths[0]),
-                02 => new TElement[lengths[0], lengths[1]],
-                03 => new TElement[lengths[0], lengths[1], lengths[2]],
-                04 => new TElement[lengths[0], lengths[1], lengths[2], lengths[3]],
-                05 => new TElement[lengths[0], lengths[1], lengths[2], lengths[3], lengths[4]],
-                _ => Array.CreateInstance(typeof(TElement), lengths)
-            };
+                return CreateMultiDimArrayOfOneDim(elementType, lengths[0]);
+            }
+
+            return Array.CreateInstance(elementType, lengths);
         }
 
         /// <summary>
@@ -272,70 +206,59 @@ namespace Swifter.Tools
         /// <param name="lengths">多维数组每个维度新的长度</param>
         /// <returns>返回新的多维数组的原数组</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static Array Resize<TElement>(Array array, int[] lengths)
+        public static void Resize<TElement>([NotNull] ref Array? array, int[] lengths)
         {
-            if (IsResize())
+            if (array is null)
             {
-                var newArray = CreateInstance<TElement>(lengths);
-
-                if (array != null)
-                {
-                    Copy<TElement>(array, newArray);
-                }
-
-                return newArray;
+                goto Resize;
             }
 
-            return array;
+            VersionDifferences.Assert(array.Rank == lengths.Length);
 
-            [MethodImpl(VersionDifferences.AggressiveInlining)]
-            bool IsResize()
+            for (int i = 0; i < lengths.Length; i++)
             {
-                if (array is null)
+                if (array.GetLength(i) != lengths[i])
                 {
-                    return true;
+                    goto Resize;
                 }
-
-                for (int dim = array.Rank - 1; dim >= 0; --dim)
-                {
-                    if (array.GetLength(dim) != lengths[dim])
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
             }
+
+            return;
+
+        Resize:
+
+            var newArray = CreateInstance(typeof(TElement), lengths);
+
+            if (array != null)
+            {
+                Copy<TElement>(array, newArray);
+            }
+
+            array = newArray;
         }
 
         /// <summary>
-        /// 将迭代器转换为可迭代器。
+        /// 获取或添加一个键值。
         /// </summary>
-        /// <param name="enumerator">迭代器</param>
-        /// <returns>返回一个可迭代器</returns>
-        public static IEnumerable AsEnumerable(this IEnumerator enumerator)
+        /// <typeparam name="TKey">键类型</typeparam>
+        /// <typeparam name="TValue">值类型</typeparam>
+        /// <param name="dictionary">字典</param>
+        /// <param name="key">键</param>
+        /// <param name="valueFactory">生成值的方法</param>
+        /// <returns>返回值</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static TValue GetOrAdd<TKey, TValue>(this Dictionary<TKey, TValue> dictionary, TKey key, Func<TKey, TValue> valueFactory) where TKey : notnull
         {
-            enumerator.Reset();
-
-            while (enumerator.MoveNext())
+            if (dictionary.TryGetValue(key, out var value))
             {
-                yield return enumerator.Current;
+                return value;
             }
-        }
 
-        /// <summary>
-        /// 将迭代器转换为可迭代器。
-        /// </summary>
-        /// <param name="enumerator">迭代器</param>
-        /// <returns>返回一个可迭代器</returns>
-        public static IEnumerable<T> AsEnumerable<T>(this IEnumerator<T> enumerator)
-        {
-            enumerator.Reset();
+            value = valueFactory(key);
 
-            while (enumerator.MoveNext())
-            {
-                yield return enumerator.Current;
-            }
+            dictionary.Add(key, value);
+
+            return value;
         }
 
         /// <summary>
@@ -345,8 +268,8 @@ namespace Swifter.Tools
         /// <param name="list">列表</param>
         /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref T[] GetRawData<T>(this List<T> list) =>
-            ref ListRaw<T>.f_items.GetReference(list);
+        public static ref T[]? GetRawData<T>(this List<T> list) =>
+            ref ListRaw<T>.f_items.UnsafeGetReference(list);
 
         /// <summary>
         /// 获取列表的数据源。
@@ -354,52 +277,8 @@ namespace Swifter.Tools
         /// <param name="arrayList">列表</param>
         /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ref object[] GetRawData(this ArrayList arrayList) =>
-            ref ArrayListRaw.f_items.GetReference(arrayList);
-
-        /// <summary>
-        /// 获取或添加一个键值。
-        /// </summary>
-        /// <typeparam name="TKey">键类型</typeparam>
-        /// <typeparam name="TValue">值类型</typeparam>
-        /// <param name="dictionary">字典</param>
-        /// <param name="key">键</param>
-        /// <param name="func">生成值的方法</param>
-        /// <returns>返回值</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static TValue GetOrAdd<TKey, TValue>(this Dictionary<TKey, TValue> dictionary, TKey key, Func<TKey, TValue> func)
-        {
-            if (dictionary.TryGetValue(key, out var value))
-            {
-                return value;
-            }
-
-            value = func(key);
-
-            dictionary.Add(key, value);
-
-            return value;
-        }
-
-        /// <summary>
-        /// 尝试添加一个键值。
-        /// </summary>
-        /// <typeparam name="TKey">键类型</typeparam>
-        /// <typeparam name="TValue">值类型</typeparam>
-        /// <param name="dictionary">字典</param>
-        /// <param name="key">键</param>
-        /// <param name="value">值</param>
-        public static bool TryAdd<TKey, TValue>(this Dictionary<TKey, TValue> dictionary, TKey key, TValue value)
-        {
-            if (dictionary.ContainsKey(key))
-            {
-                return false;
-            }
-
-            dictionary.Add(key, value);
-
-            return true;
-        }
+        public static ref object?[]? GetRawData(this ArrayList arrayList) =>
+            ref ArrayListRaw.f_items.UnsafeGetReference(arrayList);
 
         /// <summary>
         /// 获取列表的长度。
@@ -409,7 +288,7 @@ namespace Swifter.Tools
         /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static ref int GetCount<T>(this List<T> list) =>
-            ref ListRaw<T>.f_count.GetReference(list);
+            ref ListRaw<T>.f_count.UnsafeGetReference(list);
 
         /// <summary>
         /// 获取列表的长度。
@@ -418,7 +297,7 @@ namespace Swifter.Tools
         /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static ref int GetCount(this ArrayList arrayList) =>
-            ref ArrayListRaw.f_count.GetReference(arrayList);
+            ref ArrayListRaw.f_count.UnsafeGetReference(arrayList);
 
         /// <summary>
         /// 创建一个列表。
@@ -428,12 +307,12 @@ namespace Swifter.Tools
         /// <param name="count">列表数量</param>
         /// <returns>返回一个列表</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static List<T> CreateList<T>(T[] array, int count)
+        public static List<T> CreateList<T>(T[]? array, int count)
         {
-            var ret = new List<T>(0);
+            var ret = new List<T>();
 
-            ListRaw<T>.f_items.SetValue(ret, array);
-            ListRaw<T>.f_count.SetValue(ret, count);
+            ListRaw<T>.f_items.UnsafeGetReference(ret) = array;
+            ListRaw<T>.f_count.UnsafeGetReference(ret) = count;
 
             return ret;
         }
@@ -445,50 +324,14 @@ namespace Swifter.Tools
         /// <param name="count">列表数量</param>
         /// <returns>返回一个列表</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static ArrayList CreateArrayList(object[] array, int count)
+        public static ArrayList CreateArrayList(object?[]? array, int count)
         {
-            var ret = new ArrayList(0);
+            var ret = new ArrayList();
 
-            ArrayListRaw.f_items.SetValue(ret, array);
-            ArrayListRaw.f_count.SetValue(ret, count);
+            ArrayListRaw.f_items.UnsafeGetReference(ret) = array;
+            ArrayListRaw.f_count.UnsafeGetReference(ret) = count;
 
             return ret;
-        }
-
-        /// <summary>
-        /// 归并集合。
-        /// </summary>
-        /// <typeparam name="TInput">集合元素类型</typeparam>
-        /// <typeparam name="TOutput">结果类型</typeparam>
-        /// <param name="source">集合</param>
-        /// <param name="selector">选择器</param>
-        /// <param name="output">初始值</param>
-        /// <returns>返回结果值</returns>
-        public static TOutput Merge<TInput, TOutput>(this IEnumerable<TInput> source, Func<TInput, TOutput, TOutput> selector, TOutput output = default)
-        {
-            foreach (var item in source)
-            {
-                output = selector(item, output);
-            }
-
-            return output;
-        }
-
-        /// <summary>
-        /// 将一个二维集合转换为一维集合。
-        /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="tss">二维集合</param>
-        /// <returns>返回一维集合</returns>
-        public static IEnumerable<T> AsOneDim<T>(this IEnumerable<IEnumerable<T>> tss)
-        {
-            foreach (var ts in tss)
-            {
-                foreach (var t in ts)
-                {
-                    yield return t;
-                }
-            }
         }
 
         /// <summary>
@@ -512,32 +355,94 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 内存移动
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="destination">目标地址</param>
+        /// <param name="source">源地址</param>
+        /// <param name="elementCount">元素数量</param>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void Memmove<T>(ref T destination, ref T source, /*nuint*/int elementCount)
+        {
+#if Span
+            CreateSpan(ref source, elementCount).CopyTo(CreateSpan(ref destination, elementCount));
+#else
+            while (elementCount > 0)
+            {
+                destination = source;
+
+                destination = ref Unsafe.Add(ref destination, 1);
+                source = ref Unsafe.Add(ref source, 1);
+
+                --elementCount;
+            }
+#endif
+        }
+
+#if Span
+        /// <summary>
+        /// 创建一个 Span。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="reference">元素引用</param>
+        /// <param name="length">长度</param>
+        /// <returns>返回一个 Span</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static Span<T> CreateSpan<T>(ref T reference, int length)
+        {
+#if NativeSpan
+            return MemoryMarshal.CreateSpan<T>(ref reference, length);
+#else
+            IL.DeclareLocals(new LocalVar(typeof(Span<T>)));
+
+            IL.MarkLabel("Loop");
+
+            IL.Emit.Ldloca(0);
+            IL.Emit.Ldarg_0();
+            IL.Emit.Ldarg_1();
+
+            IL.Emit.Call(MethodRef.Constructor(typeof(Span<byte>), typeof(void*), typeof(int)));
+
+            IL.Emit.Ldloca(0);
+            IL.Emit.Call(MethodRef.Method(typeof(Span<T>), nameof(Span<T>.GetPinnableReference)));
+            IL.Emit.Ldarg_0();
+
+            IL.Emit.Bne_Un("Loop");
+
+            IL.Emit.Ldloc(0);
+            IL.Emit.Ret();
+
+            throw IL.Unreachable();
+#endif
+        }
+#endif
+
+        /// <summary>
         /// 
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="ts"></param>
+        /// <param name="firstByte"></param>
         /// <param name="length"></param>
-        /// <param name="value"></param>
         /// <returns></returns>
-        public static int IndexOf<T>(T* ts, int length, T value) where T : unmanaged
+        public static bool IsEmpty(ref byte firstByte, int length)
         {
-            var equalityComparer = EqualityComparer<T>.Default;
-
-            for (int i = 0; i < length; i++)
+            while (length >= 8)
             {
-                if (equalityComparer.Equals(ts[i], value))
+                if (Unsafe.As<byte, ulong>(ref firstByte) != 0)
                 {
-                    return i;
+                    return false;
                 }
+
+                firstByte = ref TypeHelper.AddByteOffset(ref firstByte, 8);
+                length -= 8;
             }
 
-            return -1;
+            return (Unsafe.As<byte, ulong>(ref firstByte) & (~(ulong.MaxValue << (length * 8)))) == 0;
         }
 
         static class ListRaw<T>
         {
-            public static readonly XClassFieldInfo<T[]> f_items;
-            public static readonly XClassFieldInfo<int> f_count;
+            public static readonly XInstanceFieldInfo<T[]> f_items;
+            public static readonly XInstanceFieldInfo<int> f_count;
 
             static ListRaw()
             {
@@ -545,29 +450,36 @@ namespace Swifter.Tools
 
                 var t_items = fields.Where(item => item.FieldType == typeof(T[])).First();
 
-                if (!(typeof(List<T>).GetProperty(nameof(List<T>.Count)) is PropertyInfo p_count && TypeHelper.IsAutoProperty(p_count, out var t_count)))
+                if (TypeHelper.IsAutoGetMethod(
+                    TypeHelper.GetMethodFromHandle(
+                        IL.Ldtoken(MethodRef.PropertyGet(typeof(List<T>), nameof(List<T>.Count))),
+                        typeof(List<T>).TypeHandle
+                        ), out var t_count))
                 {
-                    var temp = new List<T>
-                    {
-                        default,
-                        default,
-                        default
-                    };
+
+                }
+                else
+                {
+                    var temp = new List<T?>(3);
+
+                    temp.Add(default);
+                    temp.Add(default);
+                    temp.Add(default);
 
                     temp.RemoveAt(2);
 
                     t_count = fields.Where(item => item.FieldType == typeof(int) && item.GetValue(temp) is int count && count == 2).First();
                 }
 
-                f_items = XFieldInfo.Create(t_items, XBindingFlags.NonPublic) as XClassFieldInfo<T[]>;
-                f_count = XFieldInfo.Create(t_count, XBindingFlags.NonPublic) as XClassFieldInfo<int>;
+                f_items = new(t_items, XBindingFlags.NonPublic);
+                f_count = new(t_count, XBindingFlags.NonPublic);
             }
         }
 
         static class ArrayListRaw
         {
-            public static readonly XClassFieldInfo<object[]> f_items;
-            public static readonly XClassFieldInfo<int> f_count;
+            public static readonly XInstanceFieldInfo<object?[]> f_items;
+            public static readonly XInstanceFieldInfo<int> f_count;
 
             static ArrayListRaw()
             {
@@ -575,7 +487,11 @@ namespace Swifter.Tools
 
                 var t_items = fields.Where(item => item.FieldType == typeof(object[])).First();
 
-                if (!(typeof(ArrayList).GetProperty(nameof(ArrayList.Count)) is PropertyInfo p_count && TypeHelper.IsAutoProperty(p_count, out var t_count)))
+                if (TypeHelper.IsAutoGetMethod(TypeHelper.GetMethodFromHandle(IL.Ldtoken(MethodRef.PropertyGet(typeof(ArrayList), nameof(ArrayList.Count)))), out var t_count))
+                {
+
+                }
+                else
                 {
                     var temp = new ArrayList
                     {
@@ -589,8 +505,8 @@ namespace Swifter.Tools
                     t_count = fields.Where(item => item.FieldType == typeof(int) && item.GetValue(temp) is int count && count == 2).First();
                 }
 
-                f_items = XFieldInfo.Create(t_items, XBindingFlags.NonPublic) as XClassFieldInfo<object[]>;
-                f_count = XFieldInfo.Create(t_count, XBindingFlags.NonPublic) as XClassFieldInfo<int>;
+                f_items = new(t_items, XBindingFlags.NonPublic);
+                f_count = new(t_count, XBindingFlags.NonPublic);
             }
         }
     }

@@ -7,7 +7,7 @@ namespace Swifter.Tools
     public sealed unsafe partial class NumberHelper
     {
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        private static byte ToDigit(char c)
+        internal static byte ToDigit(char c)
         {
             if (c < DigitalsMaxValue)
             {
@@ -97,7 +97,7 @@ namespace Swifter.Tools
         {
             var end = begin + numberCount + splitCount - 1;
 
-            while (numberCount > 0)
+            while (numberCount > 1)
             {
                 switch (ToDigit(chars[end]))
                 {
@@ -114,19 +114,16 @@ namespace Swifter.Tools
                 break;
             }
 
-            if (numberCount > 1)
+            while (ToDigit(chars[end]) == SplitRadix)
             {
-                while (ToDigit(chars[end]) == SplitRadix)
-                {
-                    --end;
-                    --splitCount;
-                }
+                --end;
+                --splitCount;
+            }
 
-                while (ToDigit(chars[begin]) == SplitRadix)
-                {
-                    ++begin;
-                    --splitCount;
-                }
+            while (ToDigit(chars[begin]) == SplitRadix)
+            {
+                ++begin;
+                --splitCount;
             }
         }
 
@@ -135,11 +132,14 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="chars">字符串</param>
         /// <param name="length">字符串长度</param>
-        /// <param name="max_radix">最大进制数</param>
+        /// <param name="NIRadix">进制数</param>
         /// <returns>返回一个 NumberInfo</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static NumberInfo GetNumberInfo(char* chars, int length, byte max_radix = DecimalFirstRadix)
+        public static NumberInfo GetNumberInfo(char* chars, int length, sbyte NIRadix = NIRadix_DecimalFirst)
         {
+            var radix = (byte)NIRadix;
+            const byte Radix_MaxFirst = unchecked((byte)NIRadix_MaxFirst);
+
             var number = new NumberInfo
             {
                 integerBegin = -1,
@@ -165,9 +165,9 @@ namespace Swifter.Tools
                         break;
                 }
 
-                if (max_radix >= MaxFirstRadix)
+                if (radix >= Radix_MaxFirst)
                 {
-                    max_radix = (byte)(-(sbyte)max_radix);
+                    radix = (byte)(-(sbyte)radix);
 
                     if (length >= 3 && chars[index] == DigitalsZeroValue)
                     {
@@ -177,25 +177,25 @@ namespace Swifter.Tools
                             case HexSign:
                                 index += 2;
                                 number.max_digit = HexRadix - 1;
-                                max_radix = HexRadix;
+                                radix = HexRadix;
                                 break;
                             case binarySign:
                             case BinarySign:
                                 index += 2;
                                 number.max_digit = BinaryRadix - 1;
-                                max_radix = BinaryRadix;
+                                radix = BinaryRadix;
                                 break;
                         }
                     }
                 }
 
-                number.max_radix = max_radix;
+                number.max_radix = radix;
 
                 var integerBegin = index;
                 var integerCount = 0;
                 var integerSplitCount = 0;
 
-                GetNumberCount(chars, length, max_radix, ref index, ref integerCount, ref integerSplitCount, ref number.max_digit);
+                GetNumberCount(chars, length, radix, ref index, ref integerCount, ref integerSplitCount, ref number.max_digit);
 
                 if (integerCount != 0)
                 {
@@ -214,7 +214,7 @@ namespace Swifter.Tools
                     var fractionalCount = 0;
                     var fractionalSplitCount = 0;
 
-                    GetNumberCount(chars, length, max_radix, ref index, ref fractionalCount, ref fractionalSplitCount, ref number.max_digit);
+                    GetNumberCount(chars, length, radix, ref index, ref fractionalCount, ref fractionalSplitCount, ref number.max_digit);
 
                     if (fractionalCount != 0)
                     {
@@ -260,7 +260,7 @@ namespace Swifter.Tools
                         var exponentCount = 0;
                         var exponentSplitCount = 0;
 
-                        GetNumberCount(chars, length, max_radix, ref index, ref exponentCount, ref exponentSplitCount, ref number.max_digit);
+                        GetNumberCount(chars, length, radix, ref index, ref exponentCount, ref exponentSplitCount, ref number.max_digit);
 
                         if (exponentCount != 0)
                         {
@@ -647,11 +647,11 @@ namespace Swifter.Tools
 
                         if (scale >= DecimalDivisorLength)
                         {
-                            Mult((uint*)&value, length, DecimalDivisor, out carry);
+                            Mul((uint*)&value, length, DecimalDivisor, out carry);
                         }
                         else
                         {
-                            Mult((uint*)&value, length, (uint)DecimalUInt64Numbers[scale], out carry);
+                            Mul((uint*)&value, length, (uint)DecimalUInt64Numbers[scale], out carry);
                         }
 
                         if (carry != 0)
@@ -718,11 +718,11 @@ namespace Swifter.Tools
 
                 if (segment_length == DecimalDivisorLength)
                 {
-                    Mult(number, length, DecimalDivisor, out carry);
+                    Mul(number, length, DecimalDivisor, out carry);
                 }
                 else
                 {
-                    Mult(number, length, (uint)DecimalUInt64Numbers[segment_length], out carry);
+                    Mul(number, length, (uint)DecimalUInt64Numbers[segment_length], out carry);
                 }
 
                 if (carry != 0)

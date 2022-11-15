@@ -1,11 +1,12 @@
-﻿using Swifter.Tools;
+﻿using Swifter.RW;
+using Swifter.Tools;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Security;
-using System.Security.Permissions;
-using System.Text;
+using System.Runtime.Serialization;
+using System.Threading;
 
 namespace Swifter
 {
@@ -20,117 +21,60 @@ namespace Swifter
         /// 内部方法包括：
         /// <br/>1: 使用反射调用私有成员
         /// <br/>2: 试图访问 .Net Runtime 内部数据
-        /// <br/>3: 试图修改类型信息
         /// </summary>
         public static bool UseInternalMethod = true;
-
-#if NETCOREAPP
-        /// <summary>
-        /// .NET CORE 平台确定支持 Emit 。
-        /// </summary>
-        public const bool IsSupportEmit = true;
-#else
 
         /// <summary>
         /// 获取或设置当前平台是否支持 Emit。
         /// </summary>
         public static bool IsSupportEmit
         {
-            get => _IsSupportEmit ??= TestIsSupportEmit();
-            set => _IsSupportEmit = value;
+            [MethodImpl(AggressiveInlining)]
+            get => isSupportEmit is RWBoolean.None ? TestIsSupportEmit() : isSupportEmit is RWBoolean.Yes;
+            set => isSupportEmit = value ? RWBoolean.Yes : RWBoolean.No;
         }
 
-        private static bool? _IsSupportEmit;
+        private static RWBoolean isSupportEmit;
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static bool TestIsSupportEmit()
         {
-            try
+            lock (typeof(VersionDifferences))
             {
-                const int value = 1218;
-
-                var result = DynamicAssembly.DefineType($"{nameof(TestIsSupportEmit)}_{Guid.NewGuid():N}", TypeAttributes.Public, typeBuilder =>
+                if (isSupportEmit is RWBoolean.None)
                 {
-                    typeBuilder.DefineMethod(nameof(IsSupportEmit), MethodAttributes.Public | MethodAttributes.Static, typeof(int), Type.EmptyTypes, (mb, ilGen) =>
+                    isSupportEmit = RWBoolean.No;
+
+                    try
                     {
-                        ilGen.LoadConstant(value);
-                        ilGen.Return();
+                        const int value = 1218;
 
-                    });
+                        var result = DynamicAssembly
+                            .DefineType(
+                                $"{nameof(TestIsSupportEmit)}_{Guid.NewGuid():N}", 
+                                TypeAttributes.Public, 
+                                typeBuilder => typeBuilder.DefineMethod(
+                                    nameof(IsSupportEmit), 
+                                    MethodAttributes.Public | MethodAttributes.Static, 
+                                    typeof(int), 
+                                    Type.EmptyTypes, 
+                                    (mb, ilGen) => ilGen.LoadConstant(value).Return()
+                                    )
+                                )
+                            .GetMethod(nameof(IsSupportEmit))!
+                            .Invoke(null, null);
 
-                }).GetMethod(nameof(IsSupportEmit)).Invoke(null, null);
-
-                if (Equals(result, value))
-                {
-#if DEBUG
-                    Console.WriteLine($"{nameof(VersionDifferences)} : {nameof(IsSupportEmit)} : {true}");
-#endif
-
-                    return true;
+                        if (Equals(result, value))
+                        {
+                            isSupportEmit = RWBoolean.Yes;
+                        }
+                    }
+                    catch
+                    {
+                    }
                 }
-            }
-            catch
-            {
-            }
 
-#if DEBUG
-            Console.WriteLine($"{nameof(VersionDifferences)} : {nameof(IsSupportEmit)} : {false}");
-#endif
-
-            return false;
-        }
-#endif
-
-#if NET20 || NET35 || NET40 || NET45
-
-
-        /// <summary>
-        /// 往 StringBuilder 后面拼接一个字符串。
-        /// </summary>
-        /// <param name="sb">StringBuilder</param>
-        /// <param name="chars">字符串</param>
-        /// <param name="count">字符串长度</param>
-        /// <returns>返回当前实例</returns>
-        public static unsafe StringBuilder Append(this StringBuilder sb, char* chars, int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                sb.Append(chars[i]);
-            }
-
-            return sb;
-        }
-
-#endif
-
-        /// <summary>
-        /// 获取对象的 TypeHandle 值。
-        /// </summary>
-        /// <param name="obj">对象</param>
-        /// <returns>返回一个 IntPtr 值。</returns>
-        [MethodImpl(AggressiveInlining)]
-#if NETCOREAPP
-        public static IntPtr GetTypeHandle(object obj)
-        {
-            return Underlying.GetMethodTablePointer(obj);
-        }
-            
-        /// <summary>
-        /// 获取一个值，表示 TypeHandle 和 MethodTablePointer 是否一致。
-        /// </summary>
-        public const bool TypeHandleEqualMethodTablePointer = true;
-#else
-        public static IntPtr GetTypeHandle(object obj)
-        {
-            if (TypeHandleEqualMethodTablePointer)
-            {
-                // Faster
-                return Underlying.GetMethodTablePointer(obj);
-            }
-            else
-            {
-                // Stable
-                return obj.GetType().TypeHandle.Value;
+                return isSupportEmit is RWBoolean.Yes;
             }
         }
 
@@ -145,16 +89,15 @@ namespace Swifter
             try
             {
                 return
-                    typeof(DBNull).TypeHandle.Value == Underlying.GetMethodTablePointer(DBNull.Value) &&
-                    typeof(string).TypeHandle.Value == Underlying.GetMethodTablePointer(string.Empty);
+                    typeof(DBNull).TypeHandle.Value == TypeHelper.GetMethodTablePointer(DBNull.Value) &&
+                    typeof(string).TypeHandle.Value == TypeHelper.GetMethodTablePointer(string.Empty);
             }
-            catch (Exception)
+            catch
             {
             }
 
             return false;
         }
-#endif
 
 #if NET20 || NET35 || NET40
         /// <summary>
@@ -183,6 +126,15 @@ namespace Swifter
         {
             return typeBuilder.CreateType();
         }
+        
+        /// <summary>
+        /// 获取当前托管线程的唯一标识符。
+        /// </summary>
+        /// <returns>返回一个整数</returns>
+        public static int GetCurrentManagedThreadId()
+        {
+            return Thread.CurrentThread.ManagedThreadId;
+        }
 #else
 
         /// <summary>
@@ -201,15 +153,23 @@ namespace Swifter
         {
             return AssemblyBuilder.DefineDynamicAssembly(assName, access);
         }
+
+        /// <summary>
+        /// 获取当前托管线程的唯一标识符。
+        /// </summary>
+        /// <returns>返回一个整数</returns>
+        [MethodImpl(AggressiveInlining)]
+        public static int GetCurrentManagedThreadId()
+        {
+            return Environment.CurrentManagedThreadId;
+        }
 #endif
         /// <summary>
-        /// 判断是否为引用结构。
+        /// 判断一个类型是否为仅栈值类型。
         /// </summary>
-        /// <param name="type">类型</param>
-        /// <returns>返回一个 bool 值</returns>
         public static bool IsByRefLike(this Type type)
         {
-#if NETCOREAPP && !NETCOREAPP2_0
+#if NETCOREAPP2_1_OR_GREATER || NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
             return type.IsByRefLike;
 #else
             if (type.IsValueType  // 仅栈类型是值类型
@@ -236,6 +196,59 @@ namespace Swifter
 #endif
         }
 
+        /// <summary>
+        /// 判断一个类型是否为一维零下限的数组类型。
+        /// </summary>
+        public static bool IsSZArray(this Type type)
+        {
+#if NETCOREAPP || NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+            return type.IsSZArray;
+#else
+            return type.IsArray && type.GetArrayRank() == 1 && type.GetElementType()!.MakeArrayType() == type;
+#endif
+        }
+
+        /// <summary>
+        /// 检查条件；如果条件为 false，则引发 <see cref="AssertionFailedException"/>。
+        /// </summary>
+        /// <param name="condition">条件</param>
+        public static void Assert([DoesNotReturnIf(false)]bool condition)
+        {
+            if (!condition)
+            {
+                throw new AssertionFailedException();
+            }
+        }
+
+        /// <summary>
+        /// 获取要序列化对象的类型。
+        /// </summary>
+        /// <param name="serializationInfo">序列化信息</param>
+        /// <returns>返回要序列化对象的类型</returns>
+        public static Type GetObjectType(this SerializationInfo serializationInfo)
+        {
+#if NET20 || NET35
+            return Assembly.Load(serializationInfo.AssemblyName).GetType(serializationInfo.FullTypeName);
+#else
+            return serializationInfo.ObjectType;
+#endif
+        }
+
+        /// <summary>
+        /// 跳过初始化
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static void SkipInit<T>(out T value)
+        {
+            InlineIL.IL.Emit.Ret();
+            throw InlineIL.IL.Unreachable();
+        }
+
         static class IsByRefLikeAssisted<T> { }
     }
+}
+
+namespace System.Collections.Immutable
+{
+
 }

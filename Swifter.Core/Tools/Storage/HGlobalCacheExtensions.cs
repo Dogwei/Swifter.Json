@@ -1,9 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Sockets;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Swifter.Tools
@@ -11,7 +9,7 @@ namespace Swifter.Tools
     /// <summary>
     /// HGlobalCache 扩展方法。
     /// </summary>
-    public static unsafe partial class HGlobalCacheExtensions
+    public static partial class HGlobalCacheExtensions
     {
         /// <summary>
         /// 字节缓存池。
@@ -22,115 +20,374 @@ namespace Swifter.Tools
         /// 字符缓存池。
         /// </summary>
         public static readonly HGlobalCachePool<char> CharsPool = new HGlobalCachePool<char>();
+        
+        /// <summary>
+        /// 读取文本读取器中的内容并缓存到全局缓存中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="textReader">文本读取器</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<char> ReadFrom(this HGlobalCache<char> hGCache, TextReader textReader)
+        {
+            Loop:
+
+            Grow(hGCache, 1218);
+
+            int readCount = textReader.Read(
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count,
+                hGCache.Rest);
+
+            hGCache.Count += readCount;
+
+            if (readCount != 0)
+            {
+                goto Loop;
+            }
+
+            return hGCache;
+        }
 
         /// <summary>
-        /// 将 HGlobalCache 中的内容写入到流中。
+        /// 以指定编码读取流中的内容并缓存到全局缓存中。
         /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
+        /// <param name="hGCache">全局缓存</param>
         /// <param name="stream">流</param>
         /// <param name="encoding">编码</param>
-        public static void WriteTo(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<char> ReadFrom(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
         {
-            var hGBytes = BytesPool.Rent();
-
-            hGCache.WriteTo(hGBytes, encoding);
-
-            hGBytes.WriteTo(stream);
-
-            BytesPool.Return(hGBytes);
+            return hGCache.ReadFrom(new StreamReader(stream, encoding));
         }
 
         /// <summary>
-        /// 将 Stream 的内容缓存到 HGlobalCache 中。
+        /// 以指定编码将数组中的内容缓存到全局缓存中。
         /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="stream">Stream</param>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="source">数组</param>
         /// <param name="encoding">编码</param>
-        /// <returns>返回缓冲的长度</returns>
-        public static void ReadFrom(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<char> ReadFrom(this HGlobalCache<char> hGCache, ArraySegment<byte> source, Encoding encoding)
         {
-            var hGBytes = BytesPool.Rent();
+            if (source.Array is null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
 
-            hGBytes.ReadFrom(stream);
-
-            hGCache.ReadFrom(hGBytes, encoding);
-
-            BytesPool.Return(hGBytes);
-        }
-
-        /// <summary>
-        /// 将 HGlobalCache 中的内容写入到 destination 中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="destination">destination</param>
-        /// <param name="encoding">编码</param>
-        public static void WriteTo(this HGlobalCache<char> hGCache, HGlobalCache<byte> destination, Encoding encoding)
-        {
-            destination.Grow(encoding.GetMaxByteCount(hGCache.Count));
-
-            destination.Count += encoding.GetBytes(
-                hGCache.First,
-                hGCache.Count,
-                destination.Current,
-                destination.Rest);
-        }
-
-        /// <summary>
-        /// 将 source 的内容缓存到 HGlobalCache 中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="source">source</param>
-        /// <param name="encoding">编码</param>
-        /// <returns>返回缓冲的长度</returns>
-        public static void ReadFrom(this HGlobalCache<char> hGCache, HGlobalCache<byte> source, Encoding encoding)
-        {
-            hGCache.Grow(encoding.GetMaxCharCount(source.Count));
+            Grow(hGCache, encoding.GetMaxCharCount(source.Count));
 
             hGCache.Count += encoding.GetChars(
-                source.First,
+                source.Array,
+                source.Offset,
                 source.Count,
-                hGCache.Current,
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 以指定编码将数组中的内容缓存到全局缓存中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="source">数组</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<char> ReadFrom(this HGlobalCache<char> hGCache, byte[] source, Encoding encoding)
+        {
+            Grow(hGCache, encoding.GetMaxCharCount(source.Length));
+
+            hGCache.Count += encoding.GetChars(
+                source,
+                0,
+                source.Length,
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 以指定编码将字节全局缓存中的内容缓存到字符全局缓存中。
+        /// </summary>
+        /// <param name="hGCache">字符全局缓存</param>
+        /// <param name="source">字节全局缓存</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<char> ReadFrom(this HGlobalCache<char> hGCache, HGlobalCache<byte> source, Encoding encoding)
+        {
+            Grow(hGCache, encoding.GetMaxCharCount(source.Count));
+
+            hGCache.Count += encoding.GetChars(
+                source.Context,
+                source.Offset,
+                source.Count,
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 读取流中的内容并缓存到全局缓存中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="stream">流</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> ReadFrom(this HGlobalCache<byte> hGCache, Stream stream)
+        {
+            Loop:
+
+            Grow(hGCache, 1218);
+
+            int readCount = stream.Read(
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count,
                 hGCache.Rest);
+
+            hGCache.Count += readCount;
+
+            if (readCount != 0)
+            {
+                goto Loop;
+            }
+
+            return hGCache;
         }
 
         /// <summary>
-        /// 将 source 的内容缓存到 HGlobalCache 中。
+        /// 以指定编码读取文本读取器中的内容并缓存到全局缓存中。
         /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="source">source</param>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="textReader">文本读取器</param>
         /// <param name="encoding">编码</param>
-        public static void ReadFrom(this HGlobalCache<char> hGCache, ArraySegment<byte> source, Encoding encoding)
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> ReadFrom(this HGlobalCache<byte> hGCache, TextReader textReader, Encoding encoding)
         {
-            hGCache.Grow(encoding.GetMaxCharCount(source.Count));
-
-            fixed (byte* pSource = &source.Array[source.Offset])
-            {
-                hGCache.Count += encoding.GetChars(
-                    pSource,
-                    source.Count,
-                    hGCache.Current,
-                    hGCache.Rest);
-            }
+            return hGCache.ReadFrom(CharsPool.Current().ReadFrom(textReader), encoding);
         }
 
         /// <summary>
-        /// 将 source 的内容缓存到 HGlobalCache 中。
+        /// 以指定编码将字符串中的内容缓存到全局缓存中。
         /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="source">source</param>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="str">字符串</param>
         /// <param name="encoding">编码</param>
-        public static void ReadFrom(this HGlobalCache<char> hGCache, byte[] source, Encoding encoding)
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> ReadFrom(this HGlobalCache<byte> hGCache, string str, Encoding encoding)
         {
-            hGCache.Grow(encoding.GetMaxCharCount(source.Length));
+            Grow(hGCache, encoding.GetMaxByteCount(str.Length));
 
-            fixed (byte* pSource = source)
+            hGCache.Count += encoding.GetBytes(
+                str,
+                0,
+                str.Length,
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 以指定编码将数组中的内容缓存到全局缓存中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="str">数组</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> ReadFrom(this HGlobalCache<byte> hGCache, char[] str, Encoding encoding)
+        {
+            Grow(hGCache, encoding.GetMaxByteCount(str.Length));
+
+            hGCache.Count += encoding.GetBytes(
+                str,
+                0,
+                str.Length,
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 以指定编码将数组中的内容缓存到全局缓存中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="str">数组</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> ReadFrom(this HGlobalCache<byte> hGCache, ArraySegment<char> str, Encoding encoding)
+        {
+            if (str.Array is null)
             {
-                hGCache.Count += encoding.GetChars(
-                    pSource,
-                    source.Length,
-                    hGCache.Current,
-                    hGCache.Rest);
+                throw new ArgumentNullException(nameof(str));
             }
+
+            Grow(hGCache, encoding.GetMaxByteCount(str.Count));
+
+            hGCache.Count += encoding.GetBytes(
+                str.Array,
+                str.Offset,
+                str.Count,
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 以指定编码将字符全局缓存中的内容缓存到字节全局缓存中。
+        /// </summary>
+        /// <param name="hGCache">字节全局缓存</param>
+        /// <param name="source">字符全局缓存</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> ReadFrom(this HGlobalCache<byte> hGCache, HGlobalCache<char> source, Encoding encoding)
+        {
+            Grow(hGCache, encoding.GetMaxByteCount(source.Count));
+
+            hGCache.Count += encoding.GetBytes(
+                source.Context,
+                source.Offset,
+                source.Count,
+                hGCache.Context,
+                hGCache.Offset + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将内存中的元素集合缓存到全局缓存中。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="source">第一个元素的引用</param>
+        /// <param name="length">集合的长度</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static unsafe HGlobalCache<T>  ReadFrom<T>(this HGlobalCache<T> hGCache, ref T source, int length) where T : unmanaged
+        {
+            Grow(hGCache, length);
+
+            Unsafe.CopyBlock(
+                ref Unsafe.As<T, byte>(ref *hGCache.Current),
+                ref Unsafe.As<T, byte>(ref source),
+                checked((uint)((long)length * sizeof(T)))
+                );
+
+            hGCache.Count += length;
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将内存中的元素集合缓存到全局缓存中。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="source">第一个元素的地址</param>
+        /// <param name="length">集合的长度</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static unsafe HGlobalCache<T> ReadFrom<T>(this HGlobalCache<T> hGCache, T* source, int length) where T : unmanaged
+        {
+            Grow(hGCache, length);
+
+            Unsafe.CopyBlock(
+                hGCache.Current,
+                source,
+                checked((uint)((long)length * sizeof(T)))
+                );
+
+            hGCache.Count += length;
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将数组中的元素缓存到全局缓存中。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="source">数组</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<T> ReadFrom<T>(this HGlobalCache<T> hGCache, ArraySegment<T> source) where T : unmanaged
+        {
+            if (source.Array != null && source.Count > 0)
+            {
+                hGCache.ReadFrom(ref source.Array[source.Offset], source.Count);
+            }
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将数组中的元素缓存到全局缓存中。
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="source">数组</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<T> ReadFrom<T>(this HGlobalCache<T> hGCache, T[] source) where T : unmanaged
+        {
+            if (source != null && source.Length > 0)
+            {
+                hGCache.ReadFrom(ref source[0], source.Length);
+            }
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将全局缓存中内容写入到指定的文本写入器中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="textWriter">文本写入器</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<char> WriteTo(this HGlobalCache<char> hGCache, TextWriter textWriter)
+        {
+            textWriter.Write(hGCache.Context, hGCache.Offset, hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将全局缓存中内容写入到指定的流中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="stream">流</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> WriteTo(this HGlobalCache<byte> hGCache, Stream stream)
+        {
+            stream.Write(hGCache.Context, hGCache.Offset, hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将全局缓存中的内容以指定编码写入到流中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="stream">流</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<char> WriteTo(this HGlobalCache<char> hGCache, Stream stream, Encoding encoding)
+        {
+            BytesPool.Current().ReadFrom(hGCache, encoding).WriteTo(stream);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 将全局缓存中的内容写入到以指定编码文本写入器中。
+        /// </summary>
+        /// <param name="hGCache">全局缓存</param>
+        /// <param name="textWriter">文本写入器</param>
+        /// <param name="encoding">编码</param>
+        /// <returns>返回当前全局缓存</returns>
+        public static HGlobalCache<byte> WriteTo(this HGlobalCache<byte> hGCache, TextWriter textWriter, Encoding encoding)
+        {
+            CharsPool.Current().ReadFrom(hGCache, encoding).WriteTo(textWriter);
+
+            return hGCache;
         }
 
         /// <summary>
@@ -178,9 +435,9 @@ namespace Swifter.Tools
         /// <param name="hGCache">HGlobalCache</param>
         /// <returns>返回一个新的字符串</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ToStringEx(this HGlobalCache<char> hGCache)
+        public static unsafe string ToStringEx(this HGlobalCache<char> hGCache)
         {
-            return StringHelper.ToString(hGCache.First, hGCache.Count);
+            return new string(hGCache.Context, hGCache.Offset, hGCache.Count);
         }
 
         /// <summary>
@@ -188,163 +445,27 @@ namespace Swifter.Tools
         /// </summary>
         /// <param name="hGCache">字节缓存</param>
         /// <returns>返回一个字符串</returns>
-        public static string ToHexString(this HGlobalCache<byte> hGCache)
+        public static unsafe string ToHexString(this HGlobalCache<byte> hGCache)
         {
-            return ToHexString(ref *hGCache.First, hGCache.Count);
-        }
-
-        /// <summary>
-        /// 将缓存中内容写入到指定的文本写入器中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="textWriter">文本写入器</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void WriteTo(this HGlobalCache<char> hGCache, TextWriter textWriter)
-        {
-            textWriter.Write(hGCache.Context, hGCache.Offset, hGCache.Count);
-        }
-
-        /// <summary>
-        /// 将缓存中内容写入到指定的流中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="stream">流</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void WriteTo(this HGlobalCache<byte> hGCache, Stream stream)
-        {
-            stream.Write(hGCache.Context, hGCache.Offset, hGCache.Count);
-        }
-
-        /// <summary>
-        /// 缓冲 TextReader 的内容到 HGlobalCache 中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="textReader">TextReader</param>
-        /// <returns>返回缓冲的长度</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe void ReadFrom(this HGlobalCache<char> hGCache, TextReader textReader)
-        {
-        Loop:
-
-            hGCache.Grow(1218);
-
-            int readCount = textReader.Read(
-                hGCache.Context,
-                hGCache.Offset + hGCache.Count,
-                hGCache.Rest);
-
-            hGCache.Count += readCount;
-
-            if (readCount != 0)
-            {
-                goto Loop;
-            }
-        }
-
-        /// <summary>
-        /// 缓冲 Stream 的内容到 HGlobalCache 中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="stream">Stream</param>
-        /// <returns>返回缓冲的长度</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static unsafe void ReadFrom(this HGlobalCache<byte> hGCache, Stream stream)
-        {
-        Loop:
-
-            hGCache.Grow(1218);
-
-            int readCount = stream.Read(
-                hGCache.Context,
-                hGCache.Offset + hGCache.Count,
-                hGCache.Rest);
-
-            hGCache.Count += readCount;
-
-            if (readCount != 0)
-            {
-                goto Loop;
-            }
-        }
-        /// <summary>
-        /// 缓冲 字符串 的内容到 HGlobalCache 中。
-        /// </summary>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="str">字符串</param>
-        /// <param name="encoding">编码</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void ReadFrom(this HGlobalCache<byte> hGCache, string str, Encoding encoding)
-        {
-            hGCache.Grow(encoding.GetMaxByteCount(str.Length));
-
-            hGCache.Count += encoding.GetBytes(
-                str, 
-                0, 
-                str.Length, 
-                hGCache.Context, 
-                hGCache.Offset + hGCache.Count);
-        }
-
-        /// <summary>
-        /// 将 Source 中的内容缓存到 HGlobalCache 中。
-        /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="source">Source</param>
-        /// <param name="length">Source 长度</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void ReadFrom<T>(this HGlobalCache<T> hGCache, ref T source, int length) where T : unmanaged
-        {
-            hGCache.Grow(length);
-
-            Underlying.CopyBlock(
-                ref Underlying.As<T, byte>(ref *hGCache.Current),
-                ref Underlying.As<T, byte>(ref source),
-                checked((uint)((long)length * sizeof(T)))
-                );
-
-            hGCache.Count += length;
-        }
-
-        /// <summary>
-        /// 将 Source 中的内容缓存到 HGlobalCache 中。
-        /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="hGCache">HGlobalCache</param>
-        /// <param name="source">Source</param>
-        /// <param name="length">Source 长度</param>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static void ReadFrom<T>(this HGlobalCache<T> hGCache, T* source, int length) where T : unmanaged
-        {
-            hGCache.Grow(length);
-
-            Underlying.CopyBlock(
-                hGCache.Current,
-                source,
-                checked((uint)((long)length * sizeof(T)))
-                );
-
-            hGCache.Count += length;
+            return ToHexString(ref hGCache.Context[hGCache.Offset], hGCache.Count);
         }
 
         /// <summary>
         /// 将字节码转换为 16 进制字符串。
         /// </summary>
-        /// <param name="bytes">字节码</param>
+        /// <param name="firstByte">字节码</param>
         /// <param name="length">字节码长度</param>
         /// <returns>返回一个字符串</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ToHexString(ref byte bytes, int length)
+        public static unsafe string ToHexString(ref byte firstByte, int length)
         {
             const int byte_len = 2;
 
             var str = StringHelper.MakeString(length * byte_len);
 
-            ref var raw = ref StringHelper.GetRawStringData(str);
-
-            for (int i = 0; i < length; i++)
+            fixed (char* chars = str)
             {
-                NumberHelper.Hex.AppendD2(ref Underlying.Add(ref raw, i * byte_len), Underlying.Add(ref bytes, i));
+                NumberHelper.ToHexString(ref firstByte, length, chars);
             }
 
             return str;
@@ -362,7 +483,36 @@ namespace Swifter.Tools
                 return ToHexString(ref bytes[0], bytes.Length);
             }
 
-            return "";
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// 将 16 进制字符串转换为字节码。
+        /// </summary>
+        /// <param name="hexString">16 进制字符串</param>
+        /// <returns>返回字节码</returns>
+        public static byte[] ToHexBytes(this string hexString)
+        {
+            const int byte_len = 2;
+
+            if (hexString.Length == 0)
+            {
+                return new byte[0];
+            }
+
+            if (hexString.Length % byte_len != 0)
+            {
+                throw new FormatException(nameof(hexString));
+            }
+
+            var bytes = new byte[hexString.Length / byte_len];
+
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                bytes[i] = (byte)((NumberHelper.ToDigit(hexString[i * byte_len]) << 4) | (NumberHelper.ToDigit(hexString[i * byte_len + 1])));
+            }
+
+            return bytes;
         }
 
         /// <summary>
@@ -372,136 +522,12 @@ namespace Swifter.Tools
         /// <returns>返回一个字符串</returns>
         public static string ToHexString(this ArraySegment<byte> bytes)
         {
-            return ToHexString(ref bytes.Array[bytes.Offset], bytes.Count);
-        }
-
-        /// <summary>
-        /// 使用指定哈希算法类型计算字节缓存的哈希值。以十六进制字符串返回。
-        /// </summary>
-        /// <typeparam name="THashAlgorithm">哈希算法类型</typeparam>
-        /// <param name="hGCache">字节缓存</param>
-        /// <returns>返回 Hash 值的十六进制字符串</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ComputeHash<THashAlgorithm>(this HGlobalCache<byte> hGCache) where THashAlgorithm : HashAlgorithm
-        {
-
-            var instance = THashAlgorithmInstances<THashAlgorithm>.Instance;
-
-#if Span
-            hGCache.Grow(instance.HashSize);
-
-            var bytes = ((Span<byte>)hGCache).Slice(hGCache.Count);
-
-            if (instance.TryComputeHash(hGCache, bytes, out var written))
+            if (bytes.Array != null && bytes.Count > 0)
             {
-                bytes = bytes.Slice(0, written);
-            }
-            else
-            {
-                bytes = instance.ComputeHash(hGCache.Context, hGCache.Offset, hGCache.Count);
-            }
-#else
-
-            var bytes = instance.ComputeHash(hGCache.Context, hGCache.Offset, hGCache.Count);
-#endif
-
-            return ToHexString(ref bytes[0], bytes.Length);
-        }
-
-        /// <summary>
-        /// 使用指定哈希算法类型和编码类型计算字符缓存的哈希值。以十六进制字符串返回。
-        /// </summary>
-        /// <typeparam name="THashAlgorithm">哈希算法类型</typeparam>
-        /// <param name="hGCache">字符缓存</param>
-        /// <param name="encoding">指定编码</param>
-        /// <returns>返回 Hash 值的十六进制字符串</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ComputeHash<THashAlgorithm>(this HGlobalCache<char> hGCache, Encoding encoding) where THashAlgorithm : HashAlgorithm
-        {
-            var hGBytes = BytesPool.Rent();
-
-            hGCache.WriteTo(hGBytes, encoding);
-
-            var result = ComputeHash<THashAlgorithm>(hGBytes);
-
-            BytesPool.Return(hGBytes);
-
-            return result;
-        }
-
-        /// <summary>
-        /// 使用指定哈希算法类型并使用 UTF-8 编码计算字符缓存的哈希值。以十六进制字符串返回。
-        /// </summary>
-        /// <typeparam name="THashAlgorithm">哈希算法类型</typeparam>
-        /// <param name="hGCache">字符缓存</param>
-        /// <returns>返回 Hash 值的十六进制字符串</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ComputeHash<THashAlgorithm>(this HGlobalCache<char> hGCache) where THashAlgorithm : HashAlgorithm
-        {
-            return ComputeHash<THashAlgorithm>(hGCache, Encoding.UTF8);
-        }
-
-        /// <summary>
-        /// 使用指定哈希算法类型并使用 UTF-8 编码计算字节数组的哈希值。以十六进制字符串返回。
-        /// </summary>
-        /// <typeparam name="THashAlgorithm">哈希算法类型</typeparam>
-        /// <param name="data">字节数组</param>
-        /// <returns>返回 Hash 值的十六进制字符串</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ComputeHash<THashAlgorithm>(this byte[] data) where THashAlgorithm : HashAlgorithm
-        {
-            const int byte_len = 2;
-
-            var bytes = THashAlgorithmInstances<THashAlgorithm>.Instance.ComputeHash(data);
-
-            var str = StringHelper.MakeString(bytes.Length * byte_len);
-
-            fixed (char* pStr = str)
-            {
-                var pStr2 = pStr;
-
-                foreach (var item in bytes)
-                {
-                    NumberHelper.Hex.ToString(item, byte_len, pStr2);
-
-                    pStr2 += byte_len;
-                }
+                return ToHexString(ref bytes.Array[bytes.Offset], bytes.Count);
             }
 
-            return str;
-        }
-
-        /// <summary>
-        /// 使用指定哈希算法类型和编码类型计算字符串的哈希值。以十六进制字符串返回。
-        /// </summary>
-        /// <typeparam name="THashAlgorithm">哈希算法类型</typeparam>
-        /// <param name="str">字符串</param>
-        /// <param name="encoding">指定编码</param>
-        /// <returns>返回 Hash 值的十六进制字符串</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ComputeHash<THashAlgorithm>(this string str, Encoding encoding) where THashAlgorithm : HashAlgorithm
-        {
-            var hGBytes = BytesPool.Rent();
-
-            hGBytes.ReadFrom(str, encoding);
-
-            var result = ComputeHash<THashAlgorithm>(hGBytes);
-
-            BytesPool.Return(hGBytes);
-
-            return result;
-        }
-
-        /// <summary>
-        /// 使用指定哈希算法类型并使用 UTF-8 编码计算字符串的哈希值。以十六进制字符串返回。
-        /// </summary>
-        /// <typeparam name="THashAlgorithm">哈希算法类型</typeparam>
-        /// <param name="str">字符串</param>
-        /// <returns>返回 Hash 值的十六进制字符串</returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static string ComputeHash<THashAlgorithm>(this string str) where THashAlgorithm : HashAlgorithm
-        {
-            return ComputeHash<THashAlgorithm>(str, Encoding.UTF8);
+            return string.Empty;
         }
 
         /// <summary>
@@ -511,13 +537,13 @@ namespace Swifter.Tools
         /// <param name="value">字符串</param>
         /// <returns>返回当前字符缓存</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static HGlobalCache<char> Append(this HGlobalCache<char> hGCache, string value)
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, string value)
         {
-            hGCache.Grow(value.Length);
+            Grow(hGCache, value.Length);
 
-            Underlying.CopyBlock(
-                ref Underlying.As<char, byte>(ref *hGCache.Current), 
-                ref Underlying.As<char, byte>(ref StringHelper.GetRawStringData(value)),
+            Unsafe.CopyBlock(
+                ref Unsafe.As<char, byte>(ref *hGCache.Current), 
+                ref Unsafe.As<char, byte>(ref StringHelper.GetRawStringData(value)),
                ((uint)value.Length) * sizeof(char));
 
             hGCache.Count += value.Length;
@@ -526,16 +552,64 @@ namespace Swifter.Tools
         }
 
         /// <summary>
+        /// 在字符缓存的后面拼接一个全局唯一标识符。
+        /// </summary>
+        /// <param name="hGCache">字符缓存</param>
+        /// <param name="value">全局唯一标识符</param>
+        /// <param name="withSeparator">是否包含分隔符</param>
+        /// <returns>返回当前字符缓存</returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, Guid value, bool withSeparator)
+        {
+            Grow(hGCache, 40);
+
+            hGCache.Count += GuidHelper.ToString(value, hGCache.Current, withSeparator);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 在字符缓存的后面拼接一个字符串。
+        /// </summary>
+        /// <param name="hGCache">字符缓存</param>
+        /// <param name="value">字符串</param>
+        /// <param name="offset">偏移量</param>
+        /// <param name="count">字符数量</param>
+        /// <returns>返回当前字符缓存</returns>
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, string value, int offset, int count)
+        {
+            if (offset >= 0 && count >= 0 && offset + count <= value.Length)
+            {
+                Grow(hGCache, count);
+
+                Unsafe.CopyBlock(
+                    ref Unsafe.As<char, byte>(ref *hGCache.Current),
+                    ref Unsafe.As<char, byte>(ref Unsafe.Add(ref StringHelper.GetRawStringData(value), offset)),
+                   ((uint)count) * sizeof(char));
+
+                hGCache.Count += count;
+
+                return hGCache;
+            }
+            else
+            {
+                throw new IndexOutOfRangeException();
+            }
+        }
+
+        /// <summary>
         /// 在字符缓存的后面拼接一个字符。
         /// </summary>
         /// <param name="hGCache">字符缓存</param>
         /// <param name="char">字符</param>
         /// <returns>返回当前字符缓存</returns>
-        public static HGlobalCache<char> Append(this HGlobalCache<char> hGCache, char @char)
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, char @char)
         {
-            hGCache.Grow(1);
+            Grow(hGCache, 1);
 
             hGCache.First[hGCache.Count] = @char;
+
+            ++hGCache.Count;
 
             return hGCache;
         }
@@ -549,73 +623,23 @@ namespace Swifter.Tools
         /// <param name="fix">固定数字位数</param>
         /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static HGlobalCache<char> Append(this HGlobalCache<char> hGCache, ulong value, byte radix = 10, byte fix = 0)
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, ulong value, byte radix = 10, byte fix = 0)
         {
-            hGCache.Grow(128);
+            Grow(hGCache, 128);
 
             var nh = NumberHelper.GetOrCreateInstance(radix);
 
             if (fix > 0)
             {
-                nh.ToString(value, fix, hGCache.First + hGCache.Count);
+                nh.ToString(value, fix, hGCache.Current);
 
                 hGCache.Count += fix;
             }
             else
             {
-                hGCache.Count += nh.ToString(value, hGCache.First + hGCache.Count);
+                hGCache.Count += nh.ToString(value, hGCache.Current);
             }
 
-
-            return hGCache;
-        }
-
-        /// <summary>
-        /// 在字符缓存的后面拼接一个数字格式。
-        /// </summary>
-        /// <param name="hGCache">字符缓存</param>
-        /// <param name="value">数字</param>
-        /// <param name="radix">进制数</param>
-        /// <returns></returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static HGlobalCache<char> Append(this HGlobalCache<char> hGCache, float value, byte radix = 10)
-        {
-            hGCache.Grow(128);
-
-            hGCache.Count += NumberHelper.GetOrCreateInstance(radix).ToString(value, hGCache.First + hGCache.Count);
-
-            return hGCache;
-        }
-
-        /// <summary>
-        /// 在字符缓存的后面拼接一个数字格式。
-        /// </summary>
-        /// <param name="hGCache">字符缓存</param>
-        /// <param name="value">数字</param>
-        /// <param name="radix">进制数</param>
-        /// <returns></returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static HGlobalCache<char> Append(this HGlobalCache<char> hGCache, double value, byte radix = 10)
-        {
-            hGCache.Grow(128);
-
-            hGCache.Count += NumberHelper.GetOrCreateInstance(radix).ToString(value, hGCache.First + hGCache.Count);
-
-            return hGCache;
-        }
-
-        /// <summary>
-        /// 在字符缓存的后面拼接一个数字格式。
-        /// </summary>
-        /// <param name="hGCache">字符缓存</param>
-        /// <param name="value">数字</param>
-        /// <returns></returns>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static HGlobalCache<char> Append(this HGlobalCache<char> hGCache, decimal value)
-        {
-            hGCache.Grow(128);
-
-            hGCache.Count += NumberHelper.ToString(value, hGCache.First + hGCache.Count);
 
             return hGCache;
         }
@@ -628,11 +652,61 @@ namespace Swifter.Tools
         /// <param name="radix">进制数</param>
         /// <returns>返回当前缓存</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static HGlobalCache<char> Append(this HGlobalCache<char> hGCache, long value, byte radix = 10)
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, long value, byte radix = 10)
         {
-            hGCache.Grow(128);
+            Grow(hGCache, 128);
 
             hGCache.Count += NumberHelper.GetOrCreateInstance(radix).ToString(value, hGCache.First + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 在字符缓存的后面拼接一个数字格式。
+        /// </summary>
+        /// <param name="hGCache">字符缓存</param>
+        /// <param name="value">数字</param>
+        /// <param name="radix">进制数</param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, float value, byte radix = 10)
+        {
+            Grow(hGCache, 128);
+
+            hGCache.Count += NumberHelper.GetOrCreateInstance(radix).ToString(value, hGCache.First + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 在字符缓存的后面拼接一个数字格式。
+        /// </summary>
+        /// <param name="hGCache">字符缓存</param>
+        /// <param name="value">数字</param>
+        /// <param name="radix">进制数</param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, double value, byte radix = 10)
+        {
+            Grow(hGCache, 128);
+
+            hGCache.Count += NumberHelper.GetOrCreateInstance(radix).ToString(value, hGCache.First + hGCache.Count);
+
+            return hGCache;
+        }
+
+        /// <summary>
+        /// 在字符缓存的后面拼接一个数字格式。
+        /// </summary>
+        /// <param name="hGCache">字符缓存</param>
+        /// <param name="value">数字</param>
+        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static unsafe HGlobalCache<char> Append(this HGlobalCache<char> hGCache, decimal value)
+        {
+            Grow(hGCache, NumberHelper.DecimalStringMaxLength);
+
+            hGCache.Count += NumberHelper.ToString(value, hGCache.First + hGCache.Count);
 
             return hGCache;
         }
@@ -663,24 +737,23 @@ namespace Swifter.Tools
         {
             if (hGCache.Rest <= count)
             {
-                hGCache.Expand(count - hGCache.Rest);
+                hGCache.Grow(count - hGCache.Rest);
             }
 
             return hGCache;
         }
 
         /// <summary>
-        /// 对缓存进行 GZip 操作。
+        /// 对缓存进行 GZip 压缩。
         /// </summary>
         /// <param name="hGCache">缓存</param>
-        /// <param name="mode">操作</param>
         /// <param name="ignoreLose">结果字节码的长度比原始字节码的长度长时将忽略操作</param>
-        /// <returns>返回时候进行了操作</returns>
+        /// <returns>返回是否进行了操作</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static bool GZip(this HGlobalCache<byte> hGCache, CompressionMode mode, bool ignoreLose = false)
+        public static unsafe bool GZip(this HGlobalCache<byte> hGCache, bool ignoreLose = false)
         {
             using var memoryStream = new MemoryStream();
-            using var gZipStream = new GZipStream(memoryStream, mode);
+            using var gZipStream = new GZipStream(memoryStream, CompressionMode.Compress);
 
             hGCache.WriteTo(gZipStream);
 
@@ -695,9 +768,9 @@ namespace Swifter.Tools
 
             hGCache.Count = length;
 
-            hGCache.Grow(0);
+            Grow(hGCache, 0);
 
-            Underlying.CopyBlock(
+            Unsafe.CopyBlock(
                 ref hGCache.First[0], 
                 ref memoryStream.GetBuffer()[0], 
                 (uint)length);
@@ -705,62 +778,36 @@ namespace Swifter.Tools
             return true;
         }
 
-
         /// <summary>
-        /// 读取流到结尾。
+        /// 对缓存进行 GZip 解压。
         /// </summary>
-        /// <param name="stream">流</param>
-        /// <returns>返回一个数组段</returns>
-        public static ArraySegment<byte> ReadToEnd(this Stream stream)
+        /// <param name="hGCache">缓存</param>
+        public static unsafe void DeGZip(this HGlobalCache<byte> hGCache)
         {
-            if (stream is MemoryStream ms)
+            using var memoryStream = new MemoryStream(hGCache.Count);
+
+            memoryStream.Write(hGCache.Context, hGCache.Offset, hGCache.Count);
+            memoryStream.Position = 0;
+
+            using var gZipStream = new GZipStream(memoryStream, CompressionMode.Decompress);
+
+            hGCache.Count = 0;
+
+            Loop:
+
+            var readCount = gZipStream.Read(hGCache.Context, hGCache.Count, hGCache.Rest);
+
+            hGCache.Count += readCount;
+
+            if (readCount > 0)
             {
-                return InternalReadToEnd(ms);
+                if (hGCache.Rest < 1)
+                {
+                    Grow(hGCache, 128);
+                }
+
+                goto Loop;
             }
-
-            if (stream.CanSeek)
-            {
-                return InternalReadToEnd(stream);
-            }
-
-            return SteadyReadToEnd(stream);
-        }
-
-        private static ArraySegment<byte> SteadyReadToEnd(Stream stream)
-        {
-            var hGCache = BytesPool.Rent();
-
-            hGCache.ReadFrom(stream);
-
-            var bytes = hGCache.ToArray();
-
-            BytesPool.Return(hGCache);
-
-            return new ArraySegment<byte>(bytes);
-        }
-
-        private static ArraySegment<byte> InternalReadToEnd(Stream stream)
-        {
-            var length = stream.GetCheckedLength();
-
-            var bytes = new byte[length];
-
-            for (int i = 0; i < length;)
-            {
-                i += stream.Read(bytes, i, length - i);
-            }
-
-            return new ArraySegment<byte>(bytes);
-        }
-
-        private static ArraySegment<byte> InternalReadToEnd(MemoryStream ms)
-        {
-            return new ArraySegment<byte>(ms.GetBuffer(), 0, ms.GetCheckedLength());
-        }
-
-        private static int GetCheckedLength(this Stream stream)
-        {
-            return checked((int)stream.Length);
         }
     }
 }

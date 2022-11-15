@@ -7,13 +7,11 @@ namespace Swifter.RW
 {
     internal sealed class UnknowTypeInterface<T> : IValueInterface<T>
     {
-        static readonly IntPtr TypeHandle = TypeHelper.GetTypeHandle(typeof(T));
-
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
-            if (valueReader is IValueReader<T>)
+            if (valueReader is IValueReader<T> reader)
             {
-                return ((IValueReader<T>)valueReader).ReadValue();
+                return reader.ReadValue();
             }
 
             var value = valueReader.DirectRead();
@@ -25,13 +23,13 @@ namespace Swifter.RW
 
             if (value is null)
             {
-                return (T)(object)null;
+                return default;
             }
 
-            return XConvert.FromObject<T>(value);
+            return XConvert.Convert<T>(value);
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
             if (value is null)
             {
@@ -49,7 +47,7 @@ namespace Swifter.RW
             {
                 valueWriter.WriteString(str);
             }
-            else if (TypeHandle != TypeHelper.GetTypeHandle(value))
+            else if (value.GetType() != typeof(T))
             {
                 ValueInterface.GetInterface(value).Write(valueWriter, value);
             }

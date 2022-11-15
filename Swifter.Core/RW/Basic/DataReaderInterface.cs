@@ -2,9 +2,9 @@
 
 namespace Swifter.RW
 {
-    internal sealed class DataReaderInterface<T, TKey> : IValueInterface<T> where T : IDataReader<TKey>
+    internal sealed class DataReaderInterface<T, TKey> : IValueInterface<T> where T : IDataReader<TKey> where TKey : notnull
     {
-        public T ReadValue(IValueReader valueReader)
+        public T? ReadValue(IValueReader valueReader)
         {
             if (valueReader is IValueReader<T> tReader)
             {
@@ -12,6 +12,11 @@ namespace Swifter.RW
             }
 
             var value = valueReader.DirectRead();
+
+            if (value is null)
+            {
+                return default;
+            }
 
             if (value is T tValue)
             {
@@ -30,26 +35,22 @@ namespace Swifter.RW
                 return tResult2;
             }
 
-            return XConvert<T>.FromObject(value);
+            return XConvert.Convert<T>(value);
         }
 
-        public void WriteValue(IValueWriter valueWriter, T value)
+        public void WriteValue(IValueWriter valueWriter, T? value)
         {
-            if (valueWriter is IValueWriter<T> tWriter)
+            if (value is null)
+            {
+                valueWriter.DirectWrite(null);
+            }
+            else if (valueWriter is IValueWriter<T> tWriter)
             {
                 tWriter.WriteValue(value);
             }
-            else if (valueWriter is IValueWriter<IDataReader<TKey>> tWriter2)
+            else if (value is IArrayReader arrayReader)
             {
-                tWriter2.WriteValue(value);
-            }
-            else if (valueWriter is IValueWriter<IDataReader> tWriter3)
-            {
-                tWriter3.WriteValue(value);
-            }
-            else if (RWHelper.IsArrayKey<TKey>())
-            {
-                valueWriter.WriteArray(value.As<int>());
+                valueWriter.WriteArray(arrayReader);
             }
             else
             {

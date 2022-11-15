@@ -1,9 +1,5 @@
-﻿
-using Swifter.RW;
-using Swifter.Tools;
+﻿using Swifter.Tools;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Swifter.RW
 {
@@ -35,7 +31,7 @@ namespace Swifter.RW
     /// </summary>
     /// <typeparam name="TIn">输入类型</typeparam>
     /// <typeparam name="TOut">输出类型</typeparam>
-    public sealed class AsDataWriter<TIn, TOut> : IDataWriter<TOut>, IAsDataWriter
+    public sealed class AsDataWriter<TIn, TOut> : IDataWriter<TOut>, IAsDataWriter where TIn: notnull where TOut:notnull
     {
         /// <summary>
         /// 原始数据写入器。
@@ -56,12 +52,7 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="key">键</param>
         /// <returns>返回值写入器</returns>
-        public IValueWriter this[TOut key] => dataWriter[XConvert<TIn>.Convert(key)];
-
-        /// <summary>
-        /// 获取转换后的键集合。
-        /// </summary>
-        public IEnumerable<TOut> Keys => dataWriter.Keys.Select(key => XConvert.Convert<TIn, TOut>(key));
+        public IValueWriter this[TOut key] => dataWriter[XConvert.Convert<TOut, TIn>(key)!];
 
         /// <summary>
         /// 获取数据源键的数量。
@@ -76,7 +67,7 @@ namespace Swifter.RW
         /// <summary>
         /// 获取或设置原数据写入器的数据源。
         /// </summary>
-        public object Content
+        public object? Content
         {
             get => dataWriter.Content;
             set => dataWriter.Content = value;
@@ -85,7 +76,12 @@ namespace Swifter.RW
         /// <summary>
         /// 获取原数据写入器的数据源类型。
         /// </summary>
-        public Type ContentType => dataWriter.ContentType;
+        public Type? ContentType => dataWriter.ContentType;
+
+        /// <summary>
+        /// 获取原数据写入器的数据源的值的类型。
+        /// </summary>
+        public Type? ValueType => dataWriter.ValueType;
 
         /// <summary>
         /// 初始化数据源。
@@ -129,16 +125,17 @@ namespace Swifter.RW
         /// <param name="valueReader">值读取器</param>
         public void OnWriteValue(TOut key, IValueReader valueReader)
         {
-            dataWriter.OnWriteValue(XConvert<TIn>.Convert(key), valueReader);
+            dataWriter.OnWriteValue(XConvert.Convert<TOut, TIn>(key)!, valueReader);
         }
 
         /// <summary>
         /// 从数据读取器中读取所有数据源字段到数据源的值。
         /// </summary>
         /// <param name="dataReader">数据读取器</param>
-        public void OnWriteAll(IDataReader<TOut> dataReader)
+        /// <param name="stopToken">停止令牌</param>
+        public void OnWriteAll(IDataReader<TOut> dataReader, RWStopToken stopToken = default)
         {
-            dataWriter.OnWriteAll(new AsWriteAllReader<TIn, TOut>(dataReader));
+            dataWriter.OnWriteAll(new AsWriteAllReader<TIn, TOut>(dataReader), stopToken);
         }
     }
 }

@@ -1,16 +1,25 @@
-﻿using Swifter.RW;
+﻿using InlineIL;
+using Swifter.RW;
 using System;
 using System.Runtime.CompilerServices;
-
-using static Swifter.Tools.TypeHelper;
 
 namespace Swifter.Tools
 {
     /// <summary>
-    /// 
+    /// 提供枚举和位域的工具方法。
     /// </summary>
     public static class EnumHelper
     {
+        /// <summary>
+        /// 枚举分隔符。
+        /// </summary>
+        public const string EnumSeperator = ", ";
+
+        /// <summary>
+        /// 解析枚举时的分隔符。
+        /// </summary>
+        const char EnumParsingSeperator = ',';
+
         /// <summary>
         /// 尝试将字符串解析为枚举值。
         /// </summary>
@@ -38,17 +47,17 @@ namespace Swifter.Tools
 
             ulong val = 0;
 
-            var spliter = str.Split(EnumParsingSeperator);
+            var splition = str.Split(EnumParsingSeperator);
 
-            Continue:
+        Continue:
 
-            while (spliter.MoveNext())
+            while (splition.MoveNext())
             {
-                var item = spliter.Current;
+                var item = splition.Current;
 
                 item = StringHelper.Trim(item.Pointer, item.Length);
 
-                foreach (var (bits, name) in EnumInterface<T>.Items)
+                foreach (var (bits, name) in EnumInfo<T>.Items)
                 {
                     if (StringHelper.EqualsWithIgnoreCase(item, name))
                     {
@@ -68,7 +77,7 @@ namespace Swifter.Tools
 
             return true;
 
-            Number:
+        Number:
 
             var numberInfo = NumberHelper.GetNumberInfo(str.Pointer, str.Length, 16);
 
@@ -81,11 +90,17 @@ namespace Swifter.Tools
                 return true;
             }
 
-            False:
+        False:
 
             value = default;
 
             return false;
+        }
+
+        /// <inheritdoc cref="TryParseEnum{T}(Ps{char}, out T)"/>
+        public static unsafe bool TryParseEnum<T>(string str, out T value) where T : struct, Enum
+        {
+            fixed (char* pStr = str) return TryParseEnum(new Ps<char>(pStr, str.Length), out value);
         }
 
         /// <summary>
@@ -94,11 +109,11 @@ namespace Swifter.Tools
         /// <typeparam name="T">枚举类型</typeparam>
         /// <param name="value">枚举值</param>
         /// <returns>返回枚举名称，没有名称则返回 null</returns>
-        public static string GetEnumName<T>(T value) where T : struct, Enum
+        public static string? GetEnumName<T>(this T value) where T : struct, Enum
         {
             ulong val = AsUInt64(value);
 
-            foreach (var (Value, Name) in EnumInterface<T>.Items)
+            foreach (var (Value, Name) in EnumInfo<T>.Items)
             {
                 if (Value == val)
                 {
@@ -108,16 +123,6 @@ namespace Swifter.Tools
 
             return null;
         }
-
-        /// <summary>
-        /// 枚举分隔符。
-        /// </summary>
-        public const string EnumSeperator = ", ";
-
-        /// <summary>
-        /// 解析枚举时的分隔符。
-        /// </summary>
-        const char EnumParsingSeperator = ',';
 
         /// <summary>
         /// 对枚举进行标识符格式化。
@@ -130,46 +135,30 @@ namespace Swifter.Tools
         /// <returns>返回剩余的枚举值</returns>
         public static unsafe T FormatEnumFlags<T>(T value, char* chars, int length, out int charsWritten) where T : struct, Enum
         {
-            var result = AsUInt64(value);
-
-            var items = EnumInterface<T>.Items;
-
             int offset = 0;
+            bool isInsert = false;
 
-            var firstTime = true;
+            InternalFormatEnumFlags();
 
-            // 得出格式化所需的字符串长度。
-            for (int i = items.Length - 1; i >= 0; i--)
+            if (offset > length)
             {
-                var (val, name) = items[i];
+                charsWritten = 0;
 
-                if ((val & result) == val && val != 0)
-                {
-                    if (!firstTime)
-                    {
-                        offset += EnumSeperator.Length;
-                    }
-
-                    offset += name.Length;
-
-                    result -= val;
-
-                    if (result == 0)
-                    {
-                        break;
-                    }
-
-                    firstTime = false;
-                }
+                return value;
             }
 
-            if (offset <= length)
+            charsWritten = offset;
+            isInsert = true;
+
+            return InternalFormatEnumFlags();
+
+            T InternalFormatEnumFlags()
             {
-                result = AsUInt64(value);
+                var result = AsUInt64(value);
 
-                charsWritten = offset;
+                var items = EnumInfo<T>.Items;
 
-                firstTime = true;
+                var isFirst = true;
 
                 for (int i = items.Length - 1; i >= 0; i--)
                 {
@@ -177,7 +166,7 @@ namespace Swifter.Tools
 
                     if ((val & result) == val && val != 0)
                     {
-                        if (!firstTime)
+                        if (!isFirst)
                         {
                             Insert(EnumSeperator);
                         }
@@ -191,28 +180,29 @@ namespace Swifter.Tools
                             break;
                         }
 
-                        firstTime = false;
+                        isFirst = false;
                     }
                 }
 
                 return AsEnum<T>(result);
+            }
 
-                void Insert(string str)
+            void Insert(string str)
+            {
+                if (isInsert)
                 {
                     offset -= str.Length;
 
-                    Underlying.CopyBlock(
-                        ref Underlying.As<char, byte>(ref chars[offset]),
-                        ref Underlying.As<char, byte>(ref StringHelper.GetRawStringData(str)),
+                    Unsafe.CopyBlock(
+                        ref Unsafe.As<char, byte>(ref chars[offset]),
+                        ref Unsafe.As<char, byte>(ref StringHelper.GetRawStringData(str)),
                         (uint)(str.Length * sizeof(char))
                         );
                 }
-            }
-            else
-            {
-                charsWritten = 0;
-
-                return value;
+                else
+                {
+                    offset += str.Length;
+                }
             }
         }
 
@@ -221,59 +211,60 @@ namespace Swifter.Tools
         /// </summary>
         /// <typeparam name="T">枚举类型</typeparam>
         /// <returns>返回一个布尔值</returns>
-        public static bool IsFlagsEnum<T>() where T : struct, Enum => EnumInterface<T>.IsFlags;
-
-        /// <summary>
-        /// 获取枚举类型的 TypeCode 值。
-        /// </summary>
-        /// <typeparam name="T">枚举类型</typeparam>
-        /// <returns>返回一个 TypeCode 值</returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public static TypeCode GetEnumTypeCode<T>() where T : struct, Enum => EnumInterface<T>.TypeCode;
+        public static bool IsFlagsEnum<T>() where T : struct, Enum => EnumInfo<T>.IsFlags;
 
         /// <summary>
-        /// 
+        /// 获取枚举类型的 <see cref="TypeCode"/> 值。
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static TypeCode GetEnumTypeCode<T>() where T : struct, Enum => EnumInfo<T>.TypeCode;
+
+        /// <summary>
+        /// 将枚举值转换为 <see cref="UInt64"/> 值。
+        /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static ulong AsUInt64<T>(T value) where T : struct, Enum
         {
-            return (GetEnumTypeCode<T>()) switch
+            switch (Unsafe.SizeOf<T>())
             {
-                TypeCode.SByte => (ulong)As<T, sbyte>(value),
-                TypeCode.Byte => (ulong)As<T, byte>(value),
-                TypeCode.Int16 => (ulong)As<T, short>(value),
-                TypeCode.UInt16 => (ulong)As<T, ushort>(value),
-                TypeCode.Int32 => (ulong)As<T, int>(value),
-                TypeCode.UInt32 => (ulong)As<T, uint>(value),
-                TypeCode.Int64 => (ulong)As<T, long>(value),
-                _ => (ulong)As<T, ulong>(value),
-            };
+                case 1: return Unsafe.As<T, byte>(ref value);
+                case 2: return Unsafe.As<T, ushort>(ref value);
+                case 4: return Unsafe.As<T, uint>(ref value);
+                default: return Unsafe.As<T, ulong>(ref value);
+            }
         }
 
         /// <summary>
-        /// 
+        /// 将 <see cref="UInt64"/> 值转换为指定枚举类型值。
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="value"></param>
-        /// <returns></returns>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public static T AsEnum<T>(ulong value) where T : struct, Enum
         {
-            return (GetEnumTypeCode<T>()) switch
+            switch (Unsafe.SizeOf<T>())
             {
-                TypeCode.SByte => As<sbyte, T>((sbyte)value),
-                TypeCode.Byte => As<byte, T>((byte)value),
-                TypeCode.Int16 => As<short, T>((short)value),
-                TypeCode.UInt16 => As<ushort, T>((ushort)value),
-                TypeCode.Int32 => As<int, T>((int)value),
-                TypeCode.UInt32 => As<uint, T>((uint)value),
-                TypeCode.Int64 => As<long, T>((long)value),
-                _ => As<ulong, T>((ulong)value),
-            };
+                case 1: return TypeHelper.As<byte, T>((byte)value);
+                case 2: return TypeHelper.As<ushort, T>((ushort)value);
+                case 4: return TypeHelper.As<uint, T>((uint)value);
+                default: return TypeHelper.As<ulong, T>((ulong)value);
+            }
         }
 
+        /// <summary>
+        /// 判断位域枚举值 <paramref name="left"/> 是否包含 <paramref name="right"/> 的任意位。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public static bool On<T>(this T left, T right)
+            where T : struct, Enum
+        {
+            IL.Push(left);
+            IL.Push(right);
+
+            IL.Emit.And();
+            IL.Emit.Ldc_I4_0();
+            IL.Emit.Cgt_Un();
+
+            return IL.Return<bool>();
+        }
     }
 }

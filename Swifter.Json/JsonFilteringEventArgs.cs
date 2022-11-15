@@ -4,6 +4,7 @@ using System.ComponentModel;
 
 namespace Swifter.Json
 {
+#if !NO_OPTIONS
     /// <summary>
     /// JSON 事件委托。
     /// </summary>
@@ -16,14 +17,14 @@ namespace Swifter.Json
     /// JSON 序列化元素时事件参数。
     /// </summary>
     /// <typeparam name="TKey">元素键类型</typeparam>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public struct JsonFilteringEventArgs<TKey>
+    [EditorBrowsable(EditorBrowsableState.Never)] // 为了更方便在 VS 中键入 JsonFormatter
+    public struct JsonFilteringEventArgs<TKey> where TKey : notnull
     {
         /// <summary>
         /// 当前 Json 写入器。
         /// </summary>
-        public readonly IJsonWriter JsonWriter;
-        
+        public readonly JsonSerializer JsonWriter;
+
         /// <summary>
         /// 当前值信息。
         /// </summary>
@@ -34,11 +35,13 @@ namespace Swifter.Json
         /// </summary>
         public bool Result;
 
-        internal JsonFilteringEventArgs(IJsonWriter jsonWriter, ValueFilterInfo<TKey> valueInfo, bool result)
+        internal JsonFilteringEventArgs(JsonSerializer jsonWriter, ValueFilterInfo<TKey> valueInfo, bool result)
         {
             JsonWriter = jsonWriter;
             ValueInfo = valueInfo;
             Result = result;
         }
     }
+
+#endif
 }

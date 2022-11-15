@@ -1,4 +1,4 @@
-﻿#if NET20 || NET35 || NET40 || NET45 || NET47 || NETSTANDARD2_0 || NETCOREAPP2_0
+﻿#if !(NET45_OR_GREATER || NETSTANDARD2_0_OR_GREATER || NETCOREAPP2_1_OR_GREATER || NET5_0_OR_GREATER)
 
 using Swifter;
 using System.Runtime.CompilerServices;
