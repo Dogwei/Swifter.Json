@@ -4,6 +4,14 @@
 ### If you want to use Swifter.Json, please download or install the latest version on [Nuget](https://www.nuget.org/packages/Swifter.Json).
 ### 如果您想使用 Swifter.Json，请在 [Nuget](https://www.nuget.org/packages/Swifter.Json) 上下载或安装最新版本。
 
+### 1.6.0 Release Notes
+
+1. Fix known bugs.
+2. Remove dependency on Swiffer.Underlying component.
+3. Remove sensitive structures: MethodTable and FieldDesc.
+4. Supports serialization and deserialization of very large files.
+
+
 ### Easy to use 简单使用
 ```C#
 public class Demo
