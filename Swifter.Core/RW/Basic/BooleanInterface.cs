@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class BooleanInterface : IValueInterface<bool>
+    internal sealed class BooleanInterface : IValueInterface<bool>, IDefaultBehaviorValueInterface
     {
         public bool ReadValue(IValueReader valueReader)
         {

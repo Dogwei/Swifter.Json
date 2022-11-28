@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class ByteInterface : IValueInterface<byte>
+    internal sealed class ByteInterface : IValueInterface<byte>, IDefaultBehaviorValueInterface
     {
         public byte ReadValue(IValueReader valueReader)
         {

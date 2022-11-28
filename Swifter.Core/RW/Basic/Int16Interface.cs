@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class Int16Interface : IValueInterface<short>
+    internal sealed class Int16Interface : IValueInterface<short>, IDefaultBehaviorValueInterface
     {
         public short ReadValue(IValueReader valueReader)
         {

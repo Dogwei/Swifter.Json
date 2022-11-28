@@ -88,7 +88,7 @@ namespace Swifter.Json
 		{
 			var streamWriter = new StreamWriter(stream, Encoding);
 
-			await SerializeObjectAsync(value, streamWriter);
+			await SerializeAsync(value, streamWriter);
 
 			await streamWriter.FlushAsync();
 

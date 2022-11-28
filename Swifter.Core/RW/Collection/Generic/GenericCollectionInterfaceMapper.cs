@@ -16,7 +16,8 @@ namespace Swifter.RW
             var interfaceMap = typeof(T)
                 .GetInterfaces()
                 .Where(x => x.IsGenericType)
-                .ToDictionary(x => x.GetGenericTypeDefinition(), x => x.GetGenericArguments());
+                .GroupBy(x => x.GetGenericTypeDefinition(), x => x.GetGenericArguments())
+                .ToDictionary(x => x.Key, x => x.First());
 
             if (typeof(T).IsInterface && typeof(T).IsGenericType)
             {
@@ -25,7 +26,7 @@ namespace Swifter.RW
 
             Type[]? arguments;
 
-            var valueInterfaceType 
+            var valueInterfaceType
                 = interfaceMap.TryGetValue(typeof(IDictionary<,>), out arguments) ? typeof(DictionaryInterface<,,>).MakeGenericType(typeof(T), arguments[0], arguments[1])
                 : interfaceMap.TryGetValue(typeof(IList<>), out arguments) ? typeof(ListInterface<,>).MakeGenericType(typeof(T), arguments[0])
                 : interfaceMap.TryGetValue(typeof(ICollection<>), out arguments) ? typeof(CollectionInterface<,>).MakeGenericType(typeof(T), arguments[0])

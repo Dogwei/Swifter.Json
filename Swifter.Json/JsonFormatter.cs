@@ -14,7 +14,7 @@ namespace Swifter.Json
     /// JSON 文档格式化器。
     /// 此类所有的静态方法和实例方法都是线程安全的。
     /// </summary>
-    public sealed unsafe partial class JsonFormatter : IBinaryFormatter, ITextFormatter, ITargetableValueRWSource
+    public sealed unsafe partial class JsonFormatter : IBinaryFormatter, ITextFormatter, ITargetableValueRWSource, ITargetableValueRWSource<JsonDeserializer, JsonSerializer>
     {
 #if !NO_OPTIONS
         internal const JsonFormatterOptions ComplexOptions =
@@ -252,7 +252,7 @@ namespace Swifter.Json
         /// <summary>
         /// 初始化默认编码 (UTF-8) 和指定配置项的 Json 格式化器。
         /// </summary>
-        public JsonFormatter(JsonFormatterOptions options = JsonFormatterOptions.Default) : this(Encoding.UTF8, options)
+        public JsonFormatter(JsonFormatterOptions options = JsonFormatterOptions.Default) : this(new UTF8Encoding(false), options)
         {
 
         }
@@ -269,12 +269,11 @@ namespace Swifter.Json
         /// <summary>
         /// 初始化默认编码 (UTF-8) 和指定配置项的 Json 格式化器。
         /// </summary>
-        public JsonFormatter() : this(Encoding.UTF8)
+        public JsonFormatter() : this(new UTF8Encoding(false))
         {
 
         }
 #endif
-
 
         /// <summary>
         /// 将指定类型的实例序列化到 Json 缓存中。

@@ -5,7 +5,7 @@ using System;
 
 namespace Swifter.RW
 {
-    internal sealed class DateTimeOffsetInterface : IValueInterface<DateTimeOffset>
+    internal sealed class DateTimeOffsetInterface : IValueInterface<DateTimeOffset>, IDefaultBehaviorValueInterface
     {
         public DateTimeOffset ReadValue(IValueReader valueReader)
         {

@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class NullableInterface<T> : IValueInterface<T?> where T : struct
+    internal sealed class NullableInterface<T> : IValueInterface<T?>, IDefaultBehaviorValueInterface where T : struct
     {
         public T? ReadValue(IValueReader valueReader)
         {

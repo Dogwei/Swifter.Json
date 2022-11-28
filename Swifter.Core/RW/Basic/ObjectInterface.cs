@@ -4,7 +4,7 @@ using System;
 
 namespace Swifter.RW
 {
-    internal sealed class ObjectInterface : IValueInterface<object>
+    internal sealed class ObjectInterface : IValueInterface<object>, IDefaultBehaviorValueInterface
     {
         public object? ReadValue(IValueReader valueReader)
         {

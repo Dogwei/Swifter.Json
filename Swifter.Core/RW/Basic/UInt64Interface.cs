@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class UInt64Interface : IValueInterface<ulong>
+    internal sealed class UInt64Interface : IValueInterface<ulong>, IDefaultBehaviorValueInterface
     {
         public ulong ReadValue(IValueReader valueReader)
         {

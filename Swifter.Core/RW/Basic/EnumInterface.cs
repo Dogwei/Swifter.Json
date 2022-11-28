@@ -33,7 +33,7 @@ namespace Swifter.RW
                     {
                         var adapterType = typeof(EnumInterface<>).MakeGenericType(enumType);
 
-                        adapter = (EnumInterface)Activator.CreateInstance(adapterType);
+                        adapter = (EnumInterface)Activator.CreateInstance(adapterType)!;
 
                         Instances.Add(TypeHelper.GetTypeHandle(enumType), adapter);
                     }
@@ -56,7 +56,7 @@ namespace Swifter.RW
         public abstract void WriteEnum(IValueWriter valueWriter, ulong value);
     }
 
-    sealed class EnumInterface<T> : EnumInterface, IValueInterface<T> where T : struct, Enum
+    sealed class EnumInterface<T> : EnumInterface, IValueInterface<T>, IDefaultBehaviorValueInterface where T : struct, Enum
     {
         public static readonly EnumInterface<T> Instance = new EnumInterface<T>();
 

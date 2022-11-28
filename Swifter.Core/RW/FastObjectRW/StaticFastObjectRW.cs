@@ -71,7 +71,7 @@ namespace Swifter.RW
         [MethodImpl(MethodImplOptions.NoInlining)] // Compatible with MONO AOT
         public static MethodInfo? GetReadValueMethod(Type type)
         {
-            if (!ValueInterface.GetInterface(type).InterfaceIsNotModified)
+            if (!ValueInterface.GetInterface(type).IsDefaultBehaviorInternal)
             {
                 return null;
             }
@@ -97,7 +97,7 @@ namespace Swifter.RW
         [MethodImpl(MethodImplOptions.NoInlining)] // Compatible with MONO AOT
         public static MethodInfo? GetWriteValueMethod(Type type)
         {
-            if (!ValueInterface.GetInterface(type).InterfaceIsNotModified)
+            if (!ValueInterface.GetInterface(type).IsDefaultBehaviorInternal)
             {
                 return null;
             }
@@ -1542,7 +1542,8 @@ namespace Swifter.RW
             EmitSwitchFields<int>(ilGen, 1, out var Cases, out var DefaultLabel);
 
             ilGen.MarkLabel(DefaultLabel);
-            ilGen.ThrowException(typeof(IndexOutOfRangeException));
+            ilGen.Throw();
+            ilGen.ThrowNewException(typeof(IndexOutOfRangeException));
 
             for (int i = 0; i < Fields.Length; i++)
             {

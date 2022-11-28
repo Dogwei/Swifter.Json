@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class UInt32Interface : IValueInterface<uint>
+    internal sealed class UInt32Interface : IValueInterface<uint>, IDefaultBehaviorValueInterface
     {
         public uint ReadValue(IValueReader valueReader)
         {

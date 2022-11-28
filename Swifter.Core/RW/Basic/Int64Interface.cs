@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class Int64Interface : IValueInterface<long>
+    internal sealed class Int64Interface : IValueInterface<long>, IDefaultBehaviorValueInterface
     {
         public long ReadValue(IValueReader valueReader)
         {

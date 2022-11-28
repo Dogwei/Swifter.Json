@@ -11,7 +11,7 @@ namespace Swifter.RW
             Type = type;
         }
 
-        public override bool InterfaceIsNotModified => true;
+        public override bool IsDefaultBehaviorInternal => true;
 
         public override object Interface => throw new NotSupportedException();
 

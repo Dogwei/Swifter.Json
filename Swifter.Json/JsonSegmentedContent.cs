@@ -9,10 +9,10 @@ namespace Swifter.Json
     /// <summary>
     /// 输入输出分段器
     /// </summary>
-    public sealed partial class JsonSegmentedContent
+    sealed partial class JsonSegmentedContent
     {
         /// <summary>
-        /// 创建并初始化。
+        /// 创建分段读取器并初始化。
         /// </summary>
         public static JsonSegmentedContent CreateAndInitialize(TextReader textReader, HGlobalCache<char> hGCache)
         {
@@ -63,6 +63,15 @@ namespace Swifter.Json
         /// </summary>
         public void WriteSegment()
         {
+#if Async
+            if (isAsync)
+            {
+                WriteSegmentAsync().AsTask().Wait();
+
+                return;
+            }
+#endif
+
             var textWriter = (TextWriter)ioObject;
 
             textWriter
@@ -76,6 +85,12 @@ namespace Swifter.Json
         /// <returns>返回新读取的字符数</returns>
         public int ReadSegment(int retain)
         {
+#if Async
+            if (isAsync)
+            {
+                return ReadSegmentAsync(retain).AsTask().Result;
+            }
+#endif
             var textReader = (TextReader)ioObject;
 
             int result = 0;

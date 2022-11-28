@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -79,7 +80,7 @@ namespace Swifter.Json
         /// 初始化 Json 反序列化 (读取) 器。
         /// </summary>
         /// <param name="content">分段读取器</param>
-        public JsonDeserializer(JsonSegmentedContent content)
+        internal JsonDeserializer(JsonSegmentedContent content)
             : this(content.hGCache.First, content.hGCache.Count)
         {
             this.content = content;
@@ -90,7 +91,7 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="chars">Json 字符串</param>
         /// <param name="length">Json 字符串长度</param>
-        public JsonDeserializer(char* chars, int length)
+        internal JsonDeserializer(char* chars, int length)
         {
             begin = chars;
             end = chars + length;
@@ -109,7 +110,7 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="content">分段内容</param>
         /// <param name="options">指定配置</param>
-        public JsonDeserializer(JsonSegmentedContent content, JsonFormatterOptions options)
+        internal JsonDeserializer(JsonSegmentedContent content, JsonFormatterOptions options)
             : this(content.hGCache.First, content.hGCache.Count, options)
         {
             this.content = content;
@@ -121,7 +122,7 @@ namespace Swifter.Json
         /// <param name="chars">Json 字符串</param>
         /// <param name="length">Json 字符串长度</param>
         /// <param name="options">指定配置</param>
-        public JsonDeserializer(char* chars, int length, JsonFormatterOptions options)
+        internal JsonDeserializer(char* chars, int length, JsonFormatterOptions options)
             : this(chars, length)
         {
             Options = options;
@@ -138,7 +139,7 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="jsonFormatter">指定格式化器</param>
         /// <param name="content">分段内容</param>
-        public JsonDeserializer(JsonFormatter jsonFormatter, JsonSegmentedContent content)
+        internal JsonDeserializer(JsonFormatter jsonFormatter, JsonSegmentedContent content)
             : this(jsonFormatter, content.hGCache.First, content.hGCache.Count)
         {
             this.content = content;
@@ -150,7 +151,7 @@ namespace Swifter.Json
         /// <param name="jsonFormatter">指定格式化器</param>
         /// <param name="chars">Json 字符串</param>
         /// <param name="length">Json 字符串长度</param>
-        public JsonDeserializer(JsonFormatter jsonFormatter, char* chars, int length)
+        internal JsonDeserializer(JsonFormatter jsonFormatter, char* chars, int length)
             : this(chars, length
 #if !NO_OPTIONS
                   , jsonFormatter.Options
@@ -160,6 +161,80 @@ namespace Swifter.Json
             JsonFormatter = jsonFormatter;
             MaxDepth = jsonFormatter.MaxDepth;
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="chars"></param>
+        /// <param name="jsonFormatter"></param>
+        /// <returns></returns>
+        public static JsonDeserializer Create(
+            Ps<char> chars,
+            JsonFormatter? jsonFormatter = null
+            )
+        {
+            if (jsonFormatter != null)
+            {
+                return new JsonDeserializer(jsonFormatter, chars.Pointer, chars.Length);
+            }
+
+            return new JsonDeserializer(chars.Pointer, chars.Length);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="hGCache"></param>
+        /// <param name="textReader"></param>
+        /// <param name="jsonFormatter"></param>
+        /// <returns></returns>
+        public static JsonDeserializer Create(
+            HGlobalCache<char> hGCache,
+            TextReader textReader,
+            JsonFormatter? jsonFormatter = null
+            )
+        {
+            if (jsonFormatter != null)
+            {
+                return new JsonDeserializer(jsonFormatter, JsonSegmentedContent.CreateAndInitialize(textReader, hGCache));
+            }
+
+            return new JsonDeserializer(JsonSegmentedContent.CreateAndInitialize(textReader, hGCache));
+        }
+
+#if !NO_OPTIONS
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="chars"></param>
+        /// <param name="options"></param>
+        /// <returns></returns>
+        public static JsonDeserializer Create(
+            Ps<char> chars,
+            JsonFormatterOptions options
+            )
+        {
+            return new JsonDeserializer(chars.Pointer, chars.Length, options);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="hGCache"></param>
+        /// <param name="textReader"></param>
+        /// <param name="options"></param>
+        /// <returns></returns>
+        public static JsonDeserializer Create(
+            HGlobalCache<char> hGCache,
+            TextReader textReader,
+            JsonFormatterOptions options
+            )
+        {
+            return new JsonDeserializer(JsonSegmentedContent.CreateAndInitialize(textReader, hGCache), options);
+        }
+
+#endif
 
         #endregion
 
@@ -1118,7 +1193,7 @@ namespace Swifter.Json
                             fastObjectRW.content = default;
                         }
                     }
-                    else if (ValueInterface<T>.IsNotModified)
+                    else if (ValueInterface<T>.IsDefaultBehavior)
                     {
                         array[offset] = ReadValue<T>();
                     }
@@ -3456,4 +3531,56 @@ namespace Swifter.Json
 
         #endregion
     }
+
+#if Async
+
+    partial class JsonDeserializer
+    {
+        #region -- 构造函数 --
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="hGCache"></param>
+        /// <param name="textReader"></param>
+        /// <param name="jsonFormatter"></param>
+        /// <returns></returns>
+        public static async ValueTask<JsonDeserializer> CreateAsync(
+            HGlobalCache<char> hGCache,
+            TextReader textReader,
+            JsonFormatter? jsonFormatter = null
+            )
+        {
+            if (jsonFormatter != null)
+            {
+                return new JsonDeserializer(jsonFormatter, await JsonSegmentedContent.CreateAndInitializeAsync(textReader, hGCache));
+            }
+
+            return new JsonDeserializer(JsonSegmentedContent.CreateAndInitialize(textReader, hGCache));
+        }
+
+#if !NO_OPTIONS
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="hGCache"></param>
+        /// <param name="textReader"></param>
+        /// <param name="options"></param>
+        /// <returns></returns>
+        public static async ValueTask<JsonDeserializer> CreateAsync(
+            HGlobalCache<char> hGCache,
+            TextReader textReader,
+            JsonFormatterOptions options
+            )
+        {
+            return new JsonDeserializer(await JsonSegmentedContent.CreateAndInitializeAsync(textReader, hGCache), options);
+        }
+
+#endif
+
+        #endregion
+    }
+
+#endif
 }

@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class DecimalInterface : IValueInterface<decimal>
+    internal sealed class DecimalInterface : IValueInterface<decimal>, IDefaultBehaviorValueInterface
     {
         public decimal ReadValue(IValueReader valueReader)
         {

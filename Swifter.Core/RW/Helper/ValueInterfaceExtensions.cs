@@ -8,26 +8,84 @@ namespace Swifter.RW
     /// </summary>
     public static class ValueInterfaceExtensions
     {
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="TValueReader"></typeparam>
+        /// <typeparam name="TValueWriter"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="targetable"></param>
+        /// <param name="readValueFunc"></param>
+        /// <param name="writeValueFunc"></param>
+        public static IValueInterface<TValue> SetValueInterface<TValueReader, TValueWriter, TValue>(
+            this ITargetableValueRWSource<TValueReader, TValueWriter> targetable,
+            Func<TValueReader, TValue?>? readValueFunc,
+            Action<TValueWriter, TValue?>? writeValueFunc
+            )
+            where TValueReader : IValueReader
+            where TValueWriter : IValueWriter
+        {
+            if (readValueFunc is null && writeValueFunc is null)
+            {
+                throw new InvalidOperationException("The readValueFunc and the writeValueFunc cannot be empty at the same time.");
+            }
+
+            var valueInterface = new TargetableValueInterface<TValueReader, TValueWriter, TValue>(readValueFunc, writeValueFunc);
+
+            targetable.SetValueInterface(valueInterface);
+
+            return valueInterface;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="targetable"></param>
+        /// <param name="valueInterface"></param>
         public static void SetValueInterface<T>(this ITargetableValueRWSource targetable, IValueInterface<T> valueInterface)
         {
             targetable.ValueInterfaceMapSource.SetValueInterface(valueInterface);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="targetable"></param>
+        /// <returns></returns>
         public static IValueInterface<T>? GetValueInterface<T>(this ITargetableValueRWSource targetable)
         {
             return targetable.ValueInterfaceMapSource.GetValueInterface<T>();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="targetable"></param>
+        /// <returns></returns>
         public static bool RemoveValueInterface<T>(this ITargetableValueRWSource targetable)
         {
             return targetable.ValueInterfaceMapSource.RemoveValueInterface<T>();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="targetable"></param>
         public static void ClearValueInterfaces(this ITargetableValueRWSource targetable)
         {
             targetable.ValueInterfaceMapSource.ClearValueInterfaces();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="targetable"></param>
+        /// <returns></returns>
         public static IValueInterface<T>? GetValueInterface<T>(this ITargetableValueRW targetable)
         {
             return targetable.ValueInterfaceMap.GetValueInterface<T>();

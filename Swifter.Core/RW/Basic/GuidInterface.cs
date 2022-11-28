@@ -3,7 +3,7 @@ using System;
 
 namespace Swifter.RW
 {
-    internal sealed class GuidInterface : IValueInterface<Guid>
+    internal sealed class GuidInterface : IValueInterface<Guid>, IDefaultBehaviorValueInterface
     {
         public Guid ReadValue(IValueReader valueReader)
         {

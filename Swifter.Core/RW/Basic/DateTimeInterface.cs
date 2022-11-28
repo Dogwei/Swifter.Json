@@ -4,7 +4,7 @@ using System;
 
 namespace Swifter.RW
 {
-    internal sealed class DateTimeInterface : IValueInterface<DateTime>
+    internal sealed class DateTimeInterface : IValueInterface<DateTime>, IDefaultBehaviorValueInterface
     {
         public DateTime ReadValue(IValueReader valueReader)
         {

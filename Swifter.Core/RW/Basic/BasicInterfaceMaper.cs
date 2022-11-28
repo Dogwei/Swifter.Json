@@ -5,8 +5,43 @@ namespace Swifter.RW
 {
     sealed class BasicInterfaceMaper : IValueInterfaceMaper
     {
+        static readonly object[] BasicInterfaces =
+        {
+            new BooleanInterface(),
+            new SByteInterface(),
+            new Int16Interface(),
+            new Int32Interface(),
+            new Int64Interface(),
+            new ByteInterface(),
+            new UInt16Interface(),
+            new UInt32Interface(),
+            new UInt64Interface(),
+            new CharInterface(),
+            new SingleInterface(),
+            new DoubleInterface(),
+            new DecimalInterface(),
+            new StringInterface(),
+            new ObjectInterface(),
+            new DateTimeInterface(),
+            new DateTimeOffsetInterface(),
+            new TimeSpanInterface(),
+            new GuidInterface(),
+            new IntPtrInterface(),
+            new VersionInterface(),
+            new DbNullInterface(),
+            new UriInterface(),
+        };
+
         public IValueInterface<T>? TryMap<T>()
         {
+            foreach (var item in BasicInterfaces)
+            {
+                if (item is IValueInterface<T> valueInterface)
+                {
+                    return valueInterface;
+                }
+            }
+
             if (typeof(Type).IsAssignableFrom(typeof(T)))
             {
                 return (IValueInterface<T>)Activator.CreateInstance((typeof(TypeInfoInterface<>)).MakeGenericType(typeof(T)))!;
@@ -45,10 +80,6 @@ namespace Swifter.RW
                 }
             }
 
-            if (typeof(T).IsInterface || typeof(T).IsAbstract || typeof(IFormattable).IsAssignableFrom(typeof(T)))
-            {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(UnknowTypeInterface<>).MakeGenericType(typeof(T)))!;
-            }
 
             return null;
         }

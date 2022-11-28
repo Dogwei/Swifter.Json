@@ -3,7 +3,7 @@
 
 namespace Swifter.RW
 {
-    internal sealed class StringInterface : IValueInterface<string>
+    internal sealed class StringInterface : IValueInterface<string>, IDefaultBehaviorValueInterface
     {
         public string? ReadValue(IValueReader valueReader)
         {

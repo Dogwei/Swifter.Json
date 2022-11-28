@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
@@ -110,7 +111,7 @@ namespace Swifter.Json
         /// 初始化默认配置的 Json 序列号 (写入) 器。
         /// </summary>
         /// <param name="hGCache">全局内存缓存</param>
-        public JsonSerializer(HGlobalCache<char> hGCache)
+        internal JsonSerializer(HGlobalCache<char> hGCache)
         {
             segmenterOrHGCache = hGCache;
             MaxDepth = DefaultMaxDepth;
@@ -130,7 +131,7 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="jsonFormatter">指定格式化器</param>
         /// <param name="hGCache">全局内存缓存</param>
-        public JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache)
+        internal JsonSerializer(JsonFormatter jsonFormatter, HGlobalCache<char> hGCache)
             : this(hGCache
 #if !NO_OPTIONS
                   , jsonFormatter.Options
@@ -148,7 +149,7 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="hGCache">全局内存缓存</param>
         /// <param name="options">指定配置</param>
-        public JsonSerializer(HGlobalCache<char> hGCache, JsonFormatterOptions options)
+        internal JsonSerializer(HGlobalCache<char> hGCache, JsonFormatterOptions options)
             : this(hGCache)
         {
             Options = options;
@@ -168,7 +169,7 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="segmenter">分段读取器</param>
         /// <param name="options">指定配置</param>
-        public JsonSerializer(JsonSegmentedContent segmenter, JsonFormatterOptions options) : this(segmenter.hGCache, options)
+        internal JsonSerializer(JsonSegmentedContent segmenter, JsonFormatterOptions options) : this(segmenter.hGCache, options)
         {
             segmenterOrHGCache = segmenter;
         }
@@ -179,7 +180,7 @@ namespace Swifter.Json
         /// 初始化默认配置的 Json 序列号 (写入) 器。
         /// </summary>
         /// <param name="segmenter">分段读取器</param>
-        public JsonSerializer(JsonSegmentedContent segmenter) : this(segmenter.hGCache)
+        internal JsonSerializer(JsonSegmentedContent segmenter) : this(segmenter.hGCache)
         {
             segmenterOrHGCache = segmenter;
         }
@@ -189,11 +190,70 @@ namespace Swifter.Json
         /// </summary>
         /// <param name="jsonFormatter">指定格式化器</param>
         /// <param name="segmenter">分段读取器</param>
-        public JsonSerializer(JsonFormatter jsonFormatter, JsonSegmentedContent segmenter)
+        internal JsonSerializer(JsonFormatter jsonFormatter, JsonSegmentedContent segmenter)
             : this(jsonFormatter, segmenter.hGCache)
         {
             segmenterOrHGCache = segmenter;
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="hGCache"></param>
+        /// <param name="textWriter"></param>
+        /// <param name="jsonFormatter"></param>
+        /// <param name="isAsync"></param>
+        /// <returns></returns>
+        public static JsonSerializer Create(
+            HGlobalCache<char> hGCache,
+            JsonFormatter? jsonFormatter = null,
+            TextWriter? textWriter = null,
+            bool isAsync = false
+            )
+        {
+            if (jsonFormatter != null && textWriter != null)
+            {
+                return new JsonSerializer(jsonFormatter, new JsonSegmentedContent(textWriter, hGCache, isAsync));
+            }
+
+            if (jsonFormatter != null)
+            {
+                return new JsonSerializer(jsonFormatter, hGCache);
+            }
+
+            if (textWriter != null)
+            {
+                return new JsonSerializer(new JsonSegmentedContent(textWriter, hGCache, isAsync));
+            }
+
+            return new JsonSerializer(hGCache);
+        }
+
+#if !NO_OPTIONS
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="hGCache"></param>
+        /// <param name="options"></param>
+        /// <param name="textWriter"></param>
+        /// <param name="isAsync"></param>
+        /// <returns></returns>
+        public static JsonSerializer Create(
+            HGlobalCache<char> hGCache,
+            JsonFormatterOptions options,
+            TextWriter? textWriter = null,
+            bool isAsync = false
+            )
+        {
+            if (textWriter != null)
+            {
+                return new JsonSerializer(new JsonSegmentedContent(textWriter, hGCache, isAsync), options);
+            }
+
+            return new JsonSerializer(hGCache, options);
+        }
+#endif
 
         #endregion
 
@@ -369,10 +429,28 @@ namespace Swifter.Json
         }
 
         /// <summary>
-        /// 在写入值之前写入。
+        /// 写入一个键结尾符。
         /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteValueBefore()
+        public void WriteKeyEnding()
+        {
+            Append(KeyEnding);
+        }
+
+        /// <summary>
+        /// 在写入值之后写入。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void WriteValueEnding()
+        {
+            Append(ValueEnding);
+        }
+
+        /// <summary>
+        /// 在写入值之前缩进。
+        /// </summary>
+        [MethodImpl(VersionDifferences.AggressiveInlining)]
+        public void IndentValueBefore()
         {
 #if !NO_OPTIONS
             if (On(Indented))
@@ -405,19 +483,10 @@ namespace Swifter.Json
         }
 
         /// <summary>
-        /// 在写入值之后写入。
+        /// 在写入键之前缩进。
         /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteValueAfter()
-        {
-            Append(ValueEnding);
-        }
-
-        /// <summary>
-        /// 在写入键之前写入。
-        /// </summary>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteKeyBefore()
+        public void IndentKeyBefore()
         {
 #if !NO_OPTIONS
             if (On(Indented))
@@ -439,29 +508,10 @@ namespace Swifter.Json
         }
 
         /// <summary>
-        /// 在写入键之后写入。
+        /// 在写入对象或数组后缩进。
         /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteKeyAfter()
-        {
-            Append(KeyEnding);
-
-            WriteMiddleChars();
-        }
-
-        /// <summary>
-        /// 在写入对象或数组前写入。
-        /// </summary>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteStructBefore()
-        {
-        }
-
-        /// <summary>
-        /// 在写入对象或数组后写入。
-        /// </summary>
-        [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteStructAfter()
+        public void IndentStructAfter()
         {
 #if !NO_OPTIONS
             if (On(Indented))
@@ -483,10 +533,10 @@ namespace Swifter.Json
         }
 
         /// <summary>
-        /// 在写入键后且写入值之前写入。
+        /// 在写入键后之后缩进。
         /// </summary>
         [MethodImpl(VersionDifferences.AggressiveInlining)]
-        public void WriteMiddleChars()
+        public void IndentMiddleChars()
         {
 #if !NO_OPTIONS
             if (On(Indented))
@@ -674,7 +724,7 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void WriteNull()
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(6);
 
@@ -687,7 +737,7 @@ namespace Swifter.Json
 
             current += 4;
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -784,11 +834,11 @@ namespace Swifter.Json
 
         String:
 
-            WriteValueBefore();
+            IndentValueBefore();
 
             InternalWriteString(Unsafe.As<string>(value));
 
-            WriteValueAfter();
+            WriteValueEnding();
 
             return;
         }
@@ -831,7 +881,7 @@ namespace Swifter.Json
         {
             Grow(128);
 
-            WriteValueBefore();
+            IndentValueBefore();
 
             if (EnumHelper.IsFlagsEnum<T>() && EnumHelper.AsUInt64(value) != 0)
             {
@@ -879,7 +929,7 @@ namespace Swifter.Json
 
         After:
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -887,7 +937,7 @@ namespace Swifter.Json
         /// </summary>
         public void WritePath(RWPath path)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(2);
 
@@ -899,7 +949,7 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -928,7 +978,7 @@ namespace Swifter.Json
         /// </summary>
         public void WriteBoolean(bool value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(6);
 
@@ -948,7 +998,7 @@ namespace Swifter.Json
                 Append('e');
             }
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -962,11 +1012,11 @@ namespace Swifter.Json
         /// </summary>
         public void WriteChar(char value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             InternalWriteStringCore(ref value, 1);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -974,7 +1024,7 @@ namespace Swifter.Json
         /// </summary>
         public void WriteDateTime(DateTime value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(DateTimeHelper.ISOStringMaxLength + 4);
 
@@ -984,7 +1034,7 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -992,13 +1042,13 @@ namespace Swifter.Json
         /// </summary>
         public void WriteDecimal(decimal value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(NumberHelper.DecimalStringMaxLength);
 
             current += NumberHelper.ToString(value, current);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1006,7 +1056,7 @@ namespace Swifter.Json
         /// </summary>
         public void WriteDouble(double value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             if (NumberHelper.IsSpecialValue(value))
             {
@@ -1034,7 +1084,7 @@ namespace Swifter.Json
                 }
             }
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -1063,11 +1113,11 @@ namespace Swifter.Json
         /// </summary>
         public void WriteInt64(long value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             InternalWriteInt64(value);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -1089,7 +1139,7 @@ namespace Swifter.Json
         /// </summary>
         public void WriteSingle(float value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             if (NumberHelper.IsSpecialValue(value))
             {
@@ -1117,7 +1167,7 @@ namespace Swifter.Json
                 }
             }
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
         /// <summary>
         /// 写入一个 <see cref="UInt16"/> 值。
@@ -1136,11 +1186,11 @@ namespace Swifter.Json
         /// </summary>
         public void WriteUInt64(ulong value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             InternalWriteUInt64(value);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -1158,7 +1208,7 @@ namespace Swifter.Json
         /// <param name="withSeparators">是否包含分隔符</param>
         public void WriteGuid(Guid value, bool withSeparators = true)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(GuidHelper.GuidStringWithSeparatorsLength + 4);
 
@@ -1168,7 +1218,7 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1184,7 +1234,7 @@ namespace Swifter.Json
         /// </summary>
         public void WriteDateTimeOffset(DateTimeOffset value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(DateTimeHelper.ISOStringMaxLength + 4);
 
@@ -1194,7 +1244,7 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1202,7 +1252,7 @@ namespace Swifter.Json
         /// </summary>
         public void WriteTimeSpan(TimeSpan value)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(DateTimeHelper.ISOStringMaxLength + 4);
 
@@ -1212,7 +1262,7 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         #endregion
@@ -1237,13 +1287,11 @@ namespace Swifter.Json
                 return;
             }
 
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(2);
 
             Append(FixArray);
-
-            WriteStructBefore();
 
             if (depth >= MaxDepth)
             {
@@ -1301,11 +1349,11 @@ namespace Swifter.Json
                 }
             }
 
-            WriteStructAfter();
+            IndentStructAfter();
 
             Append(ArrayEnding);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1376,13 +1424,11 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void WriteArray<T>(ref T? firstElement, int length)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(2);
 
             Append(FixArray);
-
-            WriteStructBefore();
 
             if (depth >= MaxDepth)
             {
@@ -1424,7 +1470,7 @@ namespace Swifter.Json
                         WriteObject(fastObjectRW);
                     }
                 }
-                else if (ValueInterface<T>.IsNotModified)
+                else if (ValueInterface<T>.IsDefaultBehavior)
                 {
                     for (int i = 0; i < length; i++)
                     {
@@ -1449,11 +1495,11 @@ namespace Swifter.Json
                 }
             }
 
-            WriteStructAfter();
+            IndentStructAfter();
 
             Append(ArrayEnding);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1468,13 +1514,11 @@ namespace Swifter.Json
             }
 #endif
 
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(2);
 
             Append(FixObject);
-
-            WriteStructBefore();
 
             if (depth >= MaxDepth)
             {
@@ -1532,11 +1576,11 @@ namespace Swifter.Json
                 }
             }
 
-            WriteStructAfter();
+            IndentStructAfter();
 
             Append(ObjectEnding);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1544,13 +1588,11 @@ namespace Swifter.Json
         /// </summary>
         public void WriteBeginObject()
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(2);
 
             Append(FixObject);
-
-            WriteStructBefore();
 
             if (depth >= MaxDepth)
             {
@@ -1574,11 +1616,11 @@ namespace Swifter.Json
                 ++current;
             }
 
-            WriteStructAfter();
+            IndentStructAfter();
 
             Append(ObjectEnding);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1586,13 +1628,11 @@ namespace Swifter.Json
         /// </summary>
         public void WriteBeginArray()
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(2);
 
             Append(FixArray);
-
-            WriteStructBefore();
 
             if (depth >= MaxDepth)
             {
@@ -1616,11 +1656,11 @@ namespace Swifter.Json
                 ++current;
             }
 
-            WriteStructAfter();
+            IndentStructAfter();
 
             Append(ArrayEnding);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         /// <summary>
@@ -1629,7 +1669,7 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void WritePropertyName(string name)
         {
-            WriteKeyBefore();
+            IndentKeyBefore();
 
             InternalWriteString(name
 #if !NO_OPTIONS
@@ -1637,7 +1677,9 @@ namespace Swifter.Json
 #endif
                 );
 
-            WriteKeyAfter();
+            WriteKeyEnding();
+
+            IndentMiddleChars();
         }
 
         /// <summary>
@@ -1646,7 +1688,7 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void InternalWritePropertyName(Ps<char> name)
         {
-            WriteKeyBefore();
+            IndentKeyBefore();
 
             InternalWriteStringCore(ref *name.Pointer, name.Length
 #if !NO_OPTIONS
@@ -1654,7 +1696,9 @@ namespace Swifter.Json
 #endif
                 );
 
-            WriteKeyAfter();
+            WriteKeyEnding();
+
+            IndentMiddleChars();
         }
 
         /// <summary>
@@ -1665,7 +1709,7 @@ namespace Swifter.Json
         [MethodImpl(VersionDifferences.AggressiveInlining)]
         public void InternalWritePropertyName(ref char firstChar, int length)
         {
-            WriteKeyBefore();
+            IndentKeyBefore();
 
             InternalWriteStringCore(ref firstChar, length
 #if !NO_OPTIONS
@@ -1673,7 +1717,9 @@ namespace Swifter.Json
 #endif
                 );
 
-            WriteKeyAfter();
+            WriteKeyEnding();
+
+            IndentMiddleChars();
         }
 
         #endregion
@@ -1701,11 +1747,11 @@ namespace Swifter.Json
                 }
 #endif
 
-                WriteValueBefore();
+                IndentValueBefore();
 
                 InternalWriteString(value);
 
-                WriteValueAfter();
+                WriteValueEnding();
             }
         }
 
@@ -1727,7 +1773,7 @@ namespace Swifter.Json
 #endif
             )
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             InternalWriteStringCore(ref *value.Pointer, value.Length
 #if !NO_OPTIONS
@@ -1735,7 +1781,7 @@ namespace Swifter.Json
 #endif
                 );
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
 #if !NO_OPTIONS
@@ -1758,7 +1804,7 @@ namespace Swifter.Json
 #endif
             )
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             InternalWriteStringCore(ref firstChar, length
 #if !NO_OPTIONS
@@ -1766,7 +1812,7 @@ namespace Swifter.Json
 #endif
                 );
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         [MethodImpl(VersionDifferences.AggressiveInlining)]
@@ -1971,20 +2017,22 @@ namespace Swifter.Json
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteReference(RWPath reference)
         {
-            WriteValueBefore();
+            IndentValueBefore();
 
             Grow(2);
 
             Append(FixObject);
 
-            WriteMiddleChars();
+            IndentMiddleChars();
 
             Grow(8);
 
             // "$ref"
             WriteRaw(RefKeyString);
 
-            WriteKeyAfter();
+            WriteKeyEnding();
+
+            IndentMiddleChars();
 
             Grow(2);
 
@@ -1996,11 +2044,11 @@ namespace Swifter.Json
 
             Append(FixString);
 
-            WriteMiddleChars();
+            IndentMiddleChars();
 
             Append(ObjectEnding);
 
-            WriteValueAfter();
+            WriteValueEnding();
         }
 
         #endregion

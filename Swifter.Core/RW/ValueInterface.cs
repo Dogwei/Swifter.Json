@@ -2,6 +2,7 @@
 using Swifter.Tools;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
@@ -57,14 +58,14 @@ namespace Swifter.RW
             Content is IFastObjectRWCreater<T>/* || Content is FastObjectInterface<T>*/;
 
         /// <summary>
-        /// 表示是否使用用户自定义的读写方法，如果为 True, FastObjectRW 将不优化基础类型的读写。
+        /// 表示当前值接口是否是默认行为的值接口。
         /// </summary>
-        public static bool IsNotModified { get; private set; }
+        public static bool IsDefaultBehavior { get; private set; }
 
         /// <summary>
-        /// 表示是否使用用户自定义的读写方法，如果为 True, FastObjectRW 将不优化基础类型的读写。
+        /// 表示当前值接口是否是默认行为的值接口。
         /// </summary>
-        public override bool InterfaceIsNotModified => IsNotModified;
+        public override bool IsDefaultBehaviorInternal => IsDefaultBehavior;
 
         /// <summary>
         /// 获取值读写器接口。
@@ -78,73 +79,76 @@ namespace Swifter.RW
 
         static ValueInterface()
         {
-            Content = null!;
-
             try
             {
-                RuntimeHelpers.RunClassConstructor(typeof(ValueInterface).TypeHandle);
-            }
-            catch
-            {
-            }
+                IsDefaultBehavior = true;
 
-            try
-            {
-                RuntimeHelpers.RunClassConstructor(typeof(T).TypeHandle);
-            }
-            catch
-            {
-            }
-
-            IsNotModified = true;
-
-            if (Content != null)
-            {
-                return;
-            }
-
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
-
-            var NestedType = typeof(T).GetNestedType(nameof(ValueInterface), flags);
-
-            if (NestedType != null && NestedType.GetConstructor(flags, Type.DefaultBinder, Type.EmptyTypes, null) is ConstructorInfo ConstructorInfo)
-            {
-                if (NestedType.IsGenericTypeDefinition && typeof(T).IsGenericType && !typeof(T).IsGenericTypeDefinition)
+                try
                 {
-                    var NestedTypeGenArgs = NestedType.GetGenericArguments();
-                    var TypeGenArgs = typeof(T).GetGenericArguments();
+                    RuntimeHelpers.RunClassConstructor(typeof(T).TypeHandle);
+                }
+                catch
+                {
+                }
 
-                    if (TypeGenArgs.Length == NestedTypeGenArgs.Length)
+                if (Content != null)
+                {
+                    return;
+                }
+
+                #region -- 尝试获取当前类型下的嵌套值接口类型。 --
+
+                const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+
+                var NestedType = typeof(T).GetNestedType(nameof(ValueInterface), flags);
+
+                if (NestedType != null && NestedType.GetConstructor(flags, Type.DefaultBinder, Type.EmptyTypes, null) is ConstructorInfo ConstructorInfo)
+                {
+                    if (NestedType.IsGenericTypeDefinition && typeof(T).IsGenericType && !typeof(T).IsGenericTypeDefinition)
                     {
-                        NestedType = NestedType.MakeGenericType(TypeGenArgs);
+                        var NestedTypeGenArgs = NestedType.GetGenericArguments();
+                        var TypeGenArgs = typeof(T).GetGenericArguments();
 
-                        ConstructorInfo = NestedType.GetConstructor(flags, Type.DefaultBinder, Type.EmptyTypes, null)!;
+                        if (TypeGenArgs.Length == NestedTypeGenArgs.Length)
+                        {
+                            NestedType = NestedType.MakeGenericType(TypeGenArgs);
+
+                            ConstructorInfo = NestedType.GetConstructor(flags, Type.DefaultBinder, Type.EmptyTypes, null)!;
+                        }
+                    }
+
+                    if (typeof(IValueInterface<T>).IsAssignableFrom(NestedType))
+                    {
+                        SetInterface((IValueInterface<T>)ConstructorInfo.Invoke(new object[0]));
+
+                        return;
                     }
                 }
 
-                if (typeof(IValueInterface<T>).IsAssignableFrom(NestedType))
+                #endregion
+
+                #region -- 尝试在映射器集合中匹配值接口。 -- 
+
+                for (int i = Mapers.Count - 1; i >= 0; --i)
                 {
-                    Content = (IValueInterface<T>)ConstructorInfo.Invoke(new object[0]);
+                    var valueInterface = Mapers[i].TryMap<T>();
 
-                    return;
+                    if (valueInterface != null)
+                    {
+                        SetInterface(valueInterface);
+
+                        return;
+                    }
                 }
-            }
 
-            for (int i = Mapers.Count - 1; i >= 0; --i)
+                #endregion
+
+                SetInterface((IValueInterface<T>)Activator.CreateInstance(defaultObjectInterfaceType.MakeGenericType(typeof(T)))!);
+            }
+            finally
             {
-                var valueInterface = Mapers[i].TryMap<T>();
-
-                if (valueInterface != null)
-                {
-                    Content = valueInterface;
-
-                    return;
-                }
+                OnTypeLoaded(typeof(T));
             }
-
-            Content = (IValueInterface<T>)Activator.CreateInstance(defaultObjectInterfaceType.MakeGenericType(typeof(T)))!;
-
-            OnTypeLoaded(defaultObjectInterfaceType);
         }
 
         /// <summary>
@@ -174,6 +178,7 @@ namespace Swifter.RW
         /// </summary>
         /// <param name="valueInterface">值读写接口实例</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
+        [MemberNotNull(nameof(Content))]
         public static void SetInterface(IValueInterface<T> valueInterface)
         {
             if (valueInterface == null)
@@ -183,16 +188,21 @@ namespace Swifter.RW
 
             lock (Instance)
             {
-                IsNotModified = false;
-
-                ref IValueInterface<T> content = ref Content;
-
-                while (content is ChainedValueInterfaceBase<T> chainedValueInterface)
+                if (Content is ChainedValueInterfaceBase<T> chainedValueInterface)
                 {
-                    content = ref chainedValueInterface.PreviousValueInterface!;
-                }
+                    while (chainedValueInterface.PreviousValueInterface is ChainedValueInterfaceBase<T> previousChainedValueInterface)
+                    {
+                        chainedValueInterface = previousChainedValueInterface;
+                    }
 
-                content = valueInterface;
+                    chainedValueInterface.PreviousValueInterface = valueInterface;
+                }
+                else
+                {
+                    IsDefaultBehavior = valueInterface is IDefaultBehaviorValueInterface;
+
+                    Content = valueInterface;
+                }
             }
         }
 
@@ -202,16 +212,22 @@ namespace Swifter.RW
         /// <returns>值读写接口实例</returns>
         public static IValueInterface<T> GetInterface()
         {
-            ref IValueInterface<T> content = ref Content;
+            IValueInterface<T> content = Content;
 
-            while (content is ChainedValueInterfaceBase<T> chainedValueInterface)
+            while (content is ChainedValueInterfaceBase<T> chainedValueInterface 
+                && chainedValueInterface.PreviousValueInterface is not null)
             {
-                content = ref chainedValueInterface.PreviousValueInterface!;
+                content = chainedValueInterface.PreviousValueInterface;
             }
 
             return content;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="valueInterface"></param>
+        /// <exception cref="ArgumentNullException"></exception>
         public static void AddChainedInterface(ChainedValueInterfaceBase<T> valueInterface)
         {
             if (valueInterface == null)
@@ -221,7 +237,7 @@ namespace Swifter.RW
 
             lock (Instance)
             {
-                IsNotModified = false;
+                IsDefaultBehavior = false;
 
                 valueInterface.PreviousValueInterface = Content;
 
@@ -229,6 +245,13 @@ namespace Swifter.RW
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="valueInterface"></param>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="NullReferenceException"></exception>
+        /// <exception cref="InvalidOperationException"></exception>
         public static void RemoveChainedInterface(ChainedValueInterfaceBase<T> valueInterface)
         {
             if (valueInterface == null)
@@ -406,6 +429,7 @@ namespace Swifter.RW
         {
             Mapers = new List<IValueInterfaceMaper>();
             MapersLock = new object();
+            TypedCache = new Dictionary<IntPtr, ValueInterface>();
 
             if (VersionDifferences.IsSupportEmit)
             {
@@ -416,38 +440,13 @@ namespace Swifter.RW
                 defaultObjectInterfaceType = typeof(XObjectInterface<>);
             }
 
-            TypedCache = new Dictionary<IntPtr, ValueInterface>();
-
-            ValueInterface<bool>.Content = new BooleanInterface();
-            ValueInterface<sbyte>.Content = new SByteInterface();
-            ValueInterface<short>.Content = new Int16Interface();
-            ValueInterface<int>.Content = new Int32Interface();
-            ValueInterface<long>.Content = new Int64Interface();
-            ValueInterface<byte>.Content = new ByteInterface();
-            ValueInterface<ushort>.Content = new UInt16Interface();
-            ValueInterface<uint>.Content = new UInt32Interface();
-            ValueInterface<ulong>.Content = new UInt64Interface();
-            ValueInterface<char>.Content = new CharInterface();
-            ValueInterface<float>.Content = new SingleInterface();
-            ValueInterface<double>.Content = new DoubleInterface();
-            ValueInterface<decimal>.Content = new DecimalInterface();
-            ValueInterface<string>.Content = new StringInterface();
-            ValueInterface<object>.Content = new ObjectInterface();
-            ValueInterface<DateTime>.Content = new DateTimeInterface();
-            ValueInterface<DateTimeOffset>.Content = new DateTimeOffsetInterface();
-            ValueInterface<TimeSpan>.Content = new TimeSpanInterface();
-            ValueInterface<Guid>.Content = new GuidInterface();
-            ValueInterface<IntPtr>.Content = new IntPtrInterface();
-            ValueInterface<Version>.Content = new VersionInterface();
-            ValueInterface<DBNull>.Content = new DbNullInterface();
-            ValueInterface<Uri>.Content = new UriInterface();
-
-            Mapers.Add(new BasicInterfaceMaper());
+            Mapers.Add(new UnknowTypeInterfaceMaper());
             Mapers.Add(new CollectionInterfaceMaper());
             Mapers.Add(new GenericCollectionInterfaceMapper());
             Mapers.Add(new DataInterfaceMaper());
             Mapers.Add(new TupleInterfaceMaper());
             Mapers.Add(new ArrayInterfaceMaper());
+            Mapers.Add(new BasicInterfaceMaper());
 
             LoadExtensionAssembly();
         }
@@ -604,9 +603,9 @@ namespace Swifter.RW
         public abstract void Write(IValueWriter valueWriter, object? value);
 
         /// <summary>
-        /// 表示是否使用用户自定义的读写方法，如果为 True, FastObjectRW 将不优化基础类型的读写。
+        /// 表示当前值接口是否是默认行为的值接口。
         /// </summary>
-        public abstract bool InterfaceIsNotModified { get; }
+        public abstract bool IsDefaultBehaviorInternal { get; }
 
         /// <summary>
         /// 获取值读写器接口。

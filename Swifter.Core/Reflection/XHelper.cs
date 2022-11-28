@@ -166,7 +166,7 @@ namespace Swifter.Reflection
                 this.valueInterface = valueInterface;
             }
 
-            public override bool InterfaceIsNotModified => false;
+            public override bool IsDefaultBehaviorInternal => false;
 
             public override object Interface => valueInterface;
 

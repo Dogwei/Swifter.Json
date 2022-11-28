@@ -5,7 +5,7 @@ using System;
 
 namespace Swifter.RW
 {
-    internal sealed class TimeSpanInterface : IValueInterface<TimeSpan>
+    internal sealed class TimeSpanInterface : IValueInterface<TimeSpan>, IDefaultBehaviorValueInterface
     {
         public TimeSpan ReadValue(IValueReader valueReader)
         {

@@ -1,10 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net20;net35;net40;net45;netstandard2.0;netstandard2.1;netcoreapp2.1;netcoreapp3.1;net5;net6</TargetFrameworks>
+    <TargetFrameworks>
+		net20;
+		net35;
+		net40;
+		net45;
+		netstandard2.0;
+		netstandard2.1;
+		netcoreapp2.1;
+		netcoreapp3.0;
+		net5;
+		net6
+	</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	<Nullable>enable</Nullable>
-    <Version>1.6.0</Version>
+    <Version>1.6.0.4</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Swifter.Json.xml</DocumentationFile>
     <Description>A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.</Description>
@@ -46,7 +57,7 @@
   <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp2.1'">
     <DefineConstants>NO_OPTIONS_;Async;Dynamic;NativeSpan;Span;</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp3.1'">
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp3.0'">
     <DefineConstants>NO_OPTIONS_;Async;Dynamic;NativeSpan;Span;</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net5'">

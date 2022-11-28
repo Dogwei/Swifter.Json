@@ -500,7 +500,7 @@ namespace Swifter.Tools
 
                     if (item.IsPointer || item.IsByRef)
                     {
-                        ilGen.ThrowException(typeof(ArgumentException));
+                        ilGen.ThrowNewException(typeof(ArgumentException));
                     }
                     else
                     {

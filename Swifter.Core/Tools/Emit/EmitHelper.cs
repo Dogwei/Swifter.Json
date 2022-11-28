@@ -1534,5 +1534,27 @@ namespace Swifter.Tools
 
             return ilGen;
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="ilGen"></param>
+        /// <param name="exceptionType"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static ILGenerator ThrowNewException(this ILGenerator ilGen, Type exceptionType)
+        {
+            ConstructorInfo constructor = exceptionType.GetConstructor(Type.EmptyTypes);
+
+            if (constructor == null)
+            {
+                throw new ArgumentException();
+            }
+
+            ilGen.NewObject(constructor);
+            ilGen.Throw();
+
+            return ilGen;
+        }
     }
 }
