@@ -3,6 +3,7 @@ using Swifter.Tools;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Swifter.RW
@@ -44,6 +45,9 @@ namespace Swifter.RW
                 }
             }
 
+#if NET7_0_OR_GREATER
+            [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(AsHelperImpl<>))]
+#endif
             public static void Store(out AsHelper value, Type @interface)
             {
                 var genericTypes = @interface.GetGenericArguments();

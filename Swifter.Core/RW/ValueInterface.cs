@@ -143,7 +143,15 @@ namespace Swifter.RW
 
                 #endregion
 
-                SetInterface((IValueInterface<T>)Activator.CreateInstance(defaultObjectInterfaceType.MakeGenericType(typeof(T)))!);
+                #region DefaultObjectInterface
+
+                var objectInterfaceType = defaultObjectInterfaceType.MakeGenericType(typeof(T));
+
+                var objectInterfaceInstance = (IValueInterface<T>)Activator.CreateInstance(objectInterfaceType)!;
+
+                SetInterface(objectInterfaceInstance);
+
+                #endregion
             }
             finally
             {
@@ -425,6 +433,10 @@ namespace Swifter.RW
 
         }
 
+#if NET7_0_OR_GREATER
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(FastObjectInterface<>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(XObjectInterface<>))]
+#endif
         static ValueInterface()
         {
             Mapers = new List<IValueInterfaceMaper>();

@@ -1229,6 +1229,9 @@ namespace Swifter.Tools
                 return InternalGetOrCreate(obj);
             }
 
+#if NET7_0_OR_GREATER
+            [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Impl<>))]
+#endif
             [MethodImpl(MethodImplOptions.NoInlining)]
             static GenericHelper InternalGetOrCreate(Type type)
             {

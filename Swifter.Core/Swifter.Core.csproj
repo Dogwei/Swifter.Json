@@ -11,11 +11,12 @@
 		netcoreapp2.1;
 		netcoreapp3.0;
 		net5;
-		net6
+		net6;
+		net7
 	</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
-    <Version>1.6.0.4</Version>
+    <Version>1.6.0.5</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Swifter.Core.xml</DocumentationFile>
     <Description>Swifter Core components.</Description>
@@ -32,7 +33,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-	<PackageReference Include="InlineIL.Fody" Version="1.6.3" PrivateAssets="all" />
+    <PackageReference Include="InlineIL.Fody" Version="1.6.0-modifiedforswifter" PrivateAssets="all" />
   </ItemGroup>
 
 	<ItemGroup>
@@ -102,6 +103,9 @@
 	<DefineConstants>ARRAY_POOL;IMMUTABLE_COLLECTIONS;Async;NativeSpan;Span;Concurrent;</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net6'">
+	<DefineConstants>ARRAY_POOL;IMMUTABLE_COLLECTIONS;Async;NativeSpan;Span;Concurrent;</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net7'">
 	<DefineConstants>ARRAY_POOL;IMMUTABLE_COLLECTIONS;Async;NativeSpan;Span;Concurrent;</DefineConstants>
   </PropertyGroup>
   

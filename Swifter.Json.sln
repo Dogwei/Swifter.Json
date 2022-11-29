@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Json", "Swifter.Jso
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Core", "Swifter.Core\Swifter.Core.csproj", "{5E1A0662-3ADA-4681-B474-193CDC98A679}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Swifter.Extensions.AspNetCore", "Swifter.Extensions.AspNetCore\Swifter.Extensions.AspNetCore.csproj", "{2B3B22D1-12E0-461E-A763-B6B588BC81D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{5E1A0662-3ADA-4681-B474-193CDC98A679}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5E1A0662-3ADA-4681-B474-193CDC98A679}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5E1A0662-3ADA-4681-B474-193CDC98A679}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2B3B22D1-12E0-461E-A763-B6B588BC81D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B3B22D1-12E0-461E-A763-B6B588BC81D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2B3B22D1-12E0-461E-A763-B6B588BC81D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2B3B22D1-12E0-461E-A763-B6B588BC81D2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

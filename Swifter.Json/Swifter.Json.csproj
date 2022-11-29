@@ -15,7 +15,7 @@
 	</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	<Nullable>enable</Nullable>
-    <Version>1.6.0.4</Version>
+    <Version>1.6.0.5</Version>
     <Authors>Dogwei</Authors>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Swifter.Json.xml</DocumentationFile>
     <Description>A powerful, easy-to-use and fastest json serializer and deserializer on .Net platforms.</Description>

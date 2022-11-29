@@ -1,18 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Swifter.RW
 {
     internal sealed class GenericCollectionInterfaceMapper : IValueInterfaceMaper
     {
+#if NET7_0_OR_GREATER
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DictionaryInterface<,,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ListInterface<,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CollectionInterface<,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(EnumerableInterface<,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(EnumeratorInterface<,>))]
+#endif
         public IValueInterface<T>? TryMap<T>()
         {
-            if (typeof(T).IsArray)
-            {
-                return null;
-            }
-
             var interfaceMap = typeof(T)
                 .GetInterfaces()
                 .Where(x => x.IsGenericType)

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Swifter.RW
@@ -32,6 +33,14 @@ namespace Swifter.RW
             new UriInterface(),
         };
 
+#if NET7_0_OR_GREATER
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TypeInfoInterface<>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MemberInfoInterface<>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(AssemblyInterface<>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(EnumInterface<>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(NullableInterface<>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DataReaderInterface<,>))]
+#endif
         public IValueInterface<T>? TryMap<T>()
         {
             foreach (var item in BasicInterfaces)
@@ -44,27 +53,27 @@ namespace Swifter.RW
 
             if (typeof(Type).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance((typeof(TypeInfoInterface<>)).MakeGenericType(typeof(T)))!;
+                return CreateInstance((typeof(TypeInfoInterface<>)).MakeGenericType(typeof(T)));
             }
 
             if (typeof(MemberInfo).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance((typeof(MemberInfoInterface<>)).MakeGenericType(typeof(T)))!;
+                return CreateInstance((typeof(MemberInfoInterface<>)).MakeGenericType(typeof(T)));
             }
 
             if (typeof(Assembly).IsAssignableFrom(typeof(T)))
             {
-                return (IValueInterface<T>)Activator.CreateInstance((typeof(AssemblyInterface<>)).MakeGenericType(typeof(T)))!;
+                return CreateInstance((typeof(AssemblyInterface<>)).MakeGenericType(typeof(T)));
             }
 
             if (typeof(T).IsEnum)
             {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(EnumInterface<>).MakeGenericType(typeof(T)))!;
+                return CreateInstance(typeof(EnumInterface<>).MakeGenericType(typeof(T)));
             }
 
             if (default(T) is null && Nullable.GetUnderlyingType(typeof(T)) is Type underlyingType)
             {
-                return (IValueInterface<T>)Activator.CreateInstance(typeof(NullableInterface<>).MakeGenericType(underlyingType))!;
+                return CreateInstance(typeof(NullableInterface<>).MakeGenericType(underlyingType))!;
             }
 
             if (typeof(IDataReader).IsAssignableFrom(typeof(T)))
@@ -75,13 +84,18 @@ namespace Swifter.RW
                     {
                         var keyType = item.GetGenericArguments()[0];
 
-                        return (IValueInterface<T>)Activator.CreateInstance((typeof(DataReaderInterface<,>)).MakeGenericType(typeof(T), keyType))!;
+                        return CreateInstance((typeof(DataReaderInterface<,>)).MakeGenericType(typeof(T), keyType));
                     }
                 }
             }
 
 
             return null;
+
+            static IValueInterface<T> CreateInstance(Type type)
+            {
+                return CreateInstance(type)!;
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Swifter.RW
 {
@@ -18,6 +19,17 @@ namespace Swifter.RW
             { typeof(ValueTuple<,,,,,,,>), typeof(TupleInterface<,,,,,,,>) },
         };
 
+#if NET7_0_OR_GREATER
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<,,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<,,,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<,,,,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<,,,,,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<,,,,,,>))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TupleInterface<,,,,,,,>))]
+#endif
         public IValueInterface<T>? TryMap<T>()
         {
             if (ValueInterface.ValueTupleSupport)

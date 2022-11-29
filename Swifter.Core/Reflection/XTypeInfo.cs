@@ -156,6 +156,10 @@ namespace Swifter.Reflection
 
         internal XTypeInfo(Type type, XBindingFlags flags)
         {
+            Console.WriteLine(type);
+            Console.WriteLine(type.GetFields().Length);
+            Console.WriteLine(type.GetProperties().Length);
+
             RWObjectAttribute[]? rwAttributes = null;
 
             if (flags.On(Flags_RW))

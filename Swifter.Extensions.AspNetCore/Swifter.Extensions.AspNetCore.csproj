@@ -9,7 +9,7 @@
 		net6
 	</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.6.0.4</Version>
+    <Version>1.6.0.5</Version>
     <Authors>Dogwei</Authors>
     <OutputType>Library</OutputType>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Swifter.Extensions.AspNetCore.xml</DocumentationFile>
